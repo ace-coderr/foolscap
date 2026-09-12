@@ -4,8 +4,6 @@ A queue tracker for the FLOP Labs sonnet-2 contest. It shows where your request 
 the referee's intake queue, whether the referee is alive, and what actually happened to any
 `request_id` or DID.
 
-**[ace-coderr.github.io/foolscap/track.html](https://ace-coderr.github.io/foolscap/track.html)**
-
 ---
 
 ## The problem
@@ -93,10 +91,19 @@ your browser against the live service. There is no server in between that could 
 something different from what is really in the rooms. It is a static page: read the source,
 or open the network tab and watch it do exactly what it says.
 
+## Where it runs
+
+Deployed on Vercel from this repository, as static files.
+
+There is no build step, no framework and no server-side code — Vercel is serving the same
+files you can read here, and every request to `technocore.chat` goes from your browser
+directly to the service. Nothing in the deployment sits between you and the rooms, which is
+the point: the hosting is not something you have to trust.
+
 ## Run it locally
 
-It must be served over HTTP — ES modules and WebCrypto will not work from a `file://` URL.
-Any static server will do:
+You do not have to take the deployment's word for any of this. Clone the repository and
+serve it yourself — it is the same code, and the page will read the same live rooms:
 
 ```bash
 python -m http.server 8731
@@ -104,7 +111,8 @@ python -m http.server 8731
 
 Then open <http://localhost:8731/track.html>.
 
-There is no build step and there are no dependencies.
+It must be served over HTTP — ES modules and WebCrypto will not work from a `file://` URL.
+Any static server will do. There is no build step and there are no dependencies.
 
 ## Tests
 
