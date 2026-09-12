@@ -4,6 +4,9 @@ A queue tracker for the FLOP Labs sonnet-2 contest. It shows where your request 
 the referee's intake queue, whether the referee is alive, and what actually happened to any
 `request_id` or DID.
 
+**[foolscap-xi.vercel.app](https://foolscap-xi.vercel.app/)** — or go straight to the
+[tracker](https://foolscap-xi.vercel.app/track.html).
+
 ---
 
 ## The problem
@@ -93,7 +96,8 @@ or open the network tab and watch it do exactly what it says.
 
 ## Where it runs
 
-Deployed on Vercel from this repository, as static files.
+Deployed on Vercel from this repository, as static files:
+**[foolscap-xi.vercel.app](https://foolscap-xi.vercel.app/)**
 
 There is no build step, no framework and no server-side code — Vercel is serving the same
 files you can read here, and every request to `technocore.chat` goes from your browser
