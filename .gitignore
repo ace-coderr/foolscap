@@ -1,0 +1,2 @@
+# Local dev-server config for the Claude Code preview pane. Tooling, not product.
+.claude/launch.json

@@ -1,0 +1,527 @@
+/* foolscap.css — paper and ink.
+ *
+ * Serif for prose, monospace only for things that are literally strings a machine
+ * produced: DIDs, signatures, hashes, request ids, room names. One accent colour,
+ * and it earns its place by meaning something: it marks state that wants your
+ * attention. Nothing decorative is ever accent-coloured, and nothing here has a
+ * gradient, a glow or a shadow. Rules and whitespace do the dividing. */
+
+:root {
+  --paper: #faf7f2;
+  --paper-sunk: #f3eee5;
+  --ink: #1b1916;
+  --ink-mid: #55504a;
+  --ink-faint: #8b847a;
+  --rule: #ddd6ca;
+  --rule-strong: #c3bbac;
+  --accent: #a8402a;
+
+  --serif: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, "Times New Roman", serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #15140f;
+    --paper-sunk: #1d1b15;
+    --ink: #ece6da;
+    --ink-mid: #a8a096;
+    --ink-faint: #7a7369;
+    --rule: #322e27;
+    --rule-strong: #4a453c;
+    --accent: #e07a5c;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0 1.15rem 4rem;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.0625rem;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+main,
+.masthead,
+.colophon,
+.progress {
+  max-width: 38rem;
+  margin-inline: auto;
+}
+
+p {
+  margin: 0 0 0.85em;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  letter-spacing: -0.01em;
+  word-break: break-all;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- masthead */
+
+.masthead {
+  padding: 2.4rem 0 1.1rem;
+}
+
+.masthead__name {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.masthead__line {
+  margin: 0.25rem 0 0;
+  color: var(--ink-mid);
+}
+
+.masthead__reads {
+  margin: 0.15rem 0 0;
+  font-size: 0.82rem;
+  color: var(--ink-faint);
+  font-variant: small-caps;
+  letter-spacing: 0.06em;
+}
+
+/* ------------------------------------------------------- verifying the tail */
+
+/* Deliberately quiet: a line of text and a hairline. The page is usable while
+ * this runs, so it must not behave like a blocking spinner. */
+.progress {
+  padding: 0.55rem 0 0;
+}
+
+.progress__text {
+  margin: 0 0 0.3rem;
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.progress__track {
+  height: 1px;
+  background: var(--rule);
+}
+
+.progress__fill {
+  height: 1px;
+  width: 0;
+  background: var(--rule-strong);
+  transition: width 0.25s linear;
+}
+
+/* ---------------------------------------------------------------- sections */
+
+.section {
+  margin-top: 2.4rem;
+}
+
+.section__title {
+  margin: 0 0 1rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.76rem;
+  font-weight: 400;
+  font-family: var(--serif);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+}
+
+/* ------------------------------------------------------------------ lookup */
+
+.lookup__label {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--ink-mid);
+  margin-bottom: 0.4rem;
+}
+
+.lookup__row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.lookup__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.95rem; /* >=16px equivalent avoided; see note below */
+}
+
+/* iOS zooms the page when a focused input is under 16px. Keep it at 16px there. */
+@media (max-width: 30rem) {
+  .lookup__input {
+    font-size: 1rem;
+  }
+}
+
+.lookup__input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.lookup__submit {
+  flex: 0 0 auto;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--serif);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.lookup__submit:hover {
+  background: var(--ink-mid);
+  border-color: var(--ink-mid);
+}
+
+/* ------------------------------------------------------------ status cards */
+
+.result {
+  margin-top: 1.4rem;
+}
+
+.card {
+  border-left: 2px solid var(--rule-strong);
+  padding: 0.1rem 0 0.1rem 0.95rem;
+  margin-bottom: 1.6rem;
+}
+
+/* Accent marks the states that want something from the reader. */
+.card--attention {
+  border-left-color: var(--accent);
+}
+
+.card__status {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+}
+
+.card--attention .card__status {
+  color: var(--accent);
+}
+
+.card__subject {
+  margin: 0.25rem 0 0.9rem;
+  font-size: 0.85rem;
+  color: var(--ink-faint);
+}
+
+.card__copy {
+  margin: 0 0 1rem;
+  color: var(--ink-mid);
+}
+
+.card__note {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+/* The referee's own words, never reworded. */
+.verbatim {
+  margin: 0 0 1rem;
+  padding: 0.5rem 0 0.5rem 0.8rem;
+  border-left: 1px solid var(--rule-strong);
+  background: var(--paper-sunk);
+}
+
+.verbatim__label {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-faint);
+  margin-bottom: 0.2rem;
+}
+
+.verbatim__text {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  color: var(--ink);
+}
+
+/* -------------------------------------------------------------- fact lists */
+
+.facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(7.5rem, auto) 1fr;
+  gap: 0.3rem 1rem;
+  font-size: 0.9rem;
+}
+
+.facts dt {
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding-top: 0.22em;
+}
+
+.facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 26rem) {
+  .facts {
+    grid-template-columns: 1fr;
+    gap: 0 0;
+  }
+
+  .facts dt {
+    padding-top: 0.7em;
+  }
+}
+
+/* -------------------------------------------------------------- other rows */
+
+.others {
+  margin-top: 1.2rem;
+}
+
+.others__title {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-faint);
+  margin-bottom: 0.5rem;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.7rem;
+  align-items: baseline;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--rule);
+  font-size: 0.88rem;
+}
+
+.row__status {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+}
+
+.row__status--attention {
+  color: var(--accent);
+}
+
+.row__id {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.row__when {
+  flex: 0 0 auto;
+  color: var(--ink-faint);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----------------------------------------------------------- referee panel */
+
+.state {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  margin-bottom: 0.5rem;
+}
+
+.state__dot {
+  flex: 0 0 auto;
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  transform: translateY(-0.05rem);
+}
+
+.state__word {
+  font-size: 1.35rem;
+  letter-spacing: 0.03em;
+}
+
+/* live: filled accent. lagging: hollow accent. quiet: hollow, no accent at all —
+ * the absence of the colour is the signal. */
+.state--live {
+  color: var(--accent);
+}
+
+.state--live .state__dot {
+  background: currentColor;
+}
+
+.state--lagging {
+  color: var(--accent);
+}
+
+.state--quiet {
+  color: var(--ink-faint);
+}
+
+.state__reasons {
+  margin: 0 0 1.3rem;
+  color: var(--ink-mid);
+  font-size: 0.92rem;
+}
+
+.frontier {
+  margin: 0 0 1.4rem;
+  font-size: 1.05rem;
+}
+
+.counts {
+  display: flex;
+  gap: 1.8rem;
+  margin: 0 0 1.5rem;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.count__value {
+  display: block;
+  font-size: 1.3rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.count__label {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+  margin-top: 0.15rem;
+}
+
+/* ---------------------------------------------------------------- forgeries */
+
+.forgeries {
+  margin-top: 1.8rem;
+}
+
+.forgeries__title {
+  margin: 0 0 0.2rem;
+  font-size: 0.9rem;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+
+.forgeries__lede {
+  margin: 0 0 0.9rem;
+  font-size: 0.86rem;
+  color: var(--ink-mid);
+}
+
+.forgery {
+  border-left: 2px solid var(--accent);
+  padding: 0.15rem 0 0.15rem 0.8rem;
+  margin-bottom: 1rem;
+  font-size: 0.88rem;
+}
+
+.forgery__tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  margin-bottom: 0.2rem;
+}
+
+.forgery__detail {
+  margin: 0.15rem 0 0.35rem;
+  color: var(--ink-mid);
+}
+
+.forgery__where {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.8rem;
+}
+
+/* -------------------------------------------------------------- misc blocks */
+
+.empty {
+  color: var(--ink-faint);
+  font-size: 0.92rem;
+}
+
+.coverage {
+  margin-top: 1.8rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+}
+
+.coverage p {
+  margin: 0 0 0.3em;
+}
+
+.coverage__problem {
+  color: var(--accent);
+}
+
+/* ---------------------------------------------------------------- colophon */
+
+.colophon {
+  margin-top: 3.5rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.82rem;
+  color: var(--ink-faint);
+  line-height: 1.55;
+}
+
+.colophon__did {
+  color: var(--ink-mid);
+}
+
+/* -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .progress__fill {
+    transition: none;
+  }
+}
