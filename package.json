@@ -4,11 +4,15 @@
   "private": true,
   "type": "module",
   "description": "Mirror worker and schema for the Foolscap Notary archive. The static site has no dependencies and no build step; this is the server-side half.",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "migrate": "node --env-file-if-exists=.env notary/migrate.mjs",
     "mirror": "node --env-file-if-exists=.env notary/mirror.mjs",
-    "test": "node --test test/contest.test.mjs"
+    "test": "node --test test/contest.test.mjs",
+    "stats": "node --env-file-if-exists=.env notary/stats.mjs",
+    "prune": "node --env-file-if-exists=.env notary/prune.mjs"
   },
   "dependencies": {
     "pg": "^8.13.1"

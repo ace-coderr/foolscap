@@ -19,8 +19,16 @@ import { RoomWatcher, exportRoom } from '../js/technocore.js';
 import { verifyMessage, validateNonce, looksLikeDid } from '../js/did.js';
 import { WATCHED_ROOMS as SONNET_ROOMS } from '../js/contest.js';
 import {
+  isFullRoom,
+  policyFor,
+  reduceToSightings,
+  throttleSightings,
+  pruneThrottleCache,
+} from './policy.mjs';
+import {
   assertSchema,
   insertRecords,
+  upsertSightings,
   insertGap,
   markGapRecovered,
   closePool,
@@ -85,6 +93,7 @@ const stats = {
   gapsMissed: 0,
   recovered: 0,
   lost: 0,
+  sampledAway: 0,
   errors: 0,
   startedAt: Date.now(),
 };
@@ -155,24 +164,47 @@ export async function verifyBatch(messages, room) {
   return checked.filter(Boolean);
 }
 
-async function store(records) {
-  if (DRY_RUN) {
-    stats.captured += records.length;
+/**
+ * Store a run of verified records under the room's policy.
+ *
+ * A sampled room reduces to first/last per DID per day before anything is
+ * written. The dropped messages were verified and then deliberately not kept —
+ * counted as `sampledAway`, because silently discarding evidence would be the
+ * same sin as silently losing it.
+ */
+async function store(records, room) {
+  if (records.length === 0) return;
+
+  if (isFullRoom(room)) {
+    if (DRY_RUN) {
+      stats.captured += records.length;
+      return;
+    }
+    for (let i = 0; i < records.length; i += INSERT_BATCH) {
+      const slice = records.slice(i, i + INSERT_BATCH);
+      const inserted = await insertRecords(slice);
+      stats.captured += inserted;
+      stats.duplicate += slice.length - inserted;
+    }
     return;
   }
-  for (let i = 0; i < records.length; i += INSERT_BATCH) {
-    const slice = records.slice(i, i + INSERT_BATCH);
-    const inserted = await insertRecords(slice);
-    stats.captured += inserted;
-    stats.duplicate += slice.length - inserted;
+
+  const sightings = throttleSightings(reduceToSightings(records));
+  stats.sampledAway += records.length - sightings.length;
+  if (DRY_RUN) {
+    stats.captured += sightings.length;
+    return;
   }
+  const written = await upsertSightings(sightings);
+  stats.captured += written;
+  stats.duplicate += sightings.length - written;
 }
 
 /** Verify and store a run of messages, in batches, without holding it all at once. */
 async function absorb(messages, room) {
   for (let i = 0; i < messages.length; i += VERIFY_BATCH) {
     const batch = messages.slice(i, i + VERIFY_BATCH);
-    await store(await verifyBatch(batch, room));
+    await store(await verifyBatch(batch, room), room);
   }
 }
 
@@ -350,6 +382,7 @@ function report() {
       `seen ${stats.seen.toLocaleString('en')} | unsigned ${stats.unsigned} | ` +
       `bad sig ${stats.badSignature} | bad nonce ${stats.badNonce} | ` +
       `missed gaps ${stats.gapsMissed} | recovered ${stats.recovered.toLocaleString('en')} | ` +
+      `sampled away ${stats.sampledAway.toLocaleString('en')} | ` +
       `lost ${stats.lost} | errors ${stats.errors} | ` +
       `${(stats.captured / Math.max(mins, 1 / 60)).toFixed(0)}/min`
   );
@@ -395,7 +428,10 @@ async function main() {
   process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 
-  const ticker = setInterval(report, STATS_EVERY_MS);
+  const ticker = setInterval(() => {
+    report();
+    pruneThrottleCache();
+  }, STATS_EVERY_MS);
   ticker.unref?.();
 
   let sweeping = false;
@@ -419,7 +455,7 @@ async function main() {
     try {
       const { lastSeq } = await backfill(room);
       watchers.push(follow(room, lastSeq));
-      log(`[${room}] following from seq ${lastSeq}.`);
+      log(`[${room}] following from seq ${lastSeq} (${policyFor(room)}).`);
     } catch (err) {
       stats.errors++;
       log(`[${room}] backfill failed, following from the live head instead: ${err.message}`);

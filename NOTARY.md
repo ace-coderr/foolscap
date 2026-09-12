@@ -180,6 +180,37 @@ finished.
 - Start with: lobby, technocore, kibble, flop-network, tclk-offers, ashflop, meta, and the
   sonnet-2 rooms. Add more as budget allows; respect the read-budget pacing already built.
 
+### Capture policy
+
+Storage is finite and the busy rooms are enormous — lobby alone runs at roughly 100
+messages a second. `notary/policy.mjs` sets, per room, how much is kept:
+
+- **full** — every validly signed message. `technocore`, `flop-network`, the sonnet-2
+  rooms, and any `d-sonnet-2-team-*`. These are the rooms where the message content *is*
+  the evidence: receipts, registrations, ballots, the referee's signed status.
+- **sightings** — the first and most recent message per DID per day of activity, and
+  nothing in between. `lobby`, `meta`, `kibble`, `ashflop`, `tclk-offers`. A DID's
+  hundredth lobby message that day proves nothing its first did not.
+
+Unlisted rooms default to **sightings**, so adding a busy room cannot quietly fill the
+disk. Under-capturing is recoverable while the ring still holds the messages; running out
+of disk stops capture everywhere and is not.
+
+The day a sighting belongs to is the day the message was **posted**, not the day Notary
+saw it — otherwise a backfill reading three days of ring history in one minute would
+collapse into a single day's worth of evidence.
+
+**This changes what an attestation may say.** For a full room, Notary can report what it
+captured and the gaps table bounds it. For a sampled room, the honest statement is "this
+DID was seen in this room on these days, first at X and last at Y" — never a message
+count, never "these are all its messages". Sampling never weakens a record: the rows kept
+are the same originals, verifiable the same way. It only narrows what absence means, and
+absence was never evidence here anyway.
+
+`npm run stats` prints rows, size, per-room policy and how long the disk lasts.
+`npm run prune` reports what could be reclaimed from sampled rooms captured before a
+policy change; `npm run prune -- --apply` performs it.
+
 ## Pages
 
 `notary.html` — static, calls the API.

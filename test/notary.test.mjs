@@ -129,3 +129,133 @@ describe('rooms to mirror', () => {
     assert.equal(new Set(MIRROR_ROOMS).size, MIRROR_ROOMS.length);
   });
 });
+
+// ---------------------------------------------------------------------------
+
+import { reduceToSightings, policyFor, isFullRoom, POLICY, DEFAULT_POLICY } from '../notary/policy.mjs';
+
+const sighting = (did, seq, ts) => ({
+  did,
+  room: 'lobby',
+  nonce: String(seq),
+  sig: 's',
+  text: 't',
+  source: 'mirrored',
+  sourceTs: ts,
+  sourceSeq: seq,
+});
+
+describe('capture policy', () => {
+  test('the rooms that carry evidence are kept whole', () => {
+    for (const room of [
+      'technocore',
+      'flop-network',
+      'd-sonnet-2-rules',
+      'mb-sonnet-2-registration',
+      'mb-sonnet-2-votes',
+      'mb-sonnet-2-submissions',
+    ]) {
+      assert.equal(policyFor(room), POLICY.FULL, room);
+      assert.equal(isFullRoom(room), true, room);
+    }
+  });
+
+  test('the high-volume rooms are sampled', () => {
+    for (const room of ['lobby', 'meta', 'kibble', 'ashflop', 'tclk-offers']) {
+      assert.equal(policyFor(room), POLICY.SIGHTINGS, room);
+      assert.equal(isFullRoom(room), false, room);
+    }
+  });
+
+  test('an unlisted room is sampled, so a new busy room cannot eat the disk', () => {
+    assert.equal(policyFor('some-room-nobody-configured'), DEFAULT_POLICY);
+    assert.equal(DEFAULT_POLICY, POLICY.SIGHTINGS);
+  });
+
+  test('a sonnet-2 team room is kept whole even though it is unlisted', () => {
+    assert.equal(isFullRoom('d-sonnet-2-team-emberwick'), true);
+  });
+});
+
+describe('reducing a sampled room to sightings', () => {
+  const DAY = '2026-09-12T';
+
+  test('one DID posting many times in a day yields first and last only', () => {
+    const out = reduceToSightings([
+      sighting('did:a', 10, `${DAY}01:00:00Z`),
+      sighting('did:a', 20, `${DAY}02:00:00Z`),
+      sighting('did:a', 30, `${DAY}03:00:00Z`),
+      sighting('did:a', 40, `${DAY}04:00:00Z`),
+    ]);
+    assert.equal(out.length, 2);
+    assert.deepEqual(
+      out.map((r) => [r.sighting, r.sourceSeq]),
+      [['first', 10], ['last', 40]]
+    );
+  });
+
+  test('a DID seen once in a day yields one row, not a duplicated pair', () => {
+    const out = reduceToSightings([sighting('did:a', 10, `${DAY}01:00:00Z`)]);
+    assert.equal(out.length, 1);
+    assert.equal(out[0].sighting, 'first');
+  });
+
+  test('order of arrival does not matter', () => {
+    const shuffled = reduceToSightings([
+      sighting('did:a', 30, `${DAY}03:00:00Z`),
+      sighting('did:a', 10, `${DAY}01:00:00Z`),
+      sighting('did:a', 20, `${DAY}02:00:00Z`),
+    ]);
+    assert.deepEqual(
+      shuffled.map((r) => [r.sighting, r.sourceSeq]),
+      [['first', 10], ['last', 30]]
+    );
+  });
+
+  test('each DID is counted separately', () => {
+    const out = reduceToSightings([
+      sighting('did:a', 10, `${DAY}01:00:00Z`),
+      sighting('did:b', 11, `${DAY}01:00:01Z`),
+      sighting('did:a', 12, `${DAY}01:00:02Z`),
+    ]);
+    assert.equal(out.filter((r) => r.did === 'did:a').length, 2);
+    assert.equal(out.filter((r) => r.did === 'did:b').length, 1);
+  });
+
+  test('days are split by when the message was posted, not when it was captured', () => {
+    // This is the one that matters: a backfill reads several days at once, and
+    // grouping by capture time would collapse them into a single day.
+    const out = reduceToSightings([
+      sighting('did:a', 10, '2026-09-10T23:00:00Z'),
+      sighting('did:a', 20, '2026-09-11T01:00:00Z'),
+      sighting('did:a', 30, '2026-09-11T23:00:00Z'),
+      sighting('did:a', 40, '2026-09-12T01:00:00Z'),
+    ]);
+    const days = [...new Set(out.map((r) => r.activityDay))].sort();
+    assert.deepEqual(days, ['2026-09-10', '2026-09-11', '2026-09-12']);
+    const eleventh = out.filter((r) => r.activityDay === '2026-09-11');
+    assert.deepEqual(eleventh.map((r) => r.sourceSeq).sort((a, b) => a - b), [20, 30]);
+  });
+
+  test('the stored record is still the original, verbatim', () => {
+    const original = sighting('did:a', 10, `${DAY}01:00:00Z`);
+    original.text = '{"type":"sonnet.note.v1"}';
+    original.sig = 'AAAA';
+    const [kept] = reduceToSightings([original]);
+    assert.equal(kept.text, original.text);
+    assert.equal(kept.sig, original.sig);
+    assert.equal(kept.nonce, original.nonce);
+    assert.equal(typeof kept.nonce, 'string');
+  });
+
+  test('the reduction on a real room is the storage saving it claims', () => {
+    // 400 messages from 20 DIDs across one day reduce to at most 40 rows.
+    const many = [];
+    for (let i = 0; i < 400; i++) {
+      many.push(sighting(`did:${i % 20}`, 1000 + i, `${DAY}${String(i % 24).padStart(2, '0')}:00:00Z`));
+    }
+    const out = reduceToSightings(many);
+    assert.ok(out.length <= 40, `expected at most 40 rows, got ${out.length}`);
+    assert.equal(new Set(out.map((r) => r.did)).size, 20, 'every DID is still represented');
+  });
+});

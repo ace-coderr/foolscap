@@ -25,10 +25,36 @@ create table if not exists records (
   -- sometimes much later — than when it was posted. Keeping both is the honest
   -- thing: only one of them is Notary's to vouch for.
   source_ts    timestamptz,
-  source_seq   bigint,
-
-  unique (did, room, nonce)
+  source_seq   bigint
 );
+
+-- Sampling, for rooms kept under the 'sightings' policy.
+--
+-- null        a full record: every message from that room is stored.
+-- 'first'     the earliest message that DID posted in that room that day.
+-- 'last'      the most recent, and it is replaced as the day goes on.
+--
+-- `day` is the capture day and belongs to the daily anchor. `activity_day` is
+-- the day the message was POSTED, which is what a sighting is about: a backfill
+-- reading three days of ring history in one minute must still produce three
+-- days of sightings.
+alter table records add column if not exists sighting     text;
+alter table records add column if not exists activity_day date;
+
+alter table records drop constraint if exists records_did_room_nonce_key;
+
+-- Full records stay idempotent on (did, room, nonce), which is what makes a
+-- retried /capture return the original rather than a second copy.
+create unique index if not exists records_full_key
+  on records (did, room, nonce) where sighting is null;
+
+-- Sampled rooms hold at most two rows per DID per day of activity.
+create unique index if not exists records_sighting_key
+  on records (did, room, activity_day, sighting) where sighting is not null;
+
+alter table records drop constraint if exists records_sighting_check;
+alter table records add constraint records_sighting_check
+  check (sighting is null or (sighting in ('first', 'last') and activity_day is not null));
 
 create index if not exists records_did_captured_at_idx on records (did, captured_at);
 create index if not exists records_day_idx on records (day);

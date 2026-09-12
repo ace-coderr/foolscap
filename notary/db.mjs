@@ -112,10 +112,63 @@ export async function insertRecords(records) {
   const { rowCount } = await getPool().query(
     `insert into records (${COLUMNS.join(', ')}, captured_at, day)
      values ${values.join(', ')}
-     on conflict (did, room, nonce) do nothing`,
+     on conflict (did, room, nonce) where sighting is null do nothing`,
     params
   );
   return rowCount;
+}
+
+/**
+ * Store first/last sightings for a sampled room.
+ *
+ * 'first' moves only backwards and 'last' only forwards, so records arriving out
+ * of order — a sweep filling a hole, say — settle to the true earliest and
+ * latest rather than to whatever happened to be written last.
+ *
+ * One statement per row: the rows in a batch routinely collide with each other
+ * on (did, room, activity_day, sighting), and Postgres will not let a single
+ * INSERT touch the same conflict target twice.
+ */
+export async function upsertSightings(records) {
+  if (records.length === 0) return 0;
+  const pool = getPool();
+  let written = 0;
+
+  for (const record of records) {
+    const newer = record.sighting === 'last';
+    const { rowCount } = await pool.query(
+      `insert into records
+         (did, room, nonce, sig, text, source, source_ts, source_seq,
+          sighting, activity_day, captured_at, day)
+       values ($1, $2, $3::numeric, $4, $5, $6, $7::timestamptz, $8::bigint,
+               $9, $10::date, now(), (now() at time zone 'utc')::date)
+       on conflict (did, room, activity_day, sighting) where sighting is not null
+       do update set
+            nonce      = excluded.nonce,
+            sig        = excluded.sig,
+            text       = excluded.text,
+            source_ts  = excluded.source_ts,
+            source_seq = excluded.source_seq,
+            captured_at = excluded.captured_at
+          where ${newer
+            ? 'excluded.source_seq > records.source_seq'
+            : 'excluded.source_seq < records.source_seq'}`,
+      [
+        record.did,
+        record.room,
+        String(record.nonce),
+        record.sig,
+        record.text,
+        record.source,
+        record.sourceTs ?? null,
+        record.sourceSeq ?? null,
+        record.sighting,
+        record.activityDay,
+      ]
+    );
+    written += rowCount;
+  }
+  return written;
 }
 
 /** Record a hole in the archive. Returns its id so a later sweep can amend it. */
