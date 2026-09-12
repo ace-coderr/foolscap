@@ -50,9 +50,63 @@ export const WATCHED_ROOMS = [
 
 export const RECEIPT_TYPE = 'sonnet.receipt.v1';
 export const SUBMIT_TYPE = 'sonnet.submit.v1';
+export const REGISTER_TYPE = 'sonnet.register.v1';
 export const NOTICE_TYPE = 'sonnet.notice.v1';
 export const LAUNCH_TYPE = 'sonnet.launch.v1';
 export const STATUS_SUBJECT = 'referee status';
+
+/**
+ * The referee posts this hourly in the registration room. It reports how many
+ * writer and voter registrations it declined to receipt individually in that
+ * window, and why — but it carries a count, never a list of DIDs.
+ */
+export const NOT_RECEIPTED_SUBJECT = 'registrations not receipted';
+
+/** Roles whose registration requires signed activity before the cutoff. */
+export const EVIDENCE_ROLES = new Set(['writer', 'voter']);
+
+/**
+ * Request types the referee answers with a receipt. Only these have an intake
+ * queue, so only these can be QUEUED or UNANSWERED.
+ *
+ * Every entry except sonnet.claim.v1 is confirmed by receipts observed in the
+ * live rooms; sonnet.claim.v1 is named in the contest package and prize claims
+ * simply have not been posted yet.
+ */
+export const RECEIPTED_TYPES = new Set([
+  'sonnet.register.v1',
+  'sonnet.submit.v1',
+  'sonnet.ballot.v1',
+  'sonnet.claim.v1',
+  'sonnet.roster.v1',
+  'sonnet.invite.v1',
+  'sonnet.team-request.v1',
+  'sonnet.withdraw.v1',
+]);
+
+/**
+ * Types the referee is known not to receipt. Posting one is not a request; it
+ * puts a message in a room and that is the whole of it.
+ */
+export const UNRECEIPTED_TYPES = new Set([
+  'sonnet.note.v1',
+  'sonnet.word.v1',
+  'sonnet.application.v1',
+  'sonnet.recruit.v1',
+  'sonnet.question.v1',
+  'sonnet.reply.v1',
+  'sonnet.roster-consent.v1',
+  'sonnet.poem-complete.v1',
+]);
+
+/** Does this type have an intake queue at all? */
+export function isReceiptedType(type) {
+  return RECEIPTED_TYPES.has(type);
+}
+
+/** Writer and voter need signed Technocore activity strictly before this. */
+export const IDENTITY_CUTOFF = '2026-09-11T12:00:00Z';
+export const IDENTITY_CUTOFF_MS = Date.parse(IDENTITY_CUTOFF);
 
 /** The referee posts a signed status roughly every four hours. */
 export const STATUS_INTERVAL_MS = 4 * 60 * 60 * 1000;
@@ -85,6 +139,17 @@ export const COPY = {
     'The referee has worked past the time this message was received without issuing a receipt ' +
     'for it. It is still pending reconciliation — that is a delay, not a rejection. ' +
     RETRY_WARNING,
+  UNANSWERED_NOT_RECEIPTED_TAIL:
+    'Foolscap cannot confirm that this is what happened to this request. The notice carries a ' +
+    'count, not a list of DIDs, and rooms are rings — evidence of your own pre-start activity ' +
+    'may have rotated out of what Foolscap can still read, so treat this as the likely ' +
+    'explanation rather than a verdict.',
+  UNANSWERED_NOT_RECEIPTED_ADVICE:
+    `Writer and voter registration requires signed Technocore activity strictly before ` +
+    `${IDENTITY_CUTOFF}. If this DID has none, organizer is the one role that does not require ` +
+    'it — that is a different request and takes its own request_id. Re-posting the same writer ' +
+    'or voter registration changes nothing: an identical retry returns the original receipt, ' +
+    'and a fresh request_id for the same role only joins the back of the queue.',
   UNANSWERED_SUBMISSION:
     'Submissions are answered on the publication-verification path rather than the intake ' +
     'queue, and a submission can be left deliberately unanswered — an unanswered submission is ' +
@@ -93,6 +158,59 @@ export const COPY = {
     'This message claims to be a referee receipt but does not carry a valid signature from the ' +
     'pinned referee DID. It is a forgery. Nothing in it is evidence of anything.',
 };
+
+/**
+ * Wording for a message the referee never had any intention of receipting.
+ *
+ * The queue words are all wrong here: there is no position, nothing is behind a
+ * frontier, and telling someone not to re-post implies they are waiting for
+ * something. They are not.
+ */
+export function noReceiptCopy(type) {
+  const name = type ?? 'this message type';
+  if (UNRECEIPTED_TYPES.has(type)) {
+    return (
+      `The referee does not issue receipts for ${name}. There is no intake queue for it, so ` +
+      'there is nothing here to wait for and nothing to chase — the message is in the room, ' +
+      'which is all that was ever going to happen to it.'
+    );
+  }
+  return (
+    `Foolscap has seen the referee receipt no message of type ${name} in the rooms it can read, ` +
+    'so this is very likely not a type the referee answers, and there is nothing here to wait ' +
+    'for. If you were expecting a receipt, check the type string against the contest package: a ' +
+    'misspelled type posts successfully and is then ignored.'
+  );
+}
+
+/**
+ * The wording for an unanswered writer or voter registration when the referee
+ * has posted a "registrations not receipted" notice covering the period.
+ *
+ * The careful part is the first sentence. The notice says that some number of
+ * registrations went unreceipted for want of pre-start evidence; it does not say
+ * that *this* one did. Foolscap reports the referee's own statement and its own
+ * inability to check, and leaves the conclusion to the reader — telling someone
+ * their registration is dead when it might not be is as bad as telling them to
+ * keep waiting when it is.
+ */
+export function notReceiptedCopy(notice, { count = notice?.count, at = notice?.tsMs } = {}) {
+  // To the minute: the notice is hourly, so seconds and milliseconds are noise.
+  const when = Number.isFinite(at) ? `${new Date(at).toISOString().slice(0, 16).replace('T', ' ')}Z` : null;
+  const stated =
+    count == null
+      ? 'the referee has stated that registrations in this window were not receipted individually'
+      : `the referee has stated that ${count.toLocaleString('en')} registration${
+          count === 1 ? '' : 's'
+        } in the window ending ${when} were not receipted individually`;
+
+  return (
+    'The referee has worked past the time this message was received without issuing a receipt ' +
+    `for it, and there is a likely explanation on the record: ${stated}, for the reason ` +
+    `"${notice?.reason ?? 'identity: verified pre-start evidence required'}". ` +
+    `${COPY.UNANSWERED_NOT_RECEIPTED_TAIL} ${COPY.UNANSWERED_NOT_RECEIPTED_ADVICE}`
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Classification
@@ -143,7 +261,10 @@ export function isRefereeOnlyShape(payload) {
   if (!payload || typeof payload.type !== 'string') return false;
   if (payload.type === RECEIPT_TYPE) return true;
   if (payload.type === LAUNCH_TYPE) return true;
-  return payload.type === NOTICE_TYPE && payload.subject === STATUS_SUBJECT;
+  return (
+    payload.type === NOTICE_TYPE &&
+    (payload.subject === STATUS_SUBJECT || payload.subject === NOT_RECEIPTED_SUBJECT)
+  );
 }
 
 /**
@@ -558,7 +679,22 @@ export const STATUS = {
   ACCEPTED: 'ACCEPTED',
   REJECTED: 'REJECTED',
   UNANSWERED: 'UNANSWERED',
+  /** Posted, and no receipt was ever coming — this type has no intake queue. */
+  NO_RECEIPT_EXPECTED: 'NO_RECEIPT_EXPECTED',
 };
+
+/**
+ * Statuses that say something about a request's progress. A DID's headline
+ * follows the most recent of these rather than simply the most recent message,
+ * so that a note posted a minute ago does not outrank a registration that was
+ * actually answered.
+ */
+const MEANINGFUL_STATUSES = new Set([
+  STATUS.QUEUED,
+  STATUS.ACCEPTED,
+  STATUS.REJECTED,
+  STATUS.UNANSWERED,
+]);
 
 export const LIVENESS = {
   LIVE: 'live',
@@ -590,6 +726,7 @@ export class ContestTracker {
   #requestsByDid = new Map();
   #refereeMessages = [];
   #statusPosts = [];
+  #notReceipted = [];
   #seen = new Set();
   #counts = { receipts: 0, requests: 0, forgeries: 0, notices: 0, chatter: 0, duplicates: 0 };
 
@@ -613,6 +750,23 @@ export class ContestTracker {
 
   get counts() {
     return { ...this.#counts, duplicates: this.#receipts.duplicates };
+  }
+
+  /** Verified "registrations not receipted" notices, oldest first. */
+  get notReceiptedNotices() {
+    return this.#notReceipted;
+  }
+
+  /**
+   * The notice whose window could account for a message that landed at `tsMs`:
+   * the first one posted at or after it.
+   *
+   * A message newer than every notice is not covered by anything — the next
+   * notice has not been posted yet — and gets no claim made about it.
+   */
+  noticeCovering(tsMs) {
+    if (!Number.isFinite(tsMs)) return null;
+    return this.#notReceipted.find((notice) => notice.tsMs >= tsMs) ?? null;
   }
 
   /**
@@ -659,6 +813,20 @@ export class ContestTracker {
           c.payload?.subject === STATUS_SUBJECT
         ) {
           this.#statusPosts.push(c);
+        }
+        // Posted in the registration room, not the rules room, so it is matched
+        // on subject rather than location.
+        if (c.type === NOTICE_TYPE && c.payload?.subject === NOT_RECEIPTED_SUBJECT) {
+          this.#notReceipted.push({
+            tsMs: c.tsMs,
+            count: typeof c.payload.count === 'number' ? c.payload.count : null,
+            reason: typeof c.payload.reason === 'string' ? c.payload.reason : null,
+            detail: typeof c.payload.detail === 'string' ? c.payload.detail : null,
+            room: c.room,
+            seq: c.seq,
+            payload: c.payload,
+          });
+          this.#notReceipted.sort((a, b) => a.tsMs - b.tsMs);
         }
         break;
 
@@ -721,9 +889,15 @@ export class ContestTracker {
       ids.get(id).receipt = receipt;
     }
 
+    // Newest first, but a request that has a status worth reporting outranks one
+    // that never had one — otherwise a note posted a minute ago becomes the
+    // headline over the registration the user is actually asking about.
     const entries = [...ids.values()]
       .map((entry) => this.#describe(entry, nowMs))
-      .sort((a, b) => (b.sortKey ?? 0) - (a.sortKey ?? 0));
+      .sort((a, b) => {
+        const rank = (e) => (MEANINGFUL_STATUSES.has(e.status) ? 1 : 0);
+        return rank(b) - rank(a) || (b.sortKey ?? 0) - (a.sortKey ?? 0);
+      });
 
     if (entries.length === 0) {
       return { query: value, queryKind, status: STATUS.NOT_SEEN, copy: COPY.NOT_SEEN, entries: [] };
@@ -773,6 +947,18 @@ export class ContestTracker {
       return { ...base, status: STATUS.NOT_SEEN, copy: COPY.NOT_SEEN };
     }
 
+    // Before any queue talk: does this type have a queue? A note, a word
+    // proposal or a question is posted and that is the end of it, so frontiers
+    // and retry advice would both be describing something that does not exist.
+    if (!isReceiptedType(request.type)) {
+      return {
+        ...base,
+        status: STATUS.NO_RECEIPT_EXPECTED,
+        copy: noReceiptCopy(request.type),
+        knownUnreceipted: UNRECEIPTED_TYPES.has(request.type),
+      };
+    }
+
     // Submissions are answered on the publication-verification path. An
     // unanswered one is a known state, not a queue to stare at.
     if (request.type === SUBMIT_TYPE) {
@@ -791,12 +977,29 @@ export class ContestTracker {
     }
 
     if (request.tsMs <= frontier.receivedAtMs) {
-      return {
+      const unanswered = {
         ...base,
         status: STATUS.UNANSWERED,
         unansweredKind: 'deferred',
         copy: COPY.UNANSWERED,
         behindFrontierMs: frontier.receivedAtMs - request.tsMs,
+      };
+
+      // Only writer and voter registrations are in scope: those are the ones the
+      // referee's notice is about. Organizer needs no pre-start evidence, and
+      // every other request type is unrelated, so both keep the plain wording.
+      const role = request.payload?.role;
+      if (request.type !== REGISTER_TYPE || !EVIDENCE_ROLES.has(role)) return unanswered;
+
+      const notice = this.noticeCovering(request.tsMs);
+      if (!notice) return unanswered;
+
+      return {
+        ...unanswered,
+        unansweredKind: 'not-receipted',
+        role,
+        notice,
+        copy: notReceiptedCopy(notice),
       };
     }
 

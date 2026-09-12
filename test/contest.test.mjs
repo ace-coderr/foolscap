@@ -386,7 +386,7 @@ describe('lookup', () => {
     assert.equal(result.entry.request, null);
   });
 
-  test('a DID lookup lists every request that DID made, newest first', async () => {
+  test('a DID lookup lists every request that DID made, newest first within rank', async () => {
     const tracker = await trackerWith([
       [requestsFixture, REG],
       [receiptsFixture, REG],
@@ -396,8 +396,10 @@ describe('lookup', () => {
 
     assert.equal(result.queryKind, 'did');
     assert.ok(result.entries.length >= 1);
+    const rank = (e) => (e.status === STATUS.NO_RECEIPT_EXPECTED || e.status === STATUS.NOT_SEEN ? 0 : 1);
     for (let i = 1; i < result.entries.length; i++) {
-      assert.ok(result.entries[i - 1].sortKey >= result.entries[i].sortKey);
+      const [prev, cur] = [result.entries[i - 1], result.entries[i]];
+      assert.ok(rank(prev) > rank(cur) || (rank(prev) === rank(cur) && prev.sortKey >= cur.sortKey));
     }
   });
 
@@ -510,6 +512,252 @@ describe('UNANSWERED — recorded live on 2026-09-11', () => {
     assert.match(copy, /do not mint a new request_id/);
     assert.match(copy, /identical retry with the same request_id returns the original receipt/);
     assert.match(copy, /jumps no queue/);
+  });
+});
+
+describe('registrations the referee did not receipt individually', () => {
+  // 16 real hourly notices recorded from mb-sonnet-2-registration on 2026-09-12.
+  const notices = load('not-receipted-notices.jsonl', REG);
+  const FIRST_NOTICE = Date.parse('2026-09-12T04:33:24.238529Z');
+  const LAST_NOTICE = Date.parse('2026-09-12T19:36:12.575398Z');
+
+  /** A registration that landed at `tsMs`, with a frontier already past it. */
+  async function trackerFor({ role, tsMs, type = 'sonnet.register.v1' }) {
+    const tracker = await trackerWith([[notices, REG]]);
+    const payload = { type, contest_id: 'sonnet-2', role, request_id: 'probe-1' };
+    if (type === 'sonnet.register.v1' && role === 'writer') {
+      payload.x_account_url = 'https://x.com/probe';
+    }
+    await tracker.ingest(
+      [{ room: REG, seq: 1, ts: new Date(tsMs).toISOString(), tsMs, from: 'did:key:z6MkProbe', text: JSON.stringify(payload), nonce: '1', sig: null }],
+      REG
+    );
+    // Give it a frontier past the request so the lookup resolves to UNANSWERED.
+    tracker.stats.addReceipt({ intakeSeq: 1, receivedAt: (tsMs + 60_000) / 1000, receivedAtMs: tsMs + 60_000 });
+    return tracker;
+  }
+
+  test('the notices are parsed with their counts', async () => {
+    const tracker = await trackerWith([[notices, REG]]);
+    assert.equal(tracker.notReceiptedNotices.length, 16);
+    const last = tracker.notReceiptedNotices.at(-1);
+    assert.equal(last.count, 35);
+    assert.equal(last.reason, 'identity: verified pre-start evidence required');
+    assert.match(last.detail, /signed activity strictly before the opening/);
+  });
+
+  test('they are verified referee notices, not requests', async () => {
+    const c = await classify(notices.at(-1), { room: REG });
+    assert.equal(c.kind, KIND.REFEREE_NOTICE);
+    assert.equal(c.verified, true);
+  });
+
+  test('an impostor cannot post one', async () => {
+    const forged = { ...notices.at(-1), from: 'did:key:z6MkvDqGT54cXesYGvABpF1UapVNwjCqRcafi4Px6Thv5T3Z' };
+    const c = await classify(forged, { room: REG });
+    assert.equal(c.kind, KIND.FORGED_REFEREE);
+    assert.equal(c.verified, false);
+  });
+
+  test('the covering notice is the first one posted after the request', async () => {
+    const tracker = await trackerWith([[notices, REG]]);
+    const covering = tracker.noticeCovering(Date.parse('2026-09-12T16:00:00Z'));
+    assert.equal(new Date(covering.tsMs).toISOString(), '2026-09-12T16:35:28.731Z');
+    assert.equal(covering.count, 2221);
+  });
+
+  test('a request newer than every notice is not covered', async () => {
+    const tracker = await trackerWith([[notices, REG]]);
+    assert.equal(tracker.noticeCovering(LAST_NOTICE + 60_000), null);
+  });
+
+  test('a writer registration gets the notice as the likely explanation', async () => {
+    const tracker = await trackerFor({ role: 'writer', tsMs: Date.parse('2026-09-12T16:00:00Z') });
+    const result = tracker.lookup('probe-1');
+
+    assert.equal(result.status, STATUS.UNANSWERED);
+    assert.equal(result.entry.unansweredKind, 'not-receipted');
+    assert.equal(result.entry.notice.count, 2221);
+    assert.match(result.copy, /2,221 registrations in the window ending/);
+    assert.match(result.copy, /identity: verified pre-start evidence required/);
+  });
+
+  test('it is worded as likely, never as a verdict on this request', async () => {
+    const tracker = await trackerFor({ role: 'voter', tsMs: Date.parse('2026-09-12T16:00:00Z') });
+    const { copy } = tracker.lookup('probe-1');
+
+    assert.match(copy, /likely explanation/);
+    assert.match(copy, /cannot confirm that this is what happened to this request/);
+    assert.match(copy, /count, not a list of DIDs/);
+    assert.match(copy, /rather than a verdict/);
+    // It must not claim the request was rejected, or that it is finished.
+    assert.ok(!/\bwas rejected\b/.test(copy));
+    assert.ok(!/\bwill not be receipted\b/.test(copy));
+  });
+
+  test('it says what to do, without contradicting the retry advice', async () => {
+    const tracker = await trackerFor({ role: 'writer', tsMs: Date.parse('2026-09-12T16:00:00Z') });
+    const { copy } = tracker.lookup('probe-1');
+
+    assert.match(copy, /organizer is the one role that does not require it/);
+    assert.match(copy, /2026-09-11T12:00:00Z/);
+    assert.match(copy, /Re-posting the same writer or voter registration changes nothing/);
+    assert.match(copy, /identical retry returns the original receipt/);
+    // Switching role is a different request, so it legitimately needs a new id.
+    assert.match(copy, /different request and takes its own request_id/);
+  });
+
+  test('organizer registrations keep the plain wording', async () => {
+    const tracker = await trackerFor({ role: 'organizer', tsMs: Date.parse('2026-09-12T16:00:00Z') });
+    const result = tracker.lookup('probe-1');
+
+    assert.equal(result.status, STATUS.UNANSWERED);
+    assert.equal(result.entry.unansweredKind, 'deferred');
+    assert.equal(result.copy, COPY.UNANSWERED);
+  });
+
+  test('other receipted request types keep the plain wording', async () => {
+    // A ballot is receipted, so it still has a queue — but the registration
+    // notice says nothing about it.
+    const tracker = await trackerFor({
+      role: 'writer',
+      tsMs: Date.parse('2026-09-12T16:00:00Z'),
+      type: 'sonnet.ballot.v1',
+    });
+    const result = tracker.lookup('probe-1');
+    assert.equal(result.entry.unansweredKind, 'deferred');
+    assert.equal(result.copy, COPY.UNANSWERED);
+  });
+
+  test('a writer registration older than every notice still keeps the plain wording when uncovered', async () => {
+    const tracker = await trackerFor({ role: 'writer', tsMs: LAST_NOTICE + 120_000 });
+    const result = tracker.lookup('probe-1');
+    assert.equal(result.entry.unansweredKind, 'deferred');
+    assert.equal(result.copy, COPY.UNANSWERED);
+  });
+
+  test('with no notices read at all, nothing is claimed', async () => {
+    const tracker = new ContestTracker();
+    await tracker.ingest(
+      [{ room: REG, seq: 1, ts: '2026-09-12T16:00:00.000Z', tsMs: Date.parse('2026-09-12T16:00:00Z'), from: 'did:key:z6MkProbe', text: JSON.stringify({ type: 'sonnet.register.v1', role: 'writer', request_id: 'probe-1' }), nonce: '1', sig: null }],
+      REG
+    );
+    tracker.stats.addReceipt({ intakeSeq: 1, receivedAt: 1789000000, receivedAtMs: Date.parse('2026-09-12T17:00:00Z') });
+    const result = tracker.lookup('probe-1');
+    assert.equal(result.entry.unansweredKind, 'deferred');
+    assert.equal(result.copy, COPY.UNANSWERED);
+    assert.ok(FIRST_NOTICE < LAST_NOTICE);
+  });
+});
+
+describe('types the referee does not receipt', () => {
+  // A real-shaped DID: looksLikeDid requires 40+ base58 characters, so a
+  // placeholder would be read as a request_id and match nothing.
+  const SENDER = 'did:key:z6MkjA8Br94B6hAbE8CgCKQjn7aDo7RcouBEzLu2DEHkwQRA';
+
+  /** One posted message from SENDER, with a frontier already past it. */
+  async function posted(payloads) {
+    const tracker = new ContestTracker();
+    const base = Date.parse('2026-09-12T16:00:00Z');
+    const messages = payloads.map((payload, i) => ({
+      room: REG,
+      seq: 100 + i,
+      ts: new Date(base + i * 1000).toISOString(),
+      tsMs: base + i * 1000,
+      from: SENDER,
+      text: JSON.stringify(payload),
+      nonce: String(i),
+      sig: null,
+    }));
+    await tracker.ingest(messages, REG);
+    tracker.stats.addReceipt({ intakeSeq: 1, receivedAt: 1789000000, receivedAtMs: base + 3_600_000 });
+    return tracker;
+  }
+
+  test('a note is Posted, not Unanswered', async () => {
+    const tracker = await posted([{ type: 'sonnet.note.v1', request_id: 'note-1' }]);
+    const result = tracker.lookup('note-1');
+
+    assert.equal(result.status, STATUS.NO_RECEIPT_EXPECTED);
+    assert.equal(result.entry.knownUnreceipted, true);
+    assert.match(result.copy, /does not issue receipts for sonnet\.note\.v1/);
+    assert.match(result.copy, /no intake queue/);
+  });
+
+  test('a note is given no queue position, no frontier and no retry advice', async () => {
+    const tracker = await posted([{ type: 'sonnet.note.v1', request_id: 'note-1' }]);
+    const { entry, copy } = tracker.lookup('note-1');
+
+    assert.equal(entry.eta, undefined);
+    assert.equal(entry.behindFrontierMs, undefined);
+    assert.ok(!/re-post/i.test(copy), 'nothing is pending, so there is nothing to warn against re-posting');
+    assert.ok(!/request_id/.test(copy));
+    assert.ok(!/frontier/i.test(copy));
+  });
+
+  test('every type the live rooms show unreceipted lands here', async () => {
+    for (const type of ['sonnet.note.v1', 'sonnet.word.v1', 'sonnet.question.v1', 'sonnet.recruit.v1', 'sonnet.reply.v1', 'sonnet.application.v1']) {
+      const tracker = await posted([{ type, request_id: 'x-1' }]);
+      assert.equal(tracker.lookup('x-1').status, STATUS.NO_RECEIPT_EXPECTED, type);
+    }
+  });
+
+  test('receipted types still get queue statuses', async () => {
+    for (const type of ['sonnet.register.v1', 'sonnet.ballot.v1', 'sonnet.roster.v1', 'sonnet.invite.v1', 'sonnet.team-request.v1', 'sonnet.withdraw.v1', 'sonnet.claim.v1']) {
+      const tracker = await posted([{ type, request_id: 'x-1', role: 'organizer' }]);
+      const status = tracker.lookup('x-1').status;
+      assert.ok(status === STATUS.UNANSWERED || status === STATUS.QUEUED, `${type} -> ${status}`);
+    }
+  });
+
+  test('an unknown type is flagged as probably unanswered, and names the misspelling trap', async () => {
+    // sonnet.registere.v1 is a real typo observed in the registration room.
+    const tracker = await posted([{ type: 'sonnet.registere.v1', request_id: 'typo-1' }]);
+    const result = tracker.lookup('typo-1');
+
+    assert.equal(result.status, STATUS.NO_RECEIPT_EXPECTED);
+    assert.equal(result.entry.knownUnreceipted, false);
+    assert.match(result.copy, /seen the referee receipt no message of type sonnet\.registere\.v1/);
+    assert.match(result.copy, /misspelled type posts successfully and is then ignored/);
+  });
+
+  test('a receipt still wins, whatever the type', async () => {
+    // If the referee did answer it, that is the answer — the allowlist only
+    // decides what to say when there is no receipt.
+    const tracker = await posted([{ type: 'sonnet.note.v1', request_id: 'note-1' }]);
+    tracker.receipts.add({
+      kind: KIND.RECEIPT,
+      verified: true,
+      receipt: {
+        intakeSeq: 5, receivedAt: 1789000000, receivedAtMs: Date.parse('2026-09-12T16:30:00Z'),
+        requestId: 'note-1', senderDid: SENDER, participantDid: null, status: 'accepted',
+        reason: '', role: null, room: REG, seq: 9, issuedAtMs: Date.parse('2026-09-12T16:30:00Z'), payload: {},
+      },
+    });
+    assert.equal(tracker.lookup('note-1').status, STATUS.ACCEPTED);
+  });
+
+  test('a note does not outrank a registration as the DID headline', async () => {
+    const tracker = await posted([
+      { type: 'sonnet.register.v1', role: 'organizer', request_id: 'reg-1' },
+      { type: 'sonnet.note.v1', request_id: 'note-1' }, // newer
+    ]);
+    const result = tracker.lookup(SENDER);
+
+    assert.equal(result.entries.length, 2);
+    assert.equal(result.entry.requestId, 'reg-1', 'the registration is what the user is asking about');
+    assert.equal(result.status, STATUS.UNANSWERED);
+    assert.equal(result.entries[1].requestId, 'note-1');
+  });
+
+  test('with only notes, the newest note is still the headline', async () => {
+    const tracker = await posted([
+      { type: 'sonnet.note.v1', request_id: 'note-1' },
+      { type: 'sonnet.note.v1', request_id: 'note-2' },
+    ]);
+    const result = tracker.lookup(SENDER);
+    assert.equal(result.entry.requestId, 'note-2');
+    assert.equal(result.status, STATUS.NO_RECEIPT_EXPECTED);
   });
 });
 

@@ -110,6 +110,8 @@ const STATUS_WORD = {
   [STATUS.ACCEPTED]: 'Accepted',
   [STATUS.REJECTED]: 'Rejected',
   [STATUS.UNANSWERED]: 'Unanswered',
+  // Not "Unanswered": nothing was ever going to answer it.
+  [STATUS.NO_RECEIPT_EXPECTED]: 'Posted',
 };
 
 /** Accent is reserved for the states that want something from the reader. */
