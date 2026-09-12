@@ -22,14 +22,14 @@
  * those is zero. */
 
 :root {
-  --paper: #faf7f2;
-  --paper-sunk: #f3eee5;
-  --ink: #1b1916;
-  --ink-mid: #55504a;
-  --ink-faint: #8b847a;
-  --rule: #ddd6ca;
-  --rule-strong: #c3bbac;
-  --accent: #a8402a;
+  --paper: #f7f9fb;
+  --paper-sunk: #edf1f5;
+  --ink: #131b2e;
+  --ink-mid: #4a5568;
+  --ink-faint: #8794a8;
+  --rule: #d8e0e8;
+  --rule-strong: #b4c0cc;
+  --accent: #0e7c8b;
 
   --serif: Spectral, Georgia, "Iowan Old Style", "Palatino Linotype", Palatino,
     "Times New Roman", serif;
@@ -59,14 +59,14 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #15140f;
-    --paper-sunk: #1d1b15;
-    --ink: #ece6da;
-    --ink-mid: #a8a096;
-    --ink-faint: #7a7369;
-    --rule: #322e27;
-    --rule-strong: #4a453c;
-    --accent: #e07a5c;
+    --paper: #0e1420;
+    --paper-sunk: #161d2b;
+    --ink: #e6ecf2;
+    --ink-mid: #9aa6b5;
+    --ink-faint: #6b7788;
+    --rule: #262e3d;
+    --rule-strong: #3a4353;
+    --accent: #3fb3c4;
   }
 }
 
