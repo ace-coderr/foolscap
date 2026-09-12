@@ -22,23 +22,40 @@
  * those is zero. */
 
 :root {
-  --paper: #f7f9fb;
-  --paper-sunk: #edf1f5;
-  --ink: #131b2e;
-  --ink-mid: #414d5f;
-  --ink-faint: #5f6a7b;
-  --rule: #d8e0e8;
-  --rule-strong: #b4c0cc;
-  --accent: #0c6e7c;
+  /* surfaces */
+  --paper: #0e1420;
+  --paper-sunk: #161d2b;
+  --paper-raised: #1c2434;
+
+  /* text */
+  --ink: #e6ecf2;
+  --ink-mid: #a4b0bf;
+  --ink-faint: #7d8a9c;
+
+  /* structure */
+  --rule: #262e3d;
+  --rule-strong: #3a4353;
+
+  /* state — never decoration.
+   *
+   * Three of them now, because six pages need more than one distinction. The
+   * rule that survives from the one-accent version is the important half: a
+   * state colour marks a status and nothing else. It never fills a background,
+   * never makes a gradient, never decorates.
+   *
+   * All three clear 4.5:1 on all three surfaces, with one exception noted at
+   * --ink-faint below. */
+  --accent: #3fb3c4; /* live, held, verified, current */
+  --warn: #d9a441; /* degrading, expiring, uncertain */
+  --alarm: #e0674f; /* forged, failed, lost */
 
   --serif: Spectral, Georgia, "Iowan Old Style", "Palatino Linotype", Palatino,
     "Times New Roman", serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
-  /* The answer shrinks rather than wraps. Tuned so the full 3.25rem survives at
-   * 375px — the longest words, "Unanswered" and "Not seen yet", each still fit
-   * on one line — and only gives way below that, down to a 2.25rem floor. */
-  --t-answer: clamp(2.25rem, 14vw, 3.25rem);
+  /* The one answer on a page. Used at most once, and only where the page has a
+   * single answer to give. */
+  --t-answer: clamp(2.4rem, 6vw, 3.25rem);
   --t-h1: 2rem;
   --t-h2: 1.25rem;
   --t-body: 1.0625rem;
@@ -49,26 +66,23 @@
    * same size, so it is normalised against whichever step it sits in. */
   --mono-optical: 0.9em;
 
-  --space: 1rem;
+  --space: 1.05rem;
   --space-half: calc(var(--space) * 0.5);
   --space-2: calc(var(--space) * 2);
   --space-4: calc(var(--space) * 4);
 
-  color-scheme: light dark;
+  --measure: 46rem; /* prose */
+  --shell: 72rem; /* page content */
+
+  --nav-height: 3.5rem;
+
+  color-scheme: dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #0e1420;
-    --paper-sunk: #161d2b;
-    --ink: #e6ecf2;
-    --ink-mid: #a4b0bf;
-    --ink-faint: #7d8a9c;
-    --rule: #262e3d;
-    --rule-strong: #3a4353;
-    --accent: #3fb3c4;
-  }
-}
+/* --ink-faint measures 5.25:1 on --paper and 4.81:1 on --paper-sunk, but only
+ * 4.43:1 on --paper-raised. It is therefore not used on raised surfaces; nav
+ * text is --ink-mid (7.06:1). If faint text is ever wanted up there, the token
+ * needs lightening rather than the rule bending. */
 
 *,
 *::before,
@@ -138,6 +152,165 @@ a:hover {
 a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* --------------------------------------------------------------------- nav */
+
+/* Rendered by js/shell.js on every page. Never written into a page by hand:
+ * a link that exists on four of six pages is the failure this prevents. */
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--paper-raised);
+  border-bottom: 1px solid var(--rule);
+}
+
+.nav__inner {
+  max-width: var(--shell);
+  margin-inline: auto;
+  padding: 0 var(--space);
+  height: var(--nav-height);
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+}
+
+.nav__mark {
+  font-size: var(--t-h2);
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  text-decoration: none;
+  flex: 0 0 auto;
+}
+
+.nav__mark:hover {
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.nav__links {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space) * 1.15);
+  margin-left: auto;
+  list-style: none;
+  padding: 0;
+}
+
+.nav__link {
+  display: block;
+  font-size: var(--t-small);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-mid);
+  text-decoration: none;
+  padding: 0.35rem 0;
+  border-bottom: 2px solid transparent;
+}
+
+.nav__link:hover {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+/* Accent marks the current page. Never a filled pill. */
+.nav__link[aria-current='page'] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* A page that does not exist yet is shown, not hidden — the shell is the whole
+ * map — but it is not a link, so nobody is sent to a 404. */
+.nav__link--soon {
+  color: var(--ink-faint);
+  cursor: default;
+}
+
+.nav__toggle {
+  display: none;
+  margin-left: auto;
+  padding: 0.4rem 0.7rem;
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: var(--t-small);
+  cursor: pointer;
+}
+
+@media (max-width: 48rem) {
+  .nav__links {
+    display: none;
+    position: fixed;
+    inset: var(--nav-height) 0 0 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    background: var(--paper-raised);
+    padding: var(--space);
+    overflow-y: auto;
+  }
+
+  .nav__links[data-open='true'] {
+    display: flex;
+  }
+
+  .nav__link {
+    font-size: var(--t-h2);
+    text-transform: none;
+    letter-spacing: 0.01em;
+    padding: var(--space-half) 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .nav__link[aria-current='page'] {
+    border-bottom-color: var(--rule);
+  }
+
+  .nav__toggle {
+    display: block;
+  }
+}
+
+/* ------------------------------------------------------------- page layout */
+
+.shell {
+  max-width: var(--shell);
+  margin-inline: auto;
+  padding: 0 var(--space) var(--space-4);
+}
+
+/* Prose does not get to be 72rem wide just because the page is. */
+.measure {
+  max-width: var(--measure);
+}
+
+.page-header {
+  padding: var(--space-2) 0 var(--space);
+  max-width: var(--measure);
+}
+
+.page-header__eyebrow {
+  margin: 0 0 var(--space-half);
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+}
+
+.page-header__title {
+  margin: 0;
+  font-size: var(--t-h1);
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+}
+
+.page-header__line {
+  margin: var(--space-half) 0 0;
+  color: var(--ink-mid);
 }
 
 /* ---------------------------------------------------------------- masthead */
@@ -618,13 +791,20 @@ a:focus-visible {
 
 /* ---------------------------------------------------------------- colophon */
 
+/* The same statement on every page, rendered by the shell. If it differed per
+ * page, one of them would be the lie. */
 .colophon {
-  margin-top: var(--space-4);
-  padding-top: var(--space);
+  max-width: var(--shell);
+  margin: var(--space-4) auto 0;
+  padding: var(--space) var(--space) var(--space-4);
   border-top: 1px solid var(--rule);
   font-size: var(--t-small);
   color: var(--ink-faint);
   line-height: 1.55;
+}
+
+.colophon > * {
+  max-width: var(--measure);
 }
 
 .colophon__did {

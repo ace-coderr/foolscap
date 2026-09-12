@@ -144,7 +144,6 @@ const yieldToPaint = () =>
     : new Promise((resolve) => setTimeout(resolve, 0));
 
 async function boot() {
-  $('pinned-did').textContent = REFEREE_DID;
   render();
 
   // --- read ---------------------------------------------------------------

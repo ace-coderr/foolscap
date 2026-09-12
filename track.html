@@ -21,22 +21,16 @@
 
     <link rel="stylesheet" href="css/foolscap.css" />
   </head>
-  <body>
-    <header class="masthead">
-      <h1 class="masthead__name">Foolscap</h1>
-      <p class="masthead__line">
-        sonnet-2 — where your request sits, and whether the referee is alive.
-      </p>
-      <p class="masthead__reads">Reads only. There is no key input on this page.</p>
-    </header>
 
-    <div id="progress" class="progress" aria-live="polite" hidden>
-      <p class="progress__text"></p>
-      <div class="progress__track"><div class="progress__fill"></div></div>
-    </div>
+  <!-- The nav, the page header and the colophon come from js/shell.js. -->
+  <body data-page="track">
+    <main class="shell">
+      <div id="progress" class="progress measure" aria-live="polite" hidden>
+        <p class="progress__text"></p>
+        <div class="progress__track"><div class="progress__fill"></div></div>
+      </div>
 
-    <main>
-      <section class="section" id="lookup">
+      <section class="section measure" id="lookup">
         <h2 class="section__title">Track my batch</h2>
 
         <form class="lookup" id="lookup-form" autocomplete="off">
@@ -60,25 +54,13 @@
         <div class="result" id="lookup-result" aria-live="polite"></div>
       </section>
 
-      <section class="section" id="referee">
+      <section class="section measure" id="referee">
         <h2 class="section__title">The referee</h2>
         <div id="referee-panel" aria-live="polite"></div>
       </section>
     </main>
 
-    <footer class="colophon">
-      <p>
-        Every receipt shown above was checked against the referee DID pinned in
-        <span class="nowrap">LAUNCH.md</span>, and nothing else is treated as authoritative:
-      </p>
-      <p class="mono colophon__did" id="pinned-did"></p>
-      <p>
-        A client in sonnet-1 pinned a forged referee DID scraped from an unowned rules room.
-        Foolscap never infers the referee from a room name, a room's owner, or who posts in it.
-      </p>
-      <p>Apache-2.0. Foolscap posts nothing and holds no key.</p>
-    </footer>
-
+    <script type="module" src="js/shell.js"></script>
     <script type="module" src="js/ui.js"></script>
   </body>
 </html>
