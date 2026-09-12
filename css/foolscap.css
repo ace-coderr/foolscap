@@ -72,11 +72,32 @@ p {
   font-family: var(--mono);
   font-size: 0.86em;
   letter-spacing: -0.01em;
-  word-break: break-all;
+  /* Break only when the token genuinely cannot fit — a DID in a narrow column
+   * wraps, but `request_id` in a sentence stays whole. */
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .nowrap {
   white-space: nowrap;
+}
+
+/* Ink links, underlined. Nothing here is blue and nothing here is accent —
+ * the accent belongs to state. */
+a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+  text-decoration-thickness: 1px;
+}
+
+a:hover {
+  text-decoration-thickness: 2px;
+}
+
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* ---------------------------------------------------------------- masthead */
@@ -501,6 +522,53 @@ p {
 
 .coverage__problem {
   color: var(--accent);
+}
+
+/* ------------------------------------------------------------ landing page */
+
+.lede {
+  font-size: 1.15rem;
+  margin: 0 0 1.9rem;
+}
+
+.cta {
+  margin: 0 0 0.45rem;
+}
+
+/* Ink on paper, inverted — the same treatment as the Look up button, because it
+ * is the same kind of thing: the one action on the page. */
+.cta__link {
+  display: inline-block;
+  padding: 0.62rem 1.15rem;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 1.1rem;
+  text-decoration: none;
+}
+
+.cta__link:hover {
+  background: var(--ink-mid);
+  border-color: var(--ink-mid);
+  text-decoration: none;
+}
+
+.cta__sub {
+  margin: 0 0 2.2rem;
+  font-size: 0.85rem;
+  color: var(--ink-faint);
+}
+
+.trust p {
+  margin: 0 0 0.9em;
+}
+
+.trust__did {
+  margin: 0 0 0.9em;
+  padding: 0.5rem 0 0.5rem 0.8rem;
+  border-left: 1px solid var(--rule-strong);
+  background: var(--paper-sunk);
+  color: var(--ink-mid);
 }
 
 /* ---------------------------------------------------------------- colophon */

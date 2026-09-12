@@ -1,0 +1,4 @@
+# The fixtures are byte-exact recordings of the live rooms, and the signatures in
+# them are checked against the bytes. core.autocrlf=true on Windows would rewrite
+# their line endings on checkout, so pin them to LF everywhere.
+*.jsonl text eol=lf
