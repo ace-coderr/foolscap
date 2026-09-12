@@ -18,6 +18,19 @@
 import { exportRoom, RoomWatcher } from './technocore.js';
 import { ContestTracker, WATCHED_ROOMS, REFEREE_DID, STATUS } from './contest.js';
 
+/**
+ * Messages per poll. The read endpoint's default is 50 and its ceiling is 200,
+ * and it returns the NEWEST messages after the cursor rather than the next ones
+ * in order — so a burst above the cap is skipped past, not queued up. Asking for
+ * the maximum makes that rarer; it does not make it impossible, which is what
+ * the hole recovery below is for.
+ */
+const POLL_LIMIT = 200;
+
+/** Attempts to re-export a room to recover a skipped range before giving up. */
+const RECOVERY_ATTEMPTS = 3;
+const RECOVERY_RETRY_MS = 4000;
+
 /** How many of the newest referee messages to verify before the first paint. */
 const HEAD_SIZE = 200;
 /** Messages per chunk in pass 2. Small enough to keep frames cheap. */
@@ -35,6 +48,10 @@ const ui = {
   pendingDone: 0,
   problems: [],
   gaps: [],
+  /** Sequence ranges polling skipped: { room, from, to, state, recovered }. */
+  holes: [],
+  /** Re-exports in flight. While any is, a status is not safe to trust. */
+  recovering: 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -208,18 +225,13 @@ async function boot() {
     const watcher = new RoomWatcher(dump.room, {
       since: dump.lastSeq,
       backfill: false,
+      limit: POLL_LIMIT,
       onMessages: async ({ messages }) => {
         await tracker.ingest(messages, dump.room);
         render();
       },
       onGap: (gap) => {
-        if (gap.kind === 'rotated') return;
-        ui.gaps.push(
-          gap.kind === 'regenerated'
-            ? `${dump.room} was recreated; Foolscap restarted from the top of the new ring.`
-            : `${dump.room}: ${plural(gap.missing, 'message')} rotated past before Foolscap read them.`
-        );
-        render();
+        noteGap(dump.room, gap);
       },
       onError: (err) => {
         ui.problems.push(`${dump.room}: ${err.message}`);
@@ -231,6 +243,86 @@ async function boot() {
 
   setInterval(render, TICK_MS);
 }
+
+/**
+ * Go back for messages a poll skipped.
+ *
+ * The reply cap means a burst larger than POLL_LIMIT is stepped over rather than
+ * queued, and the skipped sequences sit BELOW everything that arrived after
+ * them — so the only way back is a re-export, filtered to the missing range.
+ *
+ * This matters more here than in the mirror worker. A receipt inside the hole
+ * would make Foolscap show Unanswered for a request that was actually answered,
+ * which is precisely the wrong answer to give someone deciding whether to
+ * re-post.
+ */
+async function recoverHole(hole) {
+  ui.recovering++;
+  render();
+
+  try {
+    for (let attempt = 1; attempt <= RECOVERY_ATTEMPTS; attempt++) {
+      let dump;
+      try {
+        dump = await exportRoom(hole.room);
+      } catch (err) {
+        ui.problems.push(`${hole.room}: could not re-read to recover skipped messages — ${err.message}`);
+        break;
+      }
+
+      const inHole = dump.messages.filter((m) => m.seq >= hole.from && m.seq <= hole.to);
+      if (inHole.length) {
+        await tracker.ingest(inHole, hole.room);
+        hole.recovered += inHole.length;
+        hole.from = Math.max(hole.from, Math.max(...inHole.map((m) => m.seq)) + 1);
+      }
+
+      if (hole.from > hole.to) {
+        hole.state = 'recovered';
+        return;
+      }
+
+      // Below the ring's current start it is gone, and no number of retries
+      // will bring it back.
+      if (dump.firstSeq != null && dump.firstSeq > hole.to) break;
+
+      if (attempt < RECOVERY_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, RECOVERY_RETRY_MS));
+      }
+    }
+
+    hole.state = 'lost';
+    hole.missing = hole.to - hole.from + 1;
+  } finally {
+    ui.recovering--;
+    render();
+  }
+}
+
+function noteGap(room, gap) {
+  if (gap.kind === 'rotated') return;
+
+  if (gap.kind === 'regenerated') {
+    ui.gaps.push(`${room} was recreated; Foolscap restarted from the top of the new ring.`);
+    render();
+    return;
+  }
+
+  const hole = {
+    room,
+    from: gap.expected,
+    to: gap.firstSeq - 1,
+    state: 'recovering',
+    recovered: 0,
+    missing: gap.missing,
+  };
+  ui.holes.push(hole);
+  recoverHole(hole);
+}
+
+/** Ranges Foolscap knows it is missing, after every attempt to get them back. */
+const lostHoles = () => ui.holes.filter((h) => h.state === 'lost');
+const lostCount = () => lostHoles().reduce((n, h) => n + (h.missing ?? 0), 0);
 
 async function ingestChunked(messages) {
   let sinceRender = 0;
@@ -282,7 +374,16 @@ function render() {
 }
 
 /** True while counts can still climb, which every answer has to admit to. */
-const settling = () => ui.phase !== 'following';
+const settling = () => ui.phase !== 'following' || ui.recovering > 0;
+
+/**
+ * Statuses that a lost message could have changed.
+ *
+ * A receipt in hand is evidence whatever else is missing, so Accepted and
+ * Rejected stand. The others are all conclusions drawn from absence, and absence
+ * is exactly what a hole manufactures.
+ */
+const AT_RISK_FROM_HOLES = new Set([STATUS.NOT_SEEN, STATUS.QUEUED, STATUS.UNANSWERED]);
 
 // ---------------------------------------------------------------------------
 // The referee panel
@@ -415,6 +516,25 @@ function coverageBlock() {
     )
   );
   for (const gap of ui.gaps.slice(-3)) box.append(el('p', 'coverage__problem', gap));
+
+  for (const hole of ui.holes.slice(-4)) {
+    if (hole.state === 'recovering') {
+      box.append(
+        el('p', null, `Re-reading ${hole.room} to recover ${plural(hole.missing ?? 0, 'message')} polling skipped.`)
+      );
+    } else if (hole.state === 'lost') {
+      box.append(
+        el(
+          'p',
+          'coverage__problem',
+          `${hole.room}: ${plural(hole.missing, 'message')} (seq ${hole.from}–${hole.to}) rotated ` +
+            'out before Foolscap could recover them. That part of the room is missing here.'
+        )
+      );
+    } else if (hole.recovered) {
+      box.append(el('p', null, `${hole.room}: recovered ${plural(hole.recovered, 'message')} polling skipped.`));
+    }
+  }
   const problems = problemsBlock();
   if (problems) box.append(problems);
   return box;
@@ -477,7 +597,16 @@ function statusCard(result, entry) {
   // Verbatim, exactly as contest.js wrote it.
   card.append(el('p', 'card__copy', result.copy));
 
-  if (settling()) {
+  if (ui.recovering > 0) {
+    card.append(
+      el(
+        'p',
+        'card__note',
+        'A burst of messages went past faster than Foolscap could read them. It is re-reading ' +
+          'the room to recover them before this answer can be relied on.'
+      )
+    );
+  } else if (settling()) {
     card.append(
       el(
         'p',
@@ -485,6 +614,23 @@ function statusCard(result, entry) {
         'Foolscap is still verifying the backfill, so this answer can still change.'
       )
     );
+  }
+
+  // Louder than a note, because it is the one thing here that could be wrong.
+  if (AT_RISK_FROM_HOLES.has(status) && lostCount() > 0) {
+    const rooms = [...new Set(lostHoles().map((h) => h.room))].join(', ');
+    const warning = el('div', 'verbatim');
+    warning.append(el('span', 'verbatim__label', 'This status may be wrong'));
+    warning.append(
+      el(
+        'span',
+        null,
+        `${plural(lostCount(), 'message')} in ${rooms} rotated out before Foolscap could re-read ` +
+          'them, and a receipt for this request could have been among them. Reload to read the ' +
+          'rooms again — and until then, do not treat this as an answer.'
+      )
+    );
+    card.append(warning);
   }
 
   if (!entry) return card;
