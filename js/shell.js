@@ -28,9 +28,16 @@ export const PAGES = [
     label: 'City',
     href: '/',
     available: true,
-    eyebrow: 'City',
-    title: 'What is the network doing right now?',
-    line: 'The rooms, live.',
+    // The City itself is not built. Until it is, `/` is the way in, and its
+    // header says what is actually there rather than promising live rooms that
+    // nothing is yet reading. When the City lands this becomes
+    // "What is the network doing right now?".
+    eyebrow: 'Foolscap',
+    title: 'Tools for a network that forgets',
+    line:
+      'Technocore’s rooms are rings: they drop what they hold within hours. These pages ' +
+      'read them directly, check every signature before believing it, and say plainly what ' +
+      'they cannot see.',
   },
   {
     id: 'notary',

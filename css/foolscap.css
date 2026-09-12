@@ -1,25 +1,25 @@
 @import url("https://fonts.googleapis.com/css2?family=Spectral:wght@400;600&display=swap");
 
-/* foolscap.css — paper and ink.
+/* foolscap.css — the shell, dark only.
  *
  * Serif for prose, monospace only for things that are literally strings a machine
- * produced: DIDs, signatures, hashes, request ids, room names. One accent colour,
- * and it earns its place by meaning something: it marks state that wants your
- * attention. Nothing decorative is ever accent-coloured, and nothing here has a
- * gradient, a glow or a shadow. Rules and whitespace do the dividing.
+ * produced: DIDs, signatures, hashes, request ids, room names. Three state
+ * colours, each meaning something; nothing decorative is ever given one, and
+ * nothing here has a gradient, a glow or a shadow. Rules and whitespace do the
+ * dividing.
  *
  * Two scales, and nothing outside them.
  *
  * TYPE — six steps. Every font-size in this file is one of these tokens.
- *   --t-answer   the status word on the tracker, and nothing else
- *   --t-h1       the wordmark
- *   --t-h2       section-leading text: state word, count figures, lede, CTA
+ *   --t-answer   the one answer a page exists to give. At most once per page.
+ *   --t-h1       the page title
+ *   --t-h2       the wordmark, and section-leading text: state word, figures, lede
  *   --t-body     prose, and the controls you type into
- *   --t-small    secondary prose: notes, reasons, facts, rows, colophon
+ *   --t-small    secondary prose: notes, reasons, facts, rows, nav, colophon
  *   --t-micro    labels only, always uppercase and letterspaced
  *
  * SPACE — one unit and its multiples: 0.5, 1, 2, 4. Anything that is not one of
- * those is zero. */
+ * those is zero. Widths come from --measure (prose) and --shell (page). */
 
 :root {
   /* surfaces */
@@ -30,7 +30,7 @@
   /* text */
   --ink: #e6ecf2;
   --ink-mid: #a4b0bf;
-  --ink-faint: #7d8a9c;
+  --ink-faint: #8996a8;
 
   /* structure */
   --rule: #262e3d;
@@ -54,8 +54,12 @@
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
   /* The one answer on a page. Used at most once, and only where the page has a
-   * single answer to give. */
-  --t-answer: clamp(2.4rem, 6vw, 3.25rem);
+   * single answer to give.
+   *
+   * 7vw rather than 6: the full 3.25rem arrives at 743px instead of 867px, and
+   * the floor is 2.75rem, because the answer word is the point of the page and
+   * it was measured as fitting on one line well below either. */
+  --t-answer: clamp(2.75rem, 7vw, 3.25rem);
   --t-h1: 2rem;
   --t-h2: 1.25rem;
   --t-body: 1.0625rem;
@@ -79,10 +83,11 @@
   color-scheme: dark;
 }
 
-/* --ink-faint measures 5.25:1 on --paper and 4.81:1 on --paper-sunk, but only
- * 4.43:1 on --paper-raised. It is therefore not used on raised surfaces; nav
- * text is --ink-mid (7.06:1). If faint text is ever wanted up there, the token
- * needs lightening rather than the rule bending. */
+/* Every text token clears 4.5:1 on all three surfaces, --ink-faint included:
+ * 6.14 on --paper, 5.62 on --paper-sunk, 5.17 on --paper-raised. It is lighter
+ * than it would need to be on the page alone, which is the point — a token that
+ * is safe everywhere needs no rule about where not to use it, and a rule like
+ * that is forgotten long before the palette is. */
 
 *,
 *::before,
@@ -103,14 +108,6 @@ body {
   font-size: var(--t-body);
   line-height: 1.62;
   -webkit-font-smoothing: antialiased;
-}
-
-main,
-.masthead,
-.colophon,
-.progress {
-  max-width: 38rem;
-  margin-inline: auto;
 }
 
 p {
@@ -311,33 +308,6 @@ a:focus-visible {
 .page-header__line {
   margin: var(--space-half) 0 0;
   color: var(--ink-mid);
-}
-
-/* ---------------------------------------------------------------- masthead */
-
-.masthead {
-  padding: var(--space-2) 0 var(--space);
-}
-
-.masthead__name {
-  margin: 0;
-  font-size: var(--t-h1);
-  font-weight: 400;
-  line-height: 1.15;
-  letter-spacing: 0.01em;
-}
-
-.masthead__line {
-  margin: var(--space-half) 0 0;
-  color: var(--ink-mid);
-}
-
-.masthead__reads {
-  margin: 0;
-  font-size: var(--t-small);
-  color: var(--ink-faint);
-  font-variant: small-caps;
-  letter-spacing: 0.06em;
 }
 
 /* ------------------------------------------------------- verifying the tail */
@@ -779,14 +749,6 @@ a:focus-visible {
 
 .trust p {
   margin: 0 0 var(--space);
-}
-
-.trust__did {
-  margin: 0 0 var(--space);
-  padding: var(--space-half) 0 var(--space-half) var(--space);
-  border-left: 1px solid var(--rule-strong);
-  background: var(--paper-sunk);
-  color: var(--ink-mid);
 }
 
 /* ---------------------------------------------------------------- colophon */
