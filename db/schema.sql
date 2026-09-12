@@ -1,0 +1,77 @@
+-- Foolscap Notary — schema.
+--
+-- Safe to run more than once.
+--
+-- The one column worth staring at is `nonce`. It is numeric(20,0), never bigint
+-- and never anything that could reach this database as a JSON number: nonces
+-- exceed 2^53, and a nonce that has been through a double is a nonce that no
+-- longer reproduces the canonical string `<room>|<nonce>|<text>`. A record whose
+-- signature cannot be re-verified is worth nothing here, because re-verification
+-- by a stranger is the entire product.
+
+create table if not exists records (
+  id           bigserial primary key,
+  did          text        not null,
+  room         text        not null,
+  nonce        numeric(20,0) not null,
+  sig          text        not null,
+  text         text        not null,
+  captured_at  timestamptz not null default now(),
+  day          date        not null,
+  source       text        not null check (source in ('submitted', 'mirrored')),
+
+  -- The room's own timestamp for the message, when the read API gave us one.
+  -- captured_at is when Notary saw it, which for a mirrored record is later —
+  -- sometimes much later — than when it was posted. Keeping both is the honest
+  -- thing: only one of them is Notary's to vouch for.
+  source_ts    timestamptz,
+  source_seq   bigint,
+
+  unique (did, room, nonce)
+);
+
+create index if not exists records_did_captured_at_idx on records (did, captured_at);
+create index if not exists records_day_idx on records (day);
+create index if not exists records_room_seq_idx on records (room, source_seq);
+
+create table if not exists anchors (
+  day            date primary key,
+  root           text,
+  record_count   int,
+  published_seq  bigint,
+  published_at   timestamptz,
+  first_capture  timestamptz,
+  last_capture   timestamptz
+);
+
+-- Holes in the archive, recorded rather than hidden.
+--
+-- 'missed'      lines rotated past while Notary was following the room. The
+--               archive is missing them and always will be.
+-- 'regenerated' the room was deleted and recreated; sequence numbers restarted.
+-- 'rotated'     what the ring had already dropped when Notary first looked, so
+--               it marks the start of coverage for that room.
+--
+-- An archive that quietly has holes is worse than no archive, because people
+-- would draw conclusions from absence. Every answer this database gives about a
+-- DID has to be readable against this table.
+create table if not exists gaps (
+  id           bigserial primary key,
+  room         text not null,
+  kind         text not null check (kind in ('missed', 'regenerated', 'rotated')),
+  missing      integer,
+  expected_seq bigint,
+  first_seq    bigint,
+  generation   integer,
+  noticed_at   timestamptz not null default now(),
+
+  -- How many of `missing` a later re-export got back. A poll returns only the
+  -- newest messages after the cursor, so a busy room is routinely skipped past
+  -- rather than followed; /export still holds those messages until the ring
+  -- drops them. recovered < missing means the archive really is short that many.
+  recovered    integer not null default 0
+);
+
+alter table gaps add column if not exists recovered integer not null default 0;
+
+create index if not exists gaps_room_noticed_idx on gaps (room, noticed_at);

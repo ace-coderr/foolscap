@@ -1,2 +1,7 @@
 # Local dev-server config for the Claude Code preview pane. Tooling, not product.
 .claude/launch.json
+
+# Secrets and server-side deps. The static site still has neither.
+.env
+.env.local
+node_modules/

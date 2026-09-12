@@ -390,9 +390,17 @@ async function safeText(res) {
  * message lands. `bust` appends a throwaway counter because the URL is otherwise
  * unchanged between idle polls and caches will happily answer from memory.
  */
-export async function readRoom(room, { since = 0, wait = 0, signal, fetchImpl, bust = true } = {}) {
+export async function readRoom(
+  room,
+  { since = 0, wait = 0, limit, signal, fetchImpl, bust = true } = {}
+) {
   const name = assertRoom(room);
   const params = new URLSearchParams({ format: 'json', since: String(since), wait: String(wait) });
+  // The reply is capped — 50 by default, 200 the most the server will give — and
+  // it returns the NEWEST messages after `since`, not the next ones in order. In
+  // a room busier than the cap, polling therefore skips traffic rather than
+  // falling behind it, and the skip surfaces as a `missed` gap.
+  if (limit != null) params.set('limit', String(limit));
   if (bust) params.set('n', String(++bustCounter));
 
   const res = await request(`${BASE}/r/${name}?${params}`, {
@@ -513,6 +521,8 @@ export class RoomWatcher {
   constructor(room, options = {}) {
     this.room = assertRoom(room);
     this.wait = options.wait ?? 10;
+    /** Messages per poll. The server caps this at 200; omit for its default of 50. */
+    this.limit = options.limit;
     this.backfill = options.backfill !== false;
     this.since = options.since ?? 0;
     this.generation = null;
@@ -618,6 +628,7 @@ export class RoomWatcher {
         const result = await readRoom(this.room, {
           since: this.since,
           wait: this.wait,
+          limit: this.limit,
           signal,
           fetchImpl: this.fetchImpl,
         });
