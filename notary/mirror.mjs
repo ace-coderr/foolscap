@@ -46,7 +46,7 @@ export const MIRROR_ROOMS = [
 
 /**
  * NOTARY_DRY_RUN=1 reads and verifies but writes nothing and needs no database.
- * Useful for watching the pipeline work while the Neon database is still being
+ * Useful for watching the pipeline work while the Supabase database is still being
  * created — and for confirming a room is worth mirroring before it is added.
  */
 const DRY_RUN = process.env.NOTARY_DRY_RUN === '1';

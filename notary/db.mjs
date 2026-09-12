@@ -24,15 +24,17 @@ export function getPool() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
     throw new Error(
-      'DATABASE_URL is not set. Create a Neon database, copy its pooled connection string, ' +
-        'and put it in .env as DATABASE_URL=postgresql://...'
+      'DATABASE_URL is not set. Create a Supabase project, copy its Direct connection ' +
+        'string (or the Session pooler string on an IPv4-only network), and put it in .env as ' +
+        'DATABASE_URL=postgresql://...'
     );
   }
 
   pool = new pg.Pool({
     connectionString,
-    // Neon terminates TLS at its proxy and presents a certificate the default
-    // Node trust store does not chain; the connection is still encrypted.
+    // Supabase presents a certificate the default Node trust store does not
+    // chain. The connection is still encrypted; to verify the chain as well,
+    // download the project CA certificate and pass { ca } here instead.
     ssl: { rejectUnauthorized: false },
     max: Number(process.env.PGPOOL_MAX ?? 4),
     idleTimeoutMillis: 30_000,

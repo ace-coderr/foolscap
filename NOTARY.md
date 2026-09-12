@@ -103,7 +103,7 @@ All read endpoints send `access-control-allow-origin: *` so the static pages can
 
 ## Storage
 
-Postgres (Neon free tier works, Vercel-native). One table does most of it:
+Postgres, on Supabase. One table does most of it:
 
 ```
 records(
@@ -127,6 +127,42 @@ anchors(day date primary key, root text, record_count int, published_seq bigint,
 
 Nonce as `numeric`, never bigint-as-JSON-number. The same 2^53 trap that would have broken
 signature re-verification in technocore.js applies here.
+
+**Connect with `pg` over the Postgres wire protocol. Never the Supabase JS client.**
+That client goes through PostgREST, which serialises `numeric` as a JSON number — a nonce
+past 2^53 comes back rounded, no longer reproduces `<room>|<nonce>|<text>`, and the stored
+signature stops verifying. Every record it touched would become unprovable, which is the
+whole asset. `notary/db.mjs` additionally overrides node-postgres' numeric parser so
+nonces arrive as strings rather than going near a double in either direction.
+
+## Setup
+
+One-time, in the Supabase dashboard:
+
+1. **<https://supabase.com/dashboard>** → **New project**. Name it `foolscap-notary`,
+   choose a region near wherever the worker will run.
+2. Set a **database password** when prompted and save it — the connection string needs it,
+   and it is only shown once. (Later: **Project Settings → Database → Reset database
+   password**.)
+3. Wait for the project to finish provisioning, then hit **Connect** in the top bar.
+4. In the dialog, under **Connection string**, take the **Direct connection** URI. If your
+   network has no IPv6, take **Session pooler** instead — Supabase serves direct
+   connections over IPv6 only. Either works with `pg`.
+   Avoid **Transaction pooler** (port 6543) for the worker; it is for short-lived
+   serverless calls, not a process that holds a connection.
+5. Replace `[YOUR-PASSWORD]` in the URI with the password from step 2.
+
+Then locally:
+
+```
+cp .env.example .env      # paste the URI as DATABASE_URL
+npm install
+npm run migrate           # creates records, anchors, gaps
+npm run mirror            # starts capturing
+```
+
+`NOTARY_DRY_RUN=1 npm run mirror` reads and verifies without a database, for checking the
+pipeline before any of the above.
 
 ## The mirror worker
 
