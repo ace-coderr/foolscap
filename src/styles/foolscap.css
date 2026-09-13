@@ -271,6 +271,38 @@ a:focus-visible {
   }
 }
 
+/* ------------------------------------------------------------------ reveal */
+
+/* Sections fade up as they arrive. The section carries data-in; the elements
+ * inside it carry .rise and an index, and the index only sets a delay — so a
+ * stagger is a number in the markup rather than a rule per child.
+ *
+ * One-shot, set by the observer in motion.ts. Reduced motion skips to the
+ * finished state here as well as there: this class must never be the reason
+ * something stays invisible. */
+
+.rise {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 400ms ease-out,
+    transform 400ms ease-out;
+  transition-delay: calc(var(--rise-i, 0) * 60ms);
+}
+
+[data-in='true'] .rise {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
 /* ------------------------------------------------------------------ lockup */
 
 /* Mark plus wordmark, one piece, rendered by Mark.tsx and styled once here so
@@ -800,7 +832,7 @@ a:focus-visible {
   --footer-edge: rgba(255, 255, 255, 0.1);
   --footer-text: rgba(255, 255, 255, 0.62);
   --footer-faint: rgba(255, 255, 255, 0.38);
-  --footer-quiet: #6e6e6e;
+  --footer-quiet: #8a8a8a;
   /* The wordmark's size, kept as a variable so the rules that reach past its
    * edge can be written in the same unit. Tuned so eight capitals of Saira at
    * this width span the viewport. */
@@ -879,14 +911,18 @@ body:not(.on-black) .footer {
   text-transform: uppercase;
   text-decoration: none;
   white-space: nowrap;
-  transition: background-color 140ms ease, border-color 140ms ease;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
 }
 
+/* Inverted, not dimmed: the same pill with its two colours swapped. */
 .footer__cta:hover {
   text-decoration: none;
-  color: #000;
-  background: rgba(255, 255, 255, 0.82);
-  border-color: rgba(255, 255, 255, 0.82);
+  color: #fff;
+  background: var(--void);
+  border-color: #fff;
 }
 
 .footer__cta:focus-visible {
@@ -907,6 +943,7 @@ body:not(.on-black) .footer {
 }
 
 .footer__link {
+  position: relative;
   display: block;
   font-family: var(--footer-body);
   font-weight: 400;
@@ -921,6 +958,29 @@ body:not(.on-black) .footer {
 .footer__link:hover {
   color: #fff;
   text-decoration: none;
+}
+
+/* Drawn rather than underlined, so it can arrive from one end. */
+.footer__link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.4em;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 160ms ease-out;
+}
+
+.footer__link:hover::after {
+  transform: scaleX(1);
+}
+
+/* Nothing to wipe for something that is not a link. */
+.footer__link--soon::after {
+  content: none;
 }
 
 /* Grey and unlinked, the same rule the landing's tool cards follow: nothing
@@ -939,7 +999,16 @@ body:not(.on-black) .footer {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: calc(var(--footer-mark) * -0.28);
+  /* How much of the word survives the clip, and it is worth writing down how
+   * this number is arrived at rather than nudging it.
+   *
+   * Saira at line-height 1 puts its baseline 0.849em below the line box's top
+   * (half-leading of -0.289em plus an ascent of 1.138em), and its capitals stand
+   * 0.706em tall. With the box pushed k below the footer's edge, the height of
+   * letter still above that edge is (0.849 - k)em. At k = 0.28 that left 80% of
+   * the cap showing, which read as a slice rather than a word; 0.21 leaves 90%,
+   * so the letterforms are legible as letters and only their feet are gone. */
+  bottom: calc(var(--footer-mark) * -0.21);
   z-index: 0;
   text-align: center;
   font-family: var(--footer-display);
@@ -953,6 +1022,8 @@ body:not(.on-black) .footer {
   white-space: nowrap;
   user-select: none;
   pointer-events: none;
+  /* --drift is written by useParallax, and is absent under reduced motion. */
+  transform: translateX(var(--drift, 0));
 }
 
 .footer__meta {
@@ -960,8 +1031,12 @@ body:not(.on-black) .footer {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: 1.5rem clamp(1.5rem, 4vw, 3rem);
-  margin-top: clamp(5rem, 15vw, 11rem);
-  padding-bottom: clamp(1.25rem, 2.5vw, 2rem);
+  margin-top: clamp(6rem, 17vw, 13rem);
+  /* Measured against the wordmark rather than the viewport, because that is
+   * what it has to sit inside. The glyphs occupy the 0.64em above the footer's
+   * edge; 0.36em of padding puts this row in their upper third instead of
+   * across their baseline. */
+  padding-bottom: calc(var(--footer-mark) * 0.43);
 }
 
 .footer__lockup {
@@ -978,8 +1053,8 @@ body:not(.on-black) .footer {
 .footer__trust {
   max-width: 30rem;
   margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.55;
   color: var(--footer-quiet);
 }
 
@@ -999,7 +1074,7 @@ body:not(.on-black) .footer {
 }
 
 .footer__did {
-  margin: 0;
+  margin: 0 0 0.7rem;
   font-size: 11px;
   line-height: 1.5;
 }
@@ -1047,7 +1122,7 @@ body:not(.on-black) .footer {
   .footer__meta {
     grid-template-columns: minmax(0, 1fr);
     align-items: start;
-    margin-top: clamp(4rem, 22vw, 8rem);
+    margin-top: clamp(5rem, 26vw, 9rem);
   }
 
   .footer__refs {
@@ -1479,6 +1554,40 @@ body:not(.on-black) .footer {
    * readings, no damping on the controls. Nothing here can reach into WebGL, so
    * this block is only the DOM half; see CityCanvas.tsx for the rest. */
   .city__label {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------- the pinned key */
+
+/* Tracker only. This is the key every receipt on that page is verified against,
+ * so it is set out at length there and nowhere else — a key shown where it is
+ * not doing a job is a key someone can mistake for one that is. */
+
+.pinned__copy {
+  margin: 0 0 var(--space);
+  color: var(--ink-mid);
+  font-size: var(--t-small);
+}
+
+.pinned__did {
+  margin: 0 0 var(--space);
+  padding: var(--space-half) var(--space);
+  background: var(--paper-sunk);
+  border-left: 2px solid var(--rule-strong);
+  color: var(--ink);
+}
+
+.pinned__note {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: var(--t-small);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .footer__cta,
+  .footer__link::after,
+  .footer__wordmark {
     transition: none;
   }
 }

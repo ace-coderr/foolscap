@@ -9,11 +9,22 @@
 // point of the rule in SHELL.md: a second nav written by hand is how a link ends
 // up on four of six pages. Different chrome, same map.
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useInView, useParallax } from '../motion';
 import { Link, NavLink } from 'react-router-dom';
 import { PAGES, pageById } from '../pages';
 import { Lockup } from './Mark';
-import { REFEREE_DID } from '../lib/contest.ts';
+
+/**
+ * The author's own key, published as authorship.
+ *
+ * Not the referee's. The referee DID is pinned in contest.ts and belongs on the
+ * Tracker, which is the only page that verifies anything against it; carrying it
+ * in a footer on every page would put a sonnet-2 key in front of people reading
+ * about something else, and a key shown where it is not doing a job is a key
+ * someone can mistake for one that is.
+ */
+const AUTHOR_DID = 'did:key:z6Mko5gbL5nHyfofMpxdVPFWChStScejMzJ3HtPRUzKdkEnd';
 
 /** Links, from PAGES, in whatever chrome the page wraps them in. */
 function NavItems({
@@ -118,39 +129,46 @@ function Nav({ currentId, over }: { currentId: string; over: boolean }) {
  * No accent. Nothing in here is state.
  */
 export function Footer() {
+  const wordmark = useParallax<HTMLDivElement>(2);
+  const [ref, seen] = useInView<HTMLElement>();
+
   return (
-    <footer className="footer">
+    <footer className="footer" ref={ref} data-in={seen}>
       {/* Behind everything, clipped by the footer's own edge. Decorative: the
           name is already in the nav and in the page's own heading. */}
-      <div className="footer__wordmark" aria-hidden="true">
+      <div className="footer__wordmark" aria-hidden="true" ref={wordmark}>
         Foolscap
       </div>
 
       <div className="footer__inner">
         <div className="footer__call">
-          <p className="footer__headline">Keep what the network drops.</p>
-          <p className="footer__sub">
+          <p className="footer__headline rise">Keep what the network drops.</p>
+          <p className="footer__sub rise" style={{ '--rise-i': 1 } as CSSProperties}>
             Paste a <span className="footer__mono">request_id</span> or a{' '}
             <span className="footer__mono">did:key</span> and see where it actually stands —
             read live from technocore.chat, verified in your browser.
           </p>
-          <Link className="footer__cta" to="/track">
+          <Link className="footer__cta rise" to="/track" style={{ '--rise-i': 2 } as CSSProperties}>
             Track a request
           </Link>
         </div>
 
-        <ul className="footer__nav">
+        <ul className="footer__nav rise" style={{ '--rise-i': 3 } as CSSProperties}>
           <NavItems currentId="" className="footer__link" />
         </ul>
 
-        <div className="footer__meta">
+        <div className="footer__meta rise" style={{ '--rise-i': 4 } as CSSProperties}>
           <div className="footer__who">
             <Lockup className="footer__lockup" />
             <p className="footer__by">
               Built by{' '}
-              <a href="https://x.com/_ace_won" rel="noreferrer">
+              <a href="https://x.com/_ace_won" target="_blank" rel="noopener noreferrer">
                 Ace
               </a>
+            </p>
+            <p className="footer__did">
+              <span className="footer__did-label">Author&rsquo;s DID</span>
+              <span className="footer__did-value">{AUTHOR_DID}</span>
             </p>
             <p className="footer__trust">
               Foolscap reads and nothing else: it holds no key, asks for none, and posts nothing
@@ -161,19 +179,23 @@ export function Footer() {
 
           <div className="footer__refs">
             <p className="footer__links">
-              <a href="https://github.com/ace-coderr/foolscap" rel="noreferrer">
+              <a
+                href="https://github.com/ace-coderr/foolscap"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 GitHub
               </a>
               <span className="footer__sep" aria-hidden="true">
                 ·
               </span>
-              <a href="https://github.com/ace-coderr/foolscap/blob/main/LICENSE" rel="noreferrer">
+              <a
+                href="https://github.com/ace-coderr/foolscap/blob/main/LICENSE"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 Apache-2.0
               </a>
-            </p>
-            <p className="footer__did">
-              <span className="footer__did-label">Referee, pinned</span>
-              <span className="footer__did-value">{REFEREE_DID}</span>
             </p>
           </div>
         </div>

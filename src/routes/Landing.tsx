@@ -14,34 +14,17 @@
 // between the letters, which is exactly the overlap wanted and impossible to get
 // wrong.
 
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { Footer, HeroNav } from '../components/Shell';
 import { PAGES } from '../pages';
 import { useLivePulse, type LiveFeed } from '../hero/useLivePulse';
 import { num } from '../format';
+import { useCountUp, useInView, usePrefersReducedMotion } from '../motion';
 import '../styles/hero.css';
 
 /** Three.js is the City's weight and the hero's; neither makes the Tracker pay. */
 const SignatureSphere = lazy(() => import('../hero/SignatureSphere'));
-
-function usePrefersReducedMotion(): boolean {
-  const query = useMemo(
-    () =>
-      typeof window !== 'undefined' && window.matchMedia
-        ? window.matchMedia('(prefers-reduced-motion: reduce)')
-        : null,
-    []
-  );
-  const [reduced, setReduced] = useState(() => query?.matches ?? false);
-  useEffect(() => {
-    if (!query) return;
-    const listener = (event: MediaQueryListEvent) => setReduced(event.matches);
-    query.addEventListener('change', listener);
-    return () => query.removeEventListener('change', listener);
-  }, [query]);
-  return reduced;
-}
 
 export default function Landing() {
   const feed = useLivePulse();
@@ -128,19 +111,26 @@ export default function Landing() {
  * The one thing this section must not do is imply the figures are current. They
  * are a reading of a ring that has since rotated — that is the whole point of
  * the page — so the asterisk is not decoration and the date is not a footer.
+ *
+ * The figures are held as numbers rather than as strings so they can be counted
+ * up, and formatted at the last moment. A hard-coded "13,146" would animate to
+ * the wrong thing or not at all.
  */
 function About() {
+  const [ref, seen] = useInView<HTMLElement>();
+  const [bandRef, bandSeen] = useInView<HTMLDivElement>();
+
   return (
-    <section className="about" aria-labelledby="about-title">
+    <section className="about" aria-labelledby="about-title" ref={ref} data-in={seen}>
       <div className="about__grid" aria-hidden="true" />
 
       <div className="about__inner">
-        <p className="about__eyebrow">The problem</p>
-        <h2 className="about__title" id="about-title">
+        <p className="about__eyebrow rise">The problem</p>
+        <h2 className="about__title rise" id="about-title" style={rise(1)}>
           The network forgets.
         </h2>
 
-        <div className="about__copy">
+        <div className="about__copy rise" style={rise(2)}>
           <p>
             Rooms are rings — a busy room drops its own history within the hour. Notes idle
             seven days are reclaimed. A room on a single message is deleted after twelve hours.
@@ -151,35 +141,58 @@ function About() {
             and it had already rotated away.
           </p>
         </div>
+      </div>
 
+      {/* A band rather than a column: these are the section's evidence, and
+          hairlines the full width of the page say so more plainly than a
+          heading would. */}
+      <div className="about__band rise" ref={bandRef} style={rise(3)}>
         <ul className="about__stats">
           {STATS.map((stat) => (
             <li className="about__stat" key={stat.label}>
-              <span className="about__figure">
-                {stat.figure}
-                <span className="about__ast" aria-hidden="true">
-                  *
-                </span>
-              </span>
+              <Figure value={stat.value} unit={stat.unit} active={bandSeen} />
               <span className="about__label">{stat.label}</span>
             </li>
           ))}
         </ul>
+      </div>
 
-        <p className="about__note">{FOOTNOTE}</p>
-
-        <p className="about__close">Foolscap keeps what the network drops.</p>
+      <div className="about__inner">
+        <p className="about__note rise" style={rise(4)}>
+          {FOOTNOTE}
+        </p>
+        <p className="about__close rise" style={rise(5)}>
+          Foolscap keeps what the network drops.
+        </p>
       </div>
     </section>
   );
 }
 
-const STATS = [
+/** Stagger index for the reveal, as a custom property the stylesheet reads. */
+const rise = (index: number) => ({ '--rise-i': index }) as CSSProperties;
+
+function Figure({ value, unit, active }: { value: number; unit?: string; active: boolean }) {
+  const shown = useCountUp(value, active);
+  return (
+    <span className="about__figure">
+      {num.format(shown)}
+      {/* A real space, not just the margin: the margin is optical and a screen
+          reader would otherwise read "25min". */}
+      {unit ? <span className="about__unit">{` ${unit}`}</span> : null}
+      <span className="about__ast" aria-hidden="true">
+        *
+      </span>
+    </span>
+  );
+}
+
+const STATS: { value: number; unit?: string; label: string }[] = [
   {
-    figure: '13,146',
+    value: 13146,
     label: 'distinct DIDs with registrations the referee never receipted individually',
   },
-  { figure: '14,250', label: 'writer and voter registrations left unanswered' },
+  { value: 14250, label: 'writer and voter registrations left unanswered' },
   // Counted, not inferred. lobby's export holds 31,403 messages spanning 25.0
   // minutes at 324 bytes each — the ring itself, read end to end.
   //
@@ -191,12 +204,16 @@ const STATS = [
   // edge holds for up to a day, and readRoomsIndex says so in as many words.
   // The rate it was paired with was right to within four percent. A stale
   // input, not bad arithmetic, and a good argument for counting the thing.
-  { figure: '25 min', label: "how much of lobby's history the network still holds" },
+  { value: 25, unit: 'min', label: "how much of lobby's history the network still holds" },
 ];
 
 // One marker, two provenances, because the figures no longer share one. Saying
 // only "measured directly from the ring export" would quietly promote the two
 // registration counts to a precision they were never read at.
+const FOOTNOTE =
+  '* Registrations counted from the retained ring on 2026-09-12; lobby’s window ' +
+  'measured directly from its ring export on 2026-09-13. The rings have moved since.';
+
 /**
  * The six, straight off PAGES — name, question, description, route and whether
  * it exists. Nothing here is written twice.
@@ -212,20 +229,29 @@ const STATS = [
  * honest blank.
  */
 function Tools() {
+  const [ref, seen] = useInView<HTMLElement>();
+
   return (
-    <section className="tools" aria-labelledby="tools-title">
+    <section className="tools" aria-labelledby="tools-title" ref={ref} data-in={seen}>
       <div className="tools__grid" aria-hidden="true" />
 
       <div className="tools__inner">
-        <p className="tools__eyebrow">The tools</p>
-        <h2 className="tools__title" id="tools-title">
+        <p className="tools__eyebrow rise">The tools</p>
+        <h2 className="tools__title rise" id="tools-title" style={rise(1)}>
           Six instruments.
         </h2>
-        <p className="tools__lede">Each answers one question nothing else answers.</p>
+        <p className="tools__lede rise" style={rise(2)}>
+          Each answers one question nothing else answers.
+        </p>
 
         <ul className="tools__list">
-          {PAGES.map((page) => (
-            <li className="tools__card" key={page.id} data-available={page.available}>
+          {PAGES.map((page, i) => (
+            <li
+              className="tools__card rise"
+              key={page.id}
+              data-available={page.available}
+              style={rise(3 + i)}
+            >
               <p className="tools__name">
                 {page.available && <span className="hero__dot hero__dot--live" aria-hidden="true" />}
                 {page.label}
@@ -248,9 +274,6 @@ function Tools() {
   );
 }
 
-const FOOTNOTE =
-  '* Registrations counted from the retained ring on 2026-09-12; lobby’s window ' +
-  'measured directly from its ring export on 2026-09-13. The rings have moved since.';
 
 /**
  * The card is the one place on this page that reports rather than asserts: a

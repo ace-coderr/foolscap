@@ -6,7 +6,14 @@
 import { useState, type FormEvent } from 'react';
 import { Shell } from '../components/Shell';
 import { useTracker, type Hole } from '../useTracker.ts';
-import { STATUS, WATCHED_ROOMS, type LookupEntry, type LookupResult, type Liveness } from '../lib/contest.ts';
+import {
+  REFEREE_DID,
+  STATUS,
+  WATCHED_ROOMS,
+  type LookupEntry,
+  type LookupResult,
+  type Liveness,
+} from '../lib/contest.ts';
 import {
   num,
   plural,
@@ -122,6 +129,27 @@ export default function Track() {
             />
           )}
         </div>
+      </section>
+
+      {/* The key itself, on the one page that uses it. Every receipt this page
+          calls authoritative was checked against exactly this string, so it is
+          written out in full and in mono, to be compared against LAUNCH.md by
+          eye. It used to live in the footer of every page, which put a
+          sonnet-2 key in front of people reading about something else. */}
+      <section className="section measure" id="pinned">
+        <h2 className="section__title">The pinned key</h2>
+        <p className="pinned__copy">
+          Receipts count here only if their Ed25519 signature verifies against this DID, pinned
+          from LAUNCH.md in <span className="mono">flop-labs/technocore-sonnet-challenge</span> and
+          hardcoded. Foolscap never infers the referee from a room&rsquo;s name, its topic, its
+          owner, who posts in it, or the <span className="mono">referee</span> field inside a
+          message — a launch record is just a message, and messages are forgeable.
+        </p>
+        <p className="mono pinned__did">{REFEREE_DID}</p>
+        <p className="pinned__note">
+          A message that claims the referee and fails that check is shown as a forgery rather than
+          dropped, because someone handed a fake acceptance needs telling.
+        </p>
       </section>
     </Shell>
   );
