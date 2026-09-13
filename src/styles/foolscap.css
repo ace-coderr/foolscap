@@ -733,6 +733,14 @@ a:focus-visible {
 
 /* ---------------------------------------------------------------- forgeries */
 
+/* --alarm, not --accent. A forged receipt is a failure, and the accent means
+ * verified — rendering the two the same colour is misleading on the one page
+ * whose job is telling you which of them you are looking at.
+ *
+ * --alarm clears 4.5:1 on all three surfaces (5.46 on --paper, where this block
+ * sits, 5.00 sunk, 4.60 raised). Dimmer than the accent it replaces, and still
+ * AA everywhere it can land. */
+
 .forgeries {
   margin-top: var(--space-2);
 }
@@ -741,7 +749,7 @@ a:focus-visible {
   margin: 0;
   font-size: var(--t-small);
   font-weight: 600;
-  color: var(--accent);
+  color: var(--alarm);
   letter-spacing: 0.02em;
 }
 
@@ -752,7 +760,7 @@ a:focus-visible {
 }
 
 .forgery {
-  border-left: 2px solid var(--accent);
+  border-left: 2px solid var(--alarm);
   padding: 0 0 0 var(--space);
   margin-bottom: var(--space);
   font-size: var(--t-small);
@@ -763,7 +771,7 @@ a:focus-visible {
   font-size: var(--t-micro);
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--accent);
+  color: var(--alarm);
   margin-bottom: var(--space-half);
 }
 

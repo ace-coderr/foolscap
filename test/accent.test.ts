@@ -62,11 +62,6 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
   { selector: '.legend__key--live', why: 'the key for those rooms' },
   { selector: '.detail__state--live', why: 'one room, read directly, active' },
 
-  // --- a verification result ----------------------------------------------
-  { selector: '.forgeries__title', why: 'signatures that claimed the referee and failed' },
-  { selector: '.forgery', why: 'one such message' },
-  { selector: '.forgery__tag', why: 'what the check found' },
-
   // --- something needing an answer ----------------------------------------
   { selector: '.card--attention', why: 'a status the reader has to act on' },
   { selector: '.card--attention .card__status', why: 'the word of that status' },
@@ -216,6 +211,24 @@ describe('the accent is state-only', () => {
 
     const dead = ALLOWED.filter((entry) => !live.has(entry.selector)).map((e) => e.selector);
     assert.deepEqual(dead, [], `Allowlisted selectors that no longer exist: ${dead.join(', ')}`);
+
+    // The other way a permission goes stale: the selector is still there but no
+    // longer teal. Nothing would have told me to drop the forgery entries when
+    // they moved to --alarm; this does.
+    const spends = new Set<string>();
+    for (const file of stylesheets()) {
+      for (const rule of readRules(readFileSync(file, 'utf8'))) {
+        for (const declaration of rule.declarations) {
+          if (ACCENT.test(declaration) && !isDefinition(declaration)) spends.add(rule.selector);
+        }
+      }
+    }
+    const unspent = ALLOWED.filter((entry) => !spends.has(entry.selector)).map((e) => e.selector);
+    assert.deepEqual(
+      unspent,
+      [],
+      `Allowlisted but no longer using the accent — drop them: ${unspent.join(', ')}`
+    );
 
     const files = new Set(sources().map((f) => relative(src, f).replace(/\\/g, '/')));
     const deadFiles = ALLOWED_FILES.filter((entry) => !files.has(entry.file)).map((e) => e.file);
