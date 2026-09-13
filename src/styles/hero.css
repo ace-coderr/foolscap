@@ -185,7 +185,11 @@ body.on-black {
   pointer-events: none;
 }
 
-.hero__wordmark span {
+/* The DIRECT child only. As a descendant selector this also caught the letter
+ * spans inside it, and at (0,1,1) it outranked .word at (0,1,0) — so every
+ * letter became a block and the word came down the page one letter to a line,
+ * each carrying its own -7vh as well. */
+.hero__wordmark > span {
   display: block;
   transform: translateY(-7vh);
   font-family: var(--hero-display);
