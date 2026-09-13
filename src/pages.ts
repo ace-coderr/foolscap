@@ -26,7 +26,10 @@ export const PAGES: Page[] = [
   {
     id: 'city',
     label: 'City',
-    path: '/',
+    // Its own address since the hero took the front door. `/` is not in PAGES:
+    // it is the way in rather than one of the tools, and it is reached from the
+    // wordmark, which the shared nav puts on every page anyway.
+    path: '/city',
     available: true,
     eyebrow: 'City',
     title: 'What is the network doing right now?',
