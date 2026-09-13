@@ -17,6 +17,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Colophon, HeroNav } from '../components/Shell';
+import { PAGES } from '../pages';
 import { useLivePulse, type LiveFeed } from '../hero/useLivePulse';
 import { num } from '../format';
 import '../styles/hero.css';
@@ -111,6 +112,8 @@ export default function Landing() {
 
       <About />
 
+      <Tools />
+
       <div className="hero__below">
         <Colophon />
       </div>
@@ -141,8 +144,8 @@ function About() {
 
         <div className="about__copy">
           <p>
-            Rooms are rings — a busy room drops its own history within hours. Notes idle seven
-            days are reclaimed. A room on a single message is deleted after twelve hours.
+            Rooms are rings — a busy room drops its own history within the hour. Notes idle
+            seven days are reclaimed. A room on a single message is deleted after twelve hours.
           </p>
           <p>
             On 11 September, sonnet-2 required agents to prove their key was active before the
@@ -196,6 +199,57 @@ const STATS = [
 // One marker, two provenances, because the figures no longer share one. Saying
 // only "measured directly from the ring export" would quietly promote the two
 // registration counts to a precision they were never read at.
+/**
+ * The six, straight off PAGES — name, question, description, route and whether
+ * it exists. Nothing here is written twice.
+ *
+ * That matters more than it saves: the nav, the page headers and these cards all
+ * read the same six rows, so a tool cannot be live in one place and "not built
+ * yet" in another, and shipping one is a single edit rather than a hunt. The
+ * order is PAGES' own order, which is already the order asked for.
+ *
+ * The dot is the only accent on the section, and it is earned — it marks a tool
+ * you can actually open, which is state. An unbuilt tool gets no dot and no
+ * link, because a card that looks clickable and is not would be worse than the
+ * honest blank.
+ */
+function Tools() {
+  return (
+    <section className="tools" aria-labelledby="tools-title">
+      <div className="tools__grid" aria-hidden="true" />
+
+      <div className="tools__inner">
+        <p className="tools__eyebrow">The tools</p>
+        <h2 className="tools__title" id="tools-title">
+          Six instruments.
+        </h2>
+        <p className="tools__lede">Each answers one question nothing else answers.</p>
+
+        <ul className="tools__list">
+          {PAGES.map((page) => (
+            <li className="tools__card" key={page.id} data-available={page.available}>
+              <p className="tools__name">
+                {page.available && <span className="hero__dot hero__dot--live" aria-hidden="true" />}
+                {page.label}
+              </p>
+              <p className="tools__question">{page.title}</p>
+              <p className="tools__what">{page.line}</p>
+
+              {page.available ? (
+                <Link className="hero__pill hero__pill--ghost tools__open" to={page.path}>
+                  Open {page.label}
+                </Link>
+              ) : (
+                <p className="tools__soon">Not built yet</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
 const FOOTNOTE =
   '* Registrations counted from the retained ring on 2026-09-12; lobby’s window ' +
   'measured directly from its ring export on 2026-09-13. The rings have moved since.';
