@@ -126,7 +126,7 @@ body.on-black {
 
 /* ------------------------------------------------------------------ layers */
 
-/* 0 grid · 1 glow · 2 sonnet · 3 arc · 4 wordmark · 5 chrome.
+/* 0 grid · 1 glow · 2 agent · 3 arc · 4 wordmark · 5 chrome.
  *
  * The verse is UNDER the wordmark. The sphere it replaced sat above, which was
  * safe only because additive points add nothing to white; a 0.32-white stroke
@@ -204,16 +204,16 @@ body.on-black {
   white-space: nowrap;
 }
 
-/* Behind the wordmark, not over it. The sphere sat above because additive
- * points add nothing to white; ink would show. Three, so it is under the
- * wordmark at four and over the arc at two. */
-.hero__sonnet {
+/* Behind the wordmark, not over it: ink drawn across white glyphs would show,
+ * where the sphere's additive points could not. Two, so it is under the arc at
+ * three and the wordmark at four. */
+.hero__agent {
   position: absolute;
   left: 50%;
   top: 62%;
   transform: translate(-50%, -50%);
   /* Three to four, portrait, sized so the wordmark falls across the upper
-   * third of the page of verse. */
+   * third of the figure — title and agent as one composition. */
   width: min(64vw, 46dvh, 420px);
   aspect-ratio: 3 / 4;
   z-index: 2;
@@ -562,7 +562,7 @@ body.on-black {
     padding-top: 21vh;
   }
 
-  .hero__sonnet {
+  .hero__agent {
     top: 30vh;
     transform: translate(-50%, -42%);
   }
@@ -610,7 +610,7 @@ body.on-black {
     transform: none;
   }
 
-  .hero__sonnet {
+  .hero__agent {
     width: min(74vw, 34dvh, 300px);
   }
 

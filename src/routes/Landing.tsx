@@ -24,8 +24,8 @@ import { useCountUp, useInView, usePrefersReducedMotion } from '../motion';
 import { startPointerField, tiltProps } from '../pointer';
 import '../styles/hero.css';
 
-/** The sonnet is SVG and small, but it still need not block the first paint. */
-const DrawingSonnet = lazy(() => import('../components/DrawingSonnet'));
+/** SVG and small, but it still need not block the first paint. */
+const DrawingAgent = lazy(() => import('../components/DrawingAgent'));
 
 export default function Landing() {
   const feed = useLivePulse();
@@ -94,10 +94,10 @@ export default function Landing() {
           </span>
         </div>
 
-        {/* Behind the title, not over it: unlike the sphere's additive points,
-            ink drawn across white glyphs would show. */}
+        {/* Behind the title, not over it: ink drawn across white glyphs would
+            show, where the sphere's additive points could not. */}
         <Suspense fallback={null}>
-          <DrawingSonnet className="hero__sonnet" reducedMotion={reducedMotion} />
+          <DrawingAgent className="hero__agent" reducedMotion={reducedMotion} />
         </Suspense>
 
         <div className="hero__chrome">
