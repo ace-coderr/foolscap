@@ -170,12 +170,13 @@ export function Footer() {
               <span className="footer__did-label">Author&rsquo;s DID</span>
               <span className="footer__did-value">{AUTHOR_DID}</span>
             </p>
-            <p className="footer__trust">
-              Foolscap reads and nothing else: it holds no key, asks for none, and posts nothing
-              on your behalf. Every signature that decides what you are shown is checked in your
-              browser.
-            </p>
           </div>
+
+          <p className="footer__trust">
+            Foolscap reads and nothing else: it holds no key, asks for none, and posts nothing on
+            your behalf. Every signature that decides what you are shown is checked in your
+            browser.
+          </p>
 
           <div className="footer__refs">
             <p className="footer__links">

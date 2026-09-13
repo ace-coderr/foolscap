@@ -836,7 +836,29 @@ a:focus-visible {
   /* The wordmark's size, kept as a variable so the rules that reach past its
    * edge can be written in the same unit. Tuned so eight capitals of Saira at
    * this width span the viewport. */
-  --footer-mark: 20.6vw;
+  /* Eight capitals of Saira, sized so the word spans the viewport and no more.
+   *
+   * 20.6vw was wrong and had been since the mark was drawn: measured with the
+   * -0.035em tracking applied, that put the word at 112% of the screen, so the
+   * F and the P each lost about 43% of their width to the edges at EVERY size.
+   * The container was full-width, which is what an earlier check measured, so
+   * it looked like a clean span and was not.
+   *
+   * It stays a pure viewport unit. The word has to read as FOOLSCAP at every
+   * width, and a pixel floor is the worst thing that can happen to it: it does
+   * nothing at desktop and at phone sizes, where this is only a hundred-odd
+   * pixels, it doubles the word's width and leaves three letters on screen.
+   *
+   * The room left for the parallax is deliberate and measured, not rounded down
+   * for luck. translateX percentages resolve against the element's own width,
+   * which here is the whole viewport, so a ±1% drift moves the word ±12.7px at
+   * 1280. At 18vw the word cleared each edge by 11px and would have nicked them
+   * at the ends of its travel; 17.8vw clears by 18px and never touches.
+   *
+   * How much of the word the block covers is therefore the block's problem, and
+   * it is solved below by keeping the block short rather than here by inflating
+   * the word. */
+  --footer-mark: 17.8vw;
 
   position: relative;
   /* The wordmark runs past the bottom edge on purpose. This is what cuts it,
@@ -1026,9 +1048,15 @@ body:not(.on-black) .footer {
   transform: translateX(var(--drift, 0));
 }
 
+/* Three columns, not a tall stack in a wide one. The identity, the statement
+ * and the links each get their own, which is what actually fixed the wordmark
+ * being swallowed: the block went from 165px to about 95px, so the letters it
+ * sits on are half again as tall as it is at every width. Widening the
+ * statement instead would have run it past 90 characters a line. */
 .footer__meta {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 30rem) auto;
+  justify-content: space-between;
   align-items: end;
   gap: 1.5rem clamp(1.5rem, 4vw, 3rem);
   /* Enough to separate this from the nav and no more. The band is one thing,
@@ -1046,21 +1074,25 @@ body:not(.on-black) .footer {
 }
 
 .footer__lockup {
-  margin-bottom: 0.85rem;
+  margin-bottom: 0.5rem;
   color: rgba(255, 255, 255, 0.92);
 }
 
 .footer__by {
-  margin: 0 0 0.4rem;
+  margin: 0 0 0.3rem;
   font-size: 13px;
   color: rgba(255, 255, 255, 0.72);
 }
 
+/* 1.45 rather than 1.55: three lines of 13px, and every tenth of leading here
+ * is another two per cent of the wordmark hidden behind them. Still open enough
+ * to read at this size. */
 .footer__trust {
   max-width: 30rem;
   margin: 0;
+  align-self: end;
   font-size: 13px;
-  line-height: 1.55;
+  line-height: 1.45;
   color: var(--footer-quiet);
 }
 
@@ -1069,7 +1101,7 @@ body:not(.on-black) .footer {
 }
 
 .footer__links {
-  margin: 0 0 0.45rem;
+  margin: 0;
   font-size: 13px;
   color: var(--footer-faint);
 }
@@ -1080,9 +1112,9 @@ body:not(.on-black) .footer {
 }
 
 .footer__did {
-  margin: 0 0 0.7rem;
+  margin: 0;
   font-size: 11px;
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 .footer__did-label {
@@ -1127,6 +1159,7 @@ body:not(.on-black) .footer {
 @media (max-width: 46rem) {
   .footer__meta {
     grid-template-columns: minmax(0, 1fr);
+    justify-content: stretch;
     align-items: start;
     margin-top: clamp(2rem, 8vw, 3.5rem);
   }
