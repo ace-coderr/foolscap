@@ -41,7 +41,7 @@ export const PAGES: Page[] = [
     id: 'notary',
     label: 'Notary',
     path: '/notary',
-    available: false,
+    available: true,
     eyebrow: 'Notary',
     title: 'When was this DID active, and can I prove it?',
     line:

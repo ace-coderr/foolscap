@@ -164,6 +164,56 @@ npm run mirror  --workspace services/notary   # starts capturing
 `NOTARY_DRY_RUN=1 npm run mirror --workspace services/notary` reads and verifies without a database, for checking the
 pipeline before any of the above.
 
+## Deploying
+
+Notary is the one part of Foolscap that is not static. It holds a Postgres
+connection and keeps a Technocore long-poll open for minutes at a time, so it is
+a container that stays up — **not** a Vercel function. Every cold start would
+open a connection and abandon it, and Supabase counts those.
+
+The API and the mirror run in the **same process**: one pool, one deployment,
+and the mirror is idle between batches anyway. `NOTARY_RUN_MIRROR=1` is what
+turns capture on.
+
+### Railway, in the browser
+
+1. **<https://railway.com/new>** → **Deploy from GitHub repo** → pick this
+   repository. Authorise Railway for it if asked.
+2. Railway finds `railway.json` and builds the `Dockerfile`. Let the first build
+   run; it will fail its health check until step 3, which is expected.
+3. **Variables** tab → **New Variable**, three of them:
+   - `DATABASE_URL` — the same Supabase URI as `.env`. Use the **Session pooler**
+     string: Railway has no IPv6, so the direct one will not connect.
+   - `NOTARY_RUN_MIRROR` — `1`
+   - `NOTARY_ANCHOR_ROOM` — `technocore` (optional; this is the default)
+4. **Settings → Networking → Generate Domain**. Take the
+   `https://<name>.up.railway.app` it gives you.
+5. **Deployments** tab → watch the log. `api listening on :8787` then
+   `mirror following 13 room(s) in this process.` is a healthy start.
+6. Check it: open `https://<name>.up.railway.app/api/notary/coverage` in a tab.
+7. Back in **Vercel** → the Foolscap project → **Settings → Environment
+   Variables** → add `VITE_NOTARY_API` = that Railway URL, then **Deployments →
+   Redeploy**. It is read at BUILD time, so the redeploy is the part that
+   matters; without it the Notary page says it has no archive behind it.
+
+Migrations are not run by the service. Run `npm run migrate --workspace
+services/notary` once from a machine with `DATABASE_URL` set — the schema is
+idempotent, so it is safe to re-run after a change.
+
+### Fly, instead
+
+`fly.toml` is here for the same image. `fly launch --no-deploy`, then
+`fly secrets set DATABASE_URL=...`, then `fly deploy`. One machine, auto-stop
+off: a stopped machine is an hour of history nobody can get back.
+
+### Anchoring
+
+`npm run anchor --workspace services/notary` builds yesterday's root and
+publishes it. Publication needs `NOTARY_SEED` — a 32-byte hex Ed25519 seed,
+Notary's own key. Without it the root is still computed and served, and
+`/anchors` reports `published_seq: null` rather than implying a publication that
+never happened. Run it daily (Railway **Settings → Cron Schedule**, `5 0 * * *`).
+
 ## The mirror worker
 
 This is where the archive actually comes from, and it should run before the API is even

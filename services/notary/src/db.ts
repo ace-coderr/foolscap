@@ -243,6 +243,93 @@ export async function lastSeqFor(room: string): Promise<number> {
   return seq == null ? 0 : Number(seq);
 }
 
+/** What /capture answers with, and whether this call is what created the row. */
+export interface CaptureResult {
+  id: string;
+  capturedAt: string;
+  day: string;
+  /** False when an identical submission was already held. */
+  created: boolean;
+}
+
+/**
+ * Store one submitted record, idempotently.
+ *
+ * Agents retry — on a timeout, on a 500, on a restart — and a retry must not
+ * mint a second row. (did, room, nonce) is unique for full records, so the
+ * insert simply does nothing on a clash and the original is read back and
+ * returned. The caller sees the same id and the same captured_at it saw the
+ * first time, which is what makes the endpoint safe to hammer with retries and
+ * is also why the timestamp cannot drift on a resubmission: the anchor already
+ * committed to the first one.
+ */
+export async function captureRecord(record: {
+  did: string;
+  room: string;
+  nonce: string;
+  sig: string;
+  text: string;
+}): Promise<CaptureResult> {
+  const pool = getPool();
+  const params = [record.did, record.room, String(record.nonce), record.sig, record.text];
+
+  const inserted = await pool.query(
+    `insert into records (did, room, nonce, sig, text, source, captured_at, day)
+     values ($1, $2, $3::numeric, $4, $5, 'submitted', now(), (now() at time zone 'utc')::date)
+     on conflict (did, room, nonce) where sighting is null do nothing
+     returning id::text as id, captured_at, to_char(day, 'YYYY-MM-DD') as day`,
+    params
+  );
+
+  if (inserted.rows[0]) {
+    const row = inserted.rows[0];
+    return { id: row.id, capturedAt: row.captured_at.toISOString(), day: row.day, created: true };
+  }
+
+  const existing = await pool.query(
+    `select id::text as id, captured_at, to_char(day, 'YYYY-MM-DD') as day
+       from records
+      where did = $1 and room = $2 and nonce = $3::numeric and sighting is null`,
+    params.slice(0, 3)
+  );
+  const row = existing.rows[0];
+  if (!row) {
+    // The insert hit a conflict and the row is not there to read back. That
+    // means a sighting row holds the key, which cannot happen for a submitted
+    // record — better to fail loudly than to invent an id.
+    throw new Error('capture conflicted but the original could not be read back');
+  }
+  return { id: row.id, capturedAt: row.captured_at.toISOString(), day: row.day, created: false };
+}
+
+/** Write a day's Merkle root. Re-running a day overwrites its row. */
+export async function upsertAnchor(anchor: {
+  day: string;
+  root: string | null;
+  recordCount: number;
+  firstCapture: string | null;
+  lastCapture: string | null;
+}): Promise<void> {
+  await getPool().query(
+    `insert into anchors (day, root, record_count, first_capture, last_capture)
+     values ($1::date, $2, $3, $4::timestamptz, $5::timestamptz)
+     on conflict (day) do update set
+       root = excluded.root,
+       record_count = excluded.record_count,
+       first_capture = excluded.first_capture,
+       last_capture = excluded.last_capture`,
+    [anchor.day, anchor.root, anchor.recordCount, anchor.firstCapture, anchor.lastCapture]
+  );
+}
+
+/** Note where a root was published, once it is in a room. */
+export async function markAnchorPublished(day: string, seq: number | null): Promise<void> {
+  await getPool().query(
+    `update anchors set published_seq = $2::bigint, published_at = now() where day = $1::date`,
+    [day, seq]
+  );
+}
+
 export async function archiveStats(): Promise<ArchiveTotals> {
   const { rows } = await getPool().query(
     `select

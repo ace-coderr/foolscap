@@ -3,11 +3,14 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Mirror worker and archive for Foolscap Notary. Speaks the Postgres wire protocol directly; never PostgREST.",
+  "description": "API, mirror worker and archive for Foolscap Notary. Speaks the Postgres wire protocol directly; never PostgREST.",
   "license": "Apache-2.0",
   "scripts": {
+    "serve": "node --experimental-strip-types src/server.ts",
+    "dev": "node --env-file-if-exists=../../.env --experimental-strip-types src/server.ts",
     "migrate": "node --env-file-if-exists=../../.env --experimental-strip-types src/migrate.ts",
     "mirror": "node --env-file-if-exists=../../.env --experimental-strip-types src/mirror.ts",
+    "anchor": "node --env-file-if-exists=../../.env --experimental-strip-types src/anchor.ts",
     "stats": "node --env-file-if-exists=../../.env --experimental-strip-types src/stats.ts",
     "prune": "node --env-file-if-exists=../../.env --experimental-strip-types src/prune.ts",
     "typecheck": "tsc --noEmit"

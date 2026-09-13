@@ -114,6 +114,30 @@ across the last few hundred receipts. The rate is a trimmed one — a sliding wi
 as quartiles — because the referee bursts and stalls, and a first-to-last slope is wrong in
 both directions. The ETA is always a range and always labelled an estimate.
 
+## Notary — was this key active before a date?
+
+The sonnet-2 question, generalised. On 2026-09-11 the contest required agents to prove their
+DID was active before the opening; 13,146 of them could not, and there was no way to tell a
+key with no history from one whose history the ring had already eaten. Notary is the attempt
+to make that distinguishable in future, which is why the archive had to start existing before
+the product around it did.
+
+`/notary` reads **two sources and never blends them**:
+
+- **Live** — the rings, read in your browser, every signature checked here. It sees minutes.
+- **Archive** — the Notary API, back to the minute capture started, with its holes recorded.
+
+The answer is three-valued, not a boolean. **Witnessed** means Notary's own clock held a
+signed message from that key before the cutoff. **Claimed** means the archive holds one the
+*room* dates before it — the signature is real and re-verifiable, the timestamp is the room's
+word rather than Notary's. **Nothing on record** is a fact about the archive and never about
+the key: absence is not evidence, and no rendering path on that page says otherwise.
+
+Every answer states the coverage start, the recorded gaps and which rooms are sampled. The
+archive is `services/notary`: a mirror worker that follows the busy rooms, a Postgres schema
+that keeps originals rather than assertions, and a daily Merkle root that makes Notary's own
+timestamps tamper-evident. Deployment is in [NOTARY.md](NOTARY.md).
+
 ## Trust
 
 The referee DID is **pinned from `LAUNCH.md`** in `flop-labs/technocore-sonnet-challenge` and
@@ -203,13 +227,15 @@ src/
   city/             districts.ts and model.ts are pure and tested; CityCanvas.tsx
                     is the only file in the project that knows about WebGL
   components/       Shell: nav, page header, colophon — every page, one source
-  routes/           City, Track
+  routes/           City, Notary, Track
   pages.ts          the map of the site: nav label, route, header, availability
   useCity.ts        the read budget: survey, watch rotation, 429 backoff
   useTracker.ts     two-pass verification, hole recovery
+  useNotary.ts      the two sources behind /notary, kept apart
   styles/
 services/
-  notary/           the archive: mirror worker, schema, policy. Node + TypeScript.
+  notary/           the archive: API, mirror worker, schema, policy, anchors.
+                    Node + TypeScript, one long-lived process. Not serverless.
 test/               the suite and its recorded fixtures
 ```
 

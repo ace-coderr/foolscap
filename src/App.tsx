@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Landing from './routes/Landing';
 import City from './routes/City';
+import Notary from './routes/Notary';
 import Track from './routes/Track';
 
 export default function App() {
@@ -9,6 +10,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/city" element={<City />} />
+        <Route path="/notary" element={<Notary />} />
         <Route path="/track" element={<Track />} />
         {/* The static site lived at these paths; old links still work. */}
         <Route path="/index.html" element={<Navigate to="/" replace />} />

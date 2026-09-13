@@ -399,7 +399,22 @@ function report(): void {
   );
 }
 
-async function main(): Promise<void> {
+/** A running mirror, so whoever started it can stop it. */
+export interface MirrorHandle {
+  stop: () => Promise<void>;
+  rooms: number;
+}
+
+/**
+ * Start the mirror and return a handle.
+ *
+ * It does NOT install signal handlers or close the pool: the owner does that.
+ * When the API hosts the mirror in its own process — one service, one Postgres
+ * connection pool, which is the whole reason for running them together — a
+ * mirror that called process.exit on SIGTERM would take the HTTP server down
+ * mid-request without draining it.
+ */
+export async function startMirror(): Promise<MirrorHandle> {
   log(`Notary mirror starting${DRY_RUN ? ' — DRY RUN, nothing will be written' : ''}.`);
 
   if (!DRY_RUN) {
@@ -414,10 +429,9 @@ async function main(): Promise<void> {
   const watchers: RoomWatcher[] = [];
   let stopping = false;
 
-  const shutdown = async (signal: string): Promise<void> => {
+  const stop = async (): Promise<void> => {
     if (stopping) return;
     stopping = true;
-    log(`${signal} — stopping.`);
     watchers.forEach((w) => w.stop());
     clearInterval(ticker);
     clearInterval(sweeper);
@@ -430,14 +444,10 @@ async function main(): Promise<void> {
             `${Number(after.dids).toLocaleString('en')} DIDs.`
         );
       } catch {
-        /* closing anyway */
+        /* stopping anyway */
       }
-      await closePool();
     }
-    process.exit(0);
   };
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
 
   const ticker = setInterval(() => {
     report();
@@ -462,7 +472,7 @@ async function main(): Promise<void> {
   // the fast rooms are not left unwatched while the slow ones are read.
   const rooms = DRY_RUN ? MIRROR_ROOMS.slice(0, DRY_RUN_ROOMS) : MIRROR_ROOMS;
   for (const room of rooms) {
-    if (stopping) return;
+    if (stopping) return { stop, rooms: watchers.length };
     try {
       const { lastSeq } = await backfill(room);
       watchers.push(follow(room, lastSeq));
@@ -479,18 +489,36 @@ async function main(): Promise<void> {
     report();
   }
 
-  log(`following ${watchers.length} room(s). Ctrl-C to stop.`);
+  log(`following ${watchers.length} room(s).`);
+  return { stop, rooms: watchers.length };
 }
 
 /** Counters, exported so a test can read them without touching the database. */
 export const mirrorStats = stats;
 
 // Only when run as a script, so the verification path above can be imported and
-// tested without opening a connection or following a room.
+// tested — or hosted by the API — without opening a connection or following a
+// room. As a script it owns the process, so here it does install signal
+// handlers and close the pool.
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  main().catch(async (err) => {
-    console.error(`[fatal] ${err.stack ?? (err as Error).message}`);
-    await closePool().catch(() => {});
-    process.exit(1);
-  });
+  startMirror()
+    .then((handle) => {
+      let leaving = false;
+      const leave = async (signal: string): Promise<void> => {
+        if (leaving) return;
+        leaving = true;
+        log(`${signal} — stopping.`);
+        await handle.stop();
+        if (!DRY_RUN) await closePool().catch(() => {});
+        process.exit(0);
+      };
+      process.on('SIGINT', () => void leave('SIGINT'));
+      process.on('SIGTERM', () => void leave('SIGTERM'));
+      log('Ctrl-C to stop.');
+    })
+    .catch(async (err) => {
+      console.error(`[fatal] ${err.stack ?? (err as Error).message}`);
+      await closePool().catch(() => {});
+      process.exit(1);
+    });
 }
