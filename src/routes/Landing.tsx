@@ -179,19 +179,26 @@ const STATS = [
     label: 'distinct DIDs with registrations the referee never receipted individually',
   },
   { figure: '14,250', label: 'writer and voter registrations left unanswered' },
-  // "under an hour" rather than "a few hours", which is what this line said
-  // until the claim was checked. Lobby's ring was ~6.6 MB in the survey and its
-  // records run about 320 bytes, so it holds roughly twenty thousand messages:
-  // seventeen minutes at the twenty a second measured on 2026-09-13, and three
-  // minutes at the hundred a second recorded when the capture policy was
-  // written. Even at a deliberately generous 120 bytes a record it is
-  // three-quarters of an hour. Every way of counting it lands in minutes, so
-  // the conservative bound is the one that goes on the page.
-  { figure: '~100/sec', label: 'messages entering lobby, a room whose ring holds under an hour of them' },
+  // Counted, not inferred. lobby's export holds 31,403 messages spanning 25.0
+  // minutes at 324 bytes each — the ring itself, read end to end.
+  //
+  // This line has been wrong twice and the second way is the instructive one.
+  // It began as "a few hours"; inference from the room survey cut that to
+  // "under an hour"; the export says twenty-five minutes. The inference
+  // undershot because it took the ring's size from the survey, which reported
+  // 6.6 MB where the export works out at 10.2 MB — the survey is a snapshot the
+  // edge holds for up to a day, and readRoomsIndex says so in as many words.
+  // The rate it was paired with was right to within four percent. A stale
+  // input, not bad arithmetic, and a good argument for counting the thing.
+  { figure: '25 min', label: "how much of lobby's history the network still holds" },
 ];
 
+// One marker, two provenances, because the figures no longer share one. Saying
+// only "measured directly from the ring export" would quietly promote the two
+// registration counts to a precision they were never read at.
 const FOOTNOTE =
-  '* Measured from the retained ring on 2026-09-12; the rings have moved since.';
+  '* Registrations counted from the retained ring on 2026-09-12; lobby’s window ' +
+  'measured directly from its ring export on 2026-09-13. The rings have moved since.';
 
 /**
  * The card is the one place on this page that reports rather than asserts: a
