@@ -252,14 +252,142 @@ body.on-black {
 
 /* --------------------------------------------------------------------- nav */
 
+/* TWO STATES, ONE ELEMENT, AND IT IS FIXED IN BOTH.
+ *
+ * At the top it is transparent and full width, sitting where the hero's first
+ * row used to put it. Past eighty pixels it becomes a pill floating clear of
+ * the edges. Nothing is repositioned between the two — going from in-flow to
+ * fixed at the threshold would drop the element out of layout and land it
+ * elsewhere in the same frame, which is a jump no duration can smooth. Fixed
+ * from the start leaves only interpolatable properties to differ.
+ *
+ * max-width carries the horizontal collapse and transform carries the drop, so
+ * `100%` -> `min(64rem, 100% - 32px)` is what closes the sides. Both resolve
+ * against the same containing block, so they interpolate.
+ *
+ * The transparent 1px border is there at the top on purpose: a border appearing
+ * from nothing would shift the contents by a pixel at the moment the pill
+ * forms. It costs a pixel of inset all the time and buys a clean morph. */
 .hero__nav {
-  grid-row: 1;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* Above the sections, and above the cursor glow — the pill is a surface of
+   * its own and should not be lit through. */
+  z-index: 45;
+  margin-inline: auto;
+  max-width: 100%;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: var(--hero-gutter);
   padding: clamp(1rem, 2.1vw, 1.6rem) var(--hero-gutter);
-  /* No background: the grid runs straight through it. */
+  background: rgba(10, 10, 10, 0);
+  border: 1px solid transparent;
+  border-radius: 0;
+  transform: translateY(0);
+  transition:
+    max-width 280ms ease,
+    padding 280ms ease,
+    gap 280ms ease,
+    background-color 280ms ease,
+    border-color 280ms ease,
+    border-radius 280ms ease,
+    transform 280ms ease;
+}
+
+.hero__nav[data-floating='true'] {
+  max-width: min(64rem, calc(100% - 32px));
+  transform: translateY(16px);
+  padding: 0.5rem 0.55rem 0.5rem 1.15rem;
+  gap: clamp(0.6rem, 1.4vw, 1.2rem);
+  background: rgba(10, 10, 10, 0.85);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-color: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+}
+
+/* Everything inside tightens with it. */
+.hero__nav .lockup,
+.hero__nav .lockup__word,
+.hero__nav .lockup__mark,
+.hero__nav .hero__nav-link,
+.hero__nav .hero__nav-links {
+  transition:
+    font-size 280ms ease,
+    opacity 280ms ease,
+    gap 280ms ease,
+    width 280ms ease,
+    height 280ms ease;
+}
+
+.hero__nav[data-floating='true'] .lockup__word {
+  font-size: 0.95rem;
+}
+
+.hero__nav[data-floating='true'] .lockup__mark {
+  width: 17px;
+  height: 17px;
+}
+
+.hero__nav[data-floating='true'] .hero__nav-links {
+  gap: clamp(0.7rem, 1.6vw, 1.35rem);
+}
+
+.hero__nav[data-floating='true'] .hero__nav-link {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+}
+
+/* The action stays a white pill; it just gets a little smaller. The transition
+ * is restated in full because the shorthand would otherwise drop the hover
+ * colours the pill already had. */
+.hero__nav .hero__pill {
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    transform 260ms ease-out,
+    padding 280ms ease,
+    font-size 280ms ease;
+}
+
+.hero__nav[data-floating='true'] .hero__pill {
+  padding: 0.5rem 1rem;
+  font-size: 11.5px;
+}
+
+/* Shown only where the links will not fit: narrow, and floating. */
+.hero__nav-toggle {
+  display: none;
+  grid-column: 2;
+  justify-self: center;
+  padding: 0.4rem 0.75rem;
+  background: transparent;
+  border: 1px solid var(--hero-edge);
+  border-radius: 999px;
+  color: var(--hero-text);
+  font-family: var(--hero-body);
+  font-weight: 500;
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.hero__nav-toggle:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.hero__nav-toggle:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }
 
 /* Position and colour only: the type is the lockup's, set once in foolscap.css
@@ -593,6 +721,106 @@ body.on-black {
     row-gap: 0.9rem;
   }
 
+  /* Floating on a phone: the same pill, with the six links behind a button
+   * because they will not fit in it. */
+  .hero__nav[data-floating='true'] {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: "mark toggle action";
+    row-gap: 0;
+    padding: 0.45rem 0.5rem 0.45rem 0.9rem;
+  }
+
+  .hero__nav[data-floating='true'] .hero__nav-toggle {
+    display: block;
+    grid-area: toggle;
+    /* Beside the ring, not adrift in the middle of the pill: with the word
+     * collapsed the left of the bar is the navigation and the right is the one
+     * action, which is the same division the top state has. */
+    justify-self: start;
+  }
+
+  /* THE WORD STEPS OUT OF THE PILL HERE, and the ring stays.
+   *
+   * Measured at 390: mark and word 111, the menu button 64, "Open the tracker"
+   * 161 - 336 in a content box of 334, so it overflowed the pill by the width
+   * of a letter. Shrinking type instead buys 26px, enough at 390 and not at
+   * 320, where the same row wants 329px in 264. The word is the only one of
+   * the three that is repeated elsewhere on screen; the action cannot be
+   * shortened and the button is the reason the pill exists.
+   *
+   * Collapsed rather than hidden: `display: none` would be a snap in the
+   * middle of a 280ms morph. font-size to zero takes the letter-spacing with
+   * it, animates, and leaves the link's accessible name intact. */
+  .hero__nav[data-floating='true'] .lockup {
+    gap: 0;
+  }
+
+  .hero__nav[data-floating='true'] .lockup__word {
+    font-size: 0;
+    opacity: 0;
+  }
+
+  .hero__nav[data-floating='true'] .hero__nav-links {
+    display: none;
+  }
+
+  /* The panel hangs off the pill rather than filling the screen: the pill is
+   * already clear of the edges, and a full-height sheet under a floating bar
+   * reads as a different component. */
+  .hero__nav[data-floating='true'] .hero__nav-links[data-open='true'] {
+    display: flex;
+
+    /* AN ABSOLUTELY POSITIONED GRID CHILD IS PLACED AGAINST ITS GRID AREA,
+     * not against the pill. The list is placed by `grid-area: links`, which
+     * this layout does not define, so it landed in an implicit track and the
+     * panel came out 107px wide in the middle of the bar. Spanning the whole
+     * grid makes the pill's content box the containing block, and the two
+     * insets below are then measured from that box rather than from the
+     * border box the eye actually reads. */
+    position: absolute;
+    grid-area: 1 / 1 / -1 / -1;
+    /* ...and `justify-self: center`, which the links carry so they sit in the
+     * middle of the top state, makes an out-of-flow grid child shrink to fit
+     * and then align inside its area instead of honouring left and right. */
+    justify-self: stretch;
+    align-self: start;
+
+    /* 100% is the content box, so the pill's bottom padding and border have to
+     * be added back before the 10px of air. */
+    top: calc(100% + 0.45rem + 11px);
+    /* The pill is padded 0.9rem on the left and 0.5rem on the right; undoing
+     * the difference puts both panel edges the same 0.5rem inside it. */
+    left: calc(0.5rem - 0.9rem);
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 0.4rem 1.15rem 0.8rem;
+
+    /* Opaque, and no blur of its own. The pill's backdrop-filter makes the pill
+     * a backdrop root, so a filter on a descendant has nothing left to sample —
+     * it is inert here, and at 0.92 the hero's card read straight through the
+     * menu. The panel carries the pill's fill taken to solid instead. */
+    background: #0a0a0a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+  }
+
+  .hero__nav[data-floating='true'] .hero__nav-links[data-open='true'] .hero__nav-link {
+    padding: 0.6rem 0;
+    font-size: 13px;
+    border-bottom: 1px solid var(--hero-line);
+  }
+
+  /* The rules separate the items; under the last one there is nothing to
+   * separate it from, and it read as an underline on the panel's floor. */
+  .hero__nav[data-floating='true']
+    .hero__nav-links[data-open='true']
+    li:last-child
+    .hero__nav-link {
+    border-bottom: 0;
+  }
+
   .hero__mark {
     grid-area: mark;
   }
@@ -654,6 +882,14 @@ body.on-black {
   .hero__card,
   .tools__card,
   .tools__name,
+  .hero__nav,
+  .hero__nav .lockup,
+  .hero__nav .lockup__word,
+  .hero__nav .lockup__mark,
+  .hero__nav .hero__nav-links,
+  .hero__nav .hero__nav-link,
+  .hero__nav .hero__pill,
+  .hero__nav-toggle,
   .hero__nav-link::after {
     transition: none;
   }

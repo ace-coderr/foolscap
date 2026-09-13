@@ -67,6 +67,11 @@ export default function Landing() {
           their own stacking context. */}
       <div className="cursor-glow" aria-hidden="true" />
 
+      {/* Outside the hero, not inside it. The hero isolates, so a nav within it
+          could never paint over the sections below — which is the one thing a
+          floating nav has to do. */}
+      <HeroNav action={{ label: 'Open the tracker', to: '/track' }} />
+
       <div className="hero">
         <div className="hero__grid" data-grid aria-hidden="true" />
         <div className="hero__glow" aria-hidden="true" />
@@ -101,8 +106,6 @@ export default function Landing() {
         </Suspense>
 
         <div className="hero__chrome">
-          <HeroNav action={{ label: 'Open the tracker', to: '/track' }} />
-
           {/* The wordmark above is decorative — this is the page's real heading,
               and it is the one a screen reader gets. */}
           <h1 className="hero__sr-title">Foolscap</h1>

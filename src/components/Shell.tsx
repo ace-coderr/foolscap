@@ -60,22 +60,65 @@ function NavItems({
   );
 }
 
+/** Where the nav stops sitting on the page and starts floating over it. */
+const FLOAT_AT = 80;
+/** ...and where it settles back. The gap is what stops it flickering on the
+ *  threshold, which would be a worse jump than the one being avoided. */
+const SETTLE_AT = 48;
+
 /**
  * The hero's nav: wordmark left, links centred, one action right.
  *
- * No background of its own — the grid behind the hero runs straight through it.
  * `currentId` is empty because the hero is not one of the six pages: it is the
  * way in, reached from the wordmark that every other page already carries.
+ *
+ * IT IS FIXED IN BOTH STATES, which is the whole trick. Going from in-flow to
+ * fixed at the scroll threshold would be a discontinuity no transition can
+ * cover — the element would leave the layout and land somewhere else in the
+ * same frame. Fixed from the start means the two states differ only in
+ * properties that interpolate, so the morph is genuinely a morph.
+ *
+ * At the top it is transparent, full width and sitting exactly where the hero's
+ * first row used to put it, so nothing appears to have moved.
  */
 export function HeroNav({ action }: { action: { label: string; to: string } }) {
+  const [floating, setFloating] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () =>
+      setFloating((was) => window.scrollY > (was ? SETTLE_AT : FLOAT_AT));
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // The menu belongs to the floating state; coming back to the top takes the
+  // button away, and a panel with no button to close it is a trap.
+  useEffect(() => {
+    if (!floating) setOpen(false);
+  }, [floating]);
+
   return (
-    <nav className="hero__nav" aria-label="Foolscap">
-      <Link className="hero__mark" to="/">
+    <nav className="hero__nav" data-floating={floating} aria-label="Foolscap">
+      <Link className="hero__mark" to="/" onClick={() => setOpen(false)}>
         <Lockup />
       </Link>
 
-      <ul className="hero__nav-links">
-        <NavItems currentId="" className="hero__nav-link" />
+      {/* Only ever shown in the floating state on a narrow screen, where the
+          six links do not fit in a pill. */}
+      <button
+        className="hero__nav-toggle"
+        type="button"
+        aria-controls="hero-nav-links"
+        aria-expanded={open}
+        onClick={() => setOpen((wasOpen) => !wasOpen)}
+      >
+        {open ? 'Close' : 'Menu'}
+      </button>
+
+      <ul className="hero__nav-links" id="hero-nav-links" data-open={open ? 'true' : 'false'}>
+        <NavItems currentId="" className="hero__nav-link" onNavigate={() => setOpen(false)} />
       </ul>
 
       <Link className="hero__pill hero__pill--solid hero__nav-action" to={action.to} data-magnetic>
