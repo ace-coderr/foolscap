@@ -166,19 +166,14 @@ export function Footer() {
           <div className="footer__who">
             <Lockup className="footer__lockup" />
             <p className="footer__by">
-              Built by{' '}
+              <span>Built by</span>
               <a
                 className="byline"
                 href="https://x.com/_ace_won"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                {/* The name and the arrow are separate so the rule can underline
-                    the name alone, while both stay inside one click target. */}
-                <span className="byline__name">ace</span>
-                <span className="byline__arrow" aria-hidden="true">
-                  &#8599;
-                </span>
+                ace
               </a>
             </p>
             <p className="footer__did">

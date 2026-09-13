@@ -354,6 +354,10 @@ body.on-black {
   white-space: nowrap;
   /* The pull is a transform, so no other rule may give these one. */
   transform: translate3d(var(--mx, 0), var(--my, 0), 0);
+  /* Plain white, and smoothed rather than subpixel-rendered: a label this
+   * small, letterspaced and inverted on hover picks up colour fringing on the
+   * stems otherwise. */
+  -webkit-font-smoothing: antialiased;
   transition:
     background-color 120ms ease,
     border-color 120ms ease,

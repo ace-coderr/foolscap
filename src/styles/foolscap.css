@@ -24,6 +24,7 @@
 :root {
   /* surfaces */
   --void: #000000; /* the footer band, and the landing page's ground */
+  --grey-dim: #8a8a8a; /* secondary marks on the dark band */
   --paper: #0e1420;
   --paper-sunk: #161d2b;
   --paper-raised: #1c2434;
@@ -853,7 +854,7 @@ a:focus-visible {
   --footer-edge: rgba(255, 255, 255, 0.1);
   --footer-text: rgba(255, 255, 255, 0.62);
   --footer-faint: rgba(255, 255, 255, 0.38);
-  --footer-quiet: #8a8a8a;
+  --footer-quiet: var(--grey-dim);
   /* The wordmark's size, kept as a variable so the rules that reach past its
    * edge can be written in the same unit. Tuned so eight capitals of Saira at
    * this width span the viewport. */
@@ -955,6 +956,8 @@ body:not(.on-black) .footer {
   text-transform: uppercase;
   text-decoration: none;
   white-space: nowrap;
+  /* Smoothed rather than subpixel-rendered, as on the landing's pills. */
+  -webkit-font-smoothing: antialiased;
   transition:
     background-color 120ms ease,
     border-color 120ms ease,
@@ -1102,9 +1105,12 @@ body:not(.on-black) .footer {
 }
 
 .footer__by {
-  margin: 0 0 0.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  margin: 0 0 0.6rem;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--grey-dim);
 }
 
 /* 1.45 rather than 1.55: three lines of 13px, and every tenth of leading here
@@ -1172,64 +1178,37 @@ body:not(.on-black) .footer {
 
 /* ------------------------------------------------------------------ byline */
 
-/* The signature. Bare until it is pointed at, and then three things arrive
- * together over the same 160ms: a rule wipes in from the left, the name picks
- * up an accent glow, and the arrow steps away from it.
+/* "Built by" in plain dim grey, and the name in a pill cut close to it. The
+ * pill is the footer's own glass — the same fill and hairline as the card on
+ * the landing — so it reads as part of the system rather than as a badge
+ * dropped into it.
  *
- * The name and the arrow are separate spans so the rule underlines the name
- * alone rather than running out under the arrow, while both remain inside the
- * one anchor and so inside one click target. */
+ * NO ACCENT. The hover lifts the same two whites it is already made of and
+ * nothing else. #3FB3C4 is state on this site, and a byline is not state — the
+ * one place it is spent outside the tools is the agent's sensor, which is the
+ * live thing in that figure. A name is not. */
 
-.byline,
+.byline {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.5;
+  text-decoration: none;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
 .byline:hover {
   color: #fff;
   text-decoration: none;
-  white-space: nowrap;
-}
-
-.byline__name {
-  position: relative;
-  display: inline-block;
-  /* line-height 1 puts the box bottom one descender under the baseline. For
-   * the 13px Chakra Petch this sits in that measured 2px, so the rule below
-   * takes another pixel to land at the 3px wanted. */
-  line-height: 1;
-  transition: text-shadow 160ms ease-out;
-}
-
-.byline:hover .byline__name {
-  text-shadow: 0 0 12px rgba(63, 179, 196, 0.5);
-}
-
-.byline__name::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 1px;
-  background: currentColor;
-  transform: scaleX(0);
-  transform-origin: left center;
-  transition: transform 160ms ease-out;
-}
-
-.byline:hover .byline__name::after {
-  transform: scaleX(1);
-}
-
-/* --footer-faint rather than a --grey-dim, which this stylesheet does not
- * have; it is the dim grey the footer already uses for secondary marks. */
-.byline__arrow {
-  display: inline-block;
-  margin-left: 0.28em;
-  font-size: 0.88em;
-  color: var(--footer-faint);
-  transition: transform 160ms ease-out;
-}
-
-.byline:hover .byline__arrow {
-  transform: translate(2px, -2px);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 .footer a:focus-visible {
@@ -1710,15 +1689,8 @@ body:not(.on-black) .footer {
   .footer__cta,
   .footer__link::after,
   .footer__wordmark,
-  .byline__name,
-  .byline__name::after,
-  .byline__arrow {
+  .byline {
     transition: none;
-  }
-
-  /* The rule and the glow still arrive; the arrow does not travel. */
-  .byline:hover .byline__arrow {
-    transform: none;
   }
 }
 
