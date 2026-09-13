@@ -23,9 +23,12 @@ import { createServer } from 'node:http';
 import { assertSchema, closePool } from './db.ts';
 import { createApi } from './api.ts';
 import { startMirror, type MirrorHandle } from './mirror.ts';
+import { startAnchoring, signingStatus, type AnchorHandle } from './anchor.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const RUN_MIRROR = process.env.NOTARY_RUN_MIRROR === '1';
+/** Anchoring is on unless switched off; an archive that never anchors is a database. */
+const RUN_ANCHOR = process.env.NOTARY_RUN_ANCHOR !== '0';
 
 /** How long in-flight requests get before the process leaves anyway. */
 const DRAIN_MS = Number(process.env.NOTARY_DRAIN_MS ?? 10_000);
@@ -42,6 +45,16 @@ async function main(): Promise<void> {
   const server = createServer((req, res) => void handler(req, res));
 
   server.listen(PORT, () => log(`api listening on :${PORT}`));
+
+  const signing = await signingStatus();
+  log(
+    signing.canSign
+      ? `signing anchors as ${signing.did}`
+      : `CANNOT sign anchors — ${signing.reason}. Roots will be built and served, not published.`
+  );
+
+  let anchoring: AnchorHandle | null = null;
+  if (RUN_ANCHOR) anchoring = startAnchoring();
 
   let mirror: MirrorHandle | null = null;
   if (RUN_MIRROR) {
@@ -63,6 +76,7 @@ async function main(): Promise<void> {
 
     // Mirror first: it is the thing holding open long-polls and writing
     // batches, and stopping it makes the rest quiet.
+    anchoring?.stop();
     await mirror?.stop().catch((err) => log(`mirror stop failed: ${err.message}`));
 
     const closed = new Promise<void>((resolve) => server.close(() => resolve()));

@@ -68,7 +68,7 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
 
   // --- current ------------------------------------------------------------
   // "Current" is in the token's own definition, and where you are is state.
-  { selector: ".nav__link[aria-current='page']", why: 'the page you are on' },
+  { selector: ".hero__nav-link[aria-current='page']", why: 'the page you are on' },
   { selector: 'a:focus-visible', why: 'the link keyboard focus is on' },
   { selector: '.lookup__input:focus-visible', why: 'the field keyboard focus is on' },
   { selector: '.rooms__row:focus-visible', why: 'the room keyboard focus is on' },

@@ -22,7 +22,6 @@ import { useLivePulse, type LiveFeed } from '../hero/useLivePulse';
 import { num } from '../format';
 import { useCountUp, useInView, usePrefersReducedMotion } from '../motion';
 import { startPointerField, tiltProps } from '../pointer';
-import '../styles/hero.css';
 
 /** SVG and small, but it still need not block the first paint. */
 const DrawingAgent = lazy(() => import('../components/DrawingAgent'));

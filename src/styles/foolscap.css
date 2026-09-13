@@ -1,12 +1,17 @@
-@import url("https://fonts.googleapis.com/css2?family=Spectral:wght@400;600&display=swap");
-
-/* foolscap.css — the shell, dark only.
+/* foolscap.css — the design system, for every page.
  *
- * Serif for prose, monospace only for things that are literally strings a machine
- * produced: DIDs, signatures, hashes, request ids, room names. Three state
- * colours, each meaning something; nothing decorative is ever given one, and
- * nothing here has a gradient, a glow or a shadow. Rules and whitespace do the
- * dividing.
+ * ONE PRODUCT, ONE REGISTER. This file and hero.css used to be two designs: navy
+ * paper and Spectral for the tools, black and Saira/Chakra Petch for the landing.
+ * A visitor crossing from the landing to /track changed ground colour, typeface
+ * and type scale in one click, which reads as two sites that happen to share a
+ * wordmark. The landing's register won because it is the one the product is
+ * argued in; the tokens below are now the site's, not the shell's, and hero.css
+ * extends them rather than contradicting them.
+ *
+ * Saira for headings, Chakra Petch for body, monospace only for things that are
+ * literally strings a machine produced: DIDs, signatures, hashes, request ids,
+ * room names. Three state colours, each meaning something; nothing decorative is
+ * ever given one. A grid and whitespace do the dividing.
  *
  * Two scales, and nothing outside them.
  *
@@ -22,21 +27,33 @@
  * those is zero. Widths come from --measure (prose) and --shell (page). */
 
 :root {
-  /* surfaces */
-  --void: #000000; /* the footer band, and the landing page's ground */
-  --grey-dim: #8a8a8a; /* secondary marks on the dark band */
-  --paper: #0e1420;
-  --paper-sunk: #161d2b;
-  --paper-raised: #1c2434;
+  /* surfaces — black, and glass on top of it.
+   *
+   * Every surface above the ground is white at an opacity rather than a mixed
+   * navy, so a panel over the grid shows the grid through it and the whole page
+   * reads as one sheet of glass over one ground. --paper-sunk and --paper-raised
+   * keep their names because half the shell is written against them; they are
+   * now the same glass the landing's cards are made of. */
+  --void: #000000;
+  --paper: #000000;
+  --paper-sunk: rgba(255, 255, 255, 0.03);
+  --paper-raised: rgba(255, 255, 255, 0.05);
 
-  /* text */
-  --ink: #e6ecf2;
-  --ink-mid: #a4b0bf;
-  --ink-faint: #8996a8;
+  --glass: rgba(255, 255, 255, 0.04);
+  --edge: rgba(255, 255, 255, 0.1);
+
+  /* text — white at an opacity, so it sits on the black ground predictably and
+   * needs no per-surface adjustment. These are the landing's greys exactly. */
+  --ink: #ffffff;
+  --ink-mid: rgba(255, 255, 255, 0.75);
+  --ink-faint: rgba(255, 255, 255, 0.52);
+  --grey-dim: rgba(255, 255, 255, 0.52);
 
   /* structure */
-  --rule: #262e3d;
-  --rule-strong: #3a4353;
+  --rule: rgba(255, 255, 255, 0.1);
+  --rule-strong: rgba(255, 255, 255, 0.18);
+  /* The wallpaper grid. Half the weight of a rule, so a divider still divides. */
+  --grid-line: rgba(255, 255, 255, 0.06);
 
   /* state — never decoration.
    *
@@ -58,8 +75,7 @@
   --alarm: #e0674f; /* forged, failed, lost */
 
   --display: Saira, "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
-  --serif: Spectral, Georgia, "Iowan Old Style", "Palatino Linotype", Palatino,
-    "Times New Roman", serif;
+  --body: "Chakra Petch", ui-monospace, "SF Mono", Menlo, system-ui, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
   /* The one answer on a page. Used at most once, and only where the page has a
@@ -75,9 +91,11 @@
   --t-small: 0.875rem;
   --t-micro: 0.75rem;
 
-  /* Not a seventh step: monospace runs optically larger than the serif at the
-   * same size, so it is normalised against whichever step it sits in. */
-  --mono-optical: 0.9em;
+  /* Not a seventh step: monospace runs optically larger than the body face at
+   * the same size, so it is normalised against whichever step it sits in.
+   * Chakra Petch is itself near-monospaced, so the correction is gentler than it
+   * was against a serif. */
+  --mono-optical: 0.94em;
 
   --space: 1.05rem;
   --space-half: calc(var(--space) * 0.5);
@@ -92,11 +110,12 @@
   color-scheme: dark;
 }
 
-/* Every text token clears 4.5:1 on all three surfaces, --ink-faint included:
- * 6.14 on --paper, 5.62 on --paper-sunk, 5.17 on --paper-raised. It is lighter
- * than it would need to be on the page alone, which is the point — a token that
- * is safe everywhere needs no rule about where not to use it, and a rule like
- * that is forgotten long before the palette is. */
+/* Contrast got better, not worse, when the ground went black: every text token
+ * is white at an opacity over #000, so --ink-faint at 0.52 is 8.9:1 and --ink-mid
+ * at 0.75 is 15.9:1. The state colours gained too — they were sized against
+ * #0e1420 and are now on something darker. Glass surfaces are translucent white
+ * over black, so text on them sits on a LIGHTER ground than the page; at 0.05
+ * the shift is under a tenth of a stop and nothing drops below AA. */
 
 *,
 *::before,
@@ -112,8 +131,9 @@ body {
   margin: 0;
   padding: 0 var(--space) var(--space-4);
   background: var(--paper);
-  color: var(--ink);
-  font-family: var(--serif);
+  color: var(--ink-mid);
+  font-family: var(--body);
+  font-weight: 300;
   font-size: var(--t-body);
   line-height: 1.62;
   -webkit-font-smoothing: antialiased;
@@ -165,117 +185,77 @@ a:focus-visible {
 /* Rendered by js/shell.js on every page. Never written into a page by hand:
  * a link that exists on four of six pages is the failure this prevents. */
 
-.nav {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: var(--paper-raised);
-  border-bottom: 1px solid var(--rule);
+/* THE NAV LIVES IN hero.css NOW.
+ *
+ * It was two navs: a sticky bar here and a floating pill on the landing. They
+ * were the same map in different chrome, and crossing between them was the
+ * moment the site stopped looking like one product. The landing's won; the
+ * shell renders the same component, so there is nothing left to keep in step.
+ *
+ * What remains here is the page ground the nav sits over. */
+
+/* ------------------------------------------------------------- page ground */
+
+.page {
+  position: relative;
+  min-height: 100dvh;
+  background: var(--paper);
+  /* Keeps the cursor glow's screen blend inside the page, as on the landing. */
+  isolation: isolate;
 }
 
-.nav__inner {
-  max-width: var(--shell);
-  margin-inline: auto;
-  padding: 0 var(--space);
-  height: var(--nav-height);
-  display: flex;
-  align-items: center;
-  gap: var(--space);
+/* Wallpaper. Fixed, so it does not travel with a long page — the grid is the
+ * room the content moves through rather than a pattern printed on it. Sixths
+ * across and fifths down, the same proportions as the hero's. */
+.page__grid {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 16.6667% 20%;
 }
 
-.nav__mark {
-  color: var(--ink);
-  text-decoration: none;
-  flex: 0 0 auto;
+/* The hairlines brighten under the glow. Same masked-duplicate trick as the
+ * landing's grids, and the same arithmetic: 0.085 over 0.06 reaches 0.14. */
+.page__grid::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.085) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.085) 1px, transparent 1px);
+  background-size: inherit;
+  -webkit-mask-image: radial-gradient(
+    circle 210px at var(--lx, -9999px) var(--ly, -9999px),
+    #000 0%,
+    rgba(0, 0, 0, 0.55) 45%,
+    transparent 78%
+  );
+  mask-image: radial-gradient(
+    circle 210px at var(--lx, -9999px) var(--ly, -9999px),
+    #000 0%,
+    rgba(0, 0, 0, 0.55) 45%,
+    transparent 78%
+  );
+  opacity: var(--glow-on, 0);
+  transition: opacity 220ms ease;
 }
 
-.nav__mark:hover {
-  text-decoration: none;
-  color: var(--ink);
-}
-
-.nav__links {
-  display: flex;
-  align-items: center;
-  gap: calc(var(--space) * 1.15);
-  margin-left: auto;
-  list-style: none;
-  padding: 0;
-}
-
-.nav__link {
-  display: block;
-  font-size: var(--t-small);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--ink-mid);
-  text-decoration: none;
-  padding: 0.35rem 0;
-  border-bottom: 2px solid transparent;
-}
-
-.nav__link:hover {
-  color: var(--ink);
-  text-decoration: none;
-}
-
-/* Accent marks the current page. Never a filled pill. */
-.nav__link[aria-current='page'] {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-}
-
-/* A page that does not exist yet is shown, not hidden — the shell is the whole
- * map — but it is not a link, so nobody is sent to a 404. */
-.nav__link--soon {
-  color: var(--ink-faint);
-  cursor: default;
-}
-
-.nav__toggle {
-  display: none;
-  margin-left: auto;
-  padding: 0.4rem 0.7rem;
-  background: transparent;
-  border: 1px solid var(--rule-strong);
-  color: var(--ink);
-  font-family: var(--serif);
-  font-size: var(--t-small);
-  cursor: pointer;
-}
-
-@media (max-width: 48rem) {
-  .nav__links {
+@media (prefers-reduced-motion: reduce), (hover: none), (pointer: coarse) {
+  .page__grid::after {
     display: none;
-    position: fixed;
-    inset: var(--nav-height) 0 0 0;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0;
-    background: var(--paper-raised);
-    padding: var(--space);
-    overflow-y: auto;
   }
+}
 
-  .nav__links[data-open='true'] {
-    display: flex;
-  }
-
-  .nav__link {
-    font-size: var(--t-h2);
-    text-transform: none;
-    letter-spacing: 0.01em;
-    padding: var(--space-half) 0;
-    border-bottom: 1px solid var(--rule);
-  }
-
-  .nav__link[aria-current='page'] {
-    border-bottom-color: var(--rule);
-  }
-
-  .nav__toggle {
-    display: block;
-  }
+/* Everything the reader actually reads sits above the wallpaper. */
+.shell,
+.footer {
+  position: relative;
+  z-index: 1;
 }
 
 /* ------------------------------------------------------------------ reveal */
@@ -366,7 +346,55 @@ a:focus-visible {
 .shell {
   max-width: var(--shell);
   margin-inline: auto;
-  padding: 0 var(--space) var(--space-4);
+  /* The nav is fixed in both its states, so it takes no space in the flow and
+   * the first thing on the page would otherwise start underneath it. This is
+   * the nav's own height plus the clearance the floating pill drops into. */
+  padding: calc(var(--nav-height) + var(--space-2)) var(--space) var(--space-4);
+}
+
+/* A section arrives as the reader reaches it — the same rise the landing's
+ * About uses, applied by the shell so no page has to mark its own sections.
+ * The stagger is capped at four steps: a page of twelve sections should not
+ * have its last one waiting three-quarters of a second. */
+main .section {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 400ms ease-out,
+    transform 400ms ease-out;
+  transition-delay: calc(var(--rise-i, 0) * 60ms);
+}
+
+main .section[data-in='true'] {
+  opacity: 1;
+  transform: none;
+}
+
+/* Before the observer has run, and wherever JS did not: visible. A reveal that
+ * fails closed would hide the page. */
+main .section:not([data-in]) {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  main .section {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------- glass */
+
+/* The panel surface, and the same one the landing's tool cards are made of:
+ * white at 0.04 over black, a hairline edge, and a blur so the grid behind it
+ * reads as depth rather than as noise through a window. */
+.glass {
+  border-radius: 20px;
+  padding: clamp(1.35rem, 2.2vw, 1.85rem);
+  background: var(--glass);
+  border: 1px solid var(--edge);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 /* Prose does not get to be 72rem wide just because the page is. */
@@ -389,10 +417,13 @@ a:focus-visible {
 
 .page-header__title {
   margin: 0;
+  font-family: var(--display);
+  font-stretch: 108%;
   font-size: var(--t-h1);
-  font-weight: 400;
-  line-height: 1.15;
-  letter-spacing: 0.01em;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: 0.005em;
+  color: var(--ink);
 }
 
 .page-header__line {
@@ -437,9 +468,9 @@ a:focus-visible {
   margin: 0 0 var(--space);
   padding-bottom: var(--space-half);
   border-bottom: 1px solid var(--rule);
+  font-family: var(--display);
   font-size: var(--t-micro);
-  font-weight: 400;
-  font-family: var(--serif);
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.14em;
   color: var(--ink-faint);
@@ -486,7 +517,7 @@ a:focus-visible {
   border-radius: 0;
   background: var(--ink);
   color: var(--paper);
-  font-family: var(--serif);
+  font-family: var(--body);
   font-size: var(--t-body);
   cursor: pointer;
 }
@@ -502,10 +533,21 @@ a:focus-visible {
   margin-top: var(--space);
 }
 
+/* A status card is glass now, the same glass the landing's tool cards are made
+ * of — it was a bare left rule, which read as a blockquote next to them.
+ *
+ * The left rule survives as the state marker rather than as the card: it is the
+ * one part that carries meaning, and --accent on it is what says "this needs
+ * you". Glass plus a coloured edge is the same idea the hero's card already had. */
 .card {
-  border-left: 2px solid var(--rule-strong);
-  padding: 0 0 0 var(--space);
+  border-radius: 20px;
+  padding: clamp(1.2rem, 2vw, 1.6rem);
   margin-bottom: var(--space-2);
+  background: var(--glass);
+  border: 1px solid var(--edge);
+  border-left: 2px solid var(--rule-strong);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 /* Accent marks the states that want something from the reader. */
@@ -518,10 +560,13 @@ a:focus-visible {
  * shouting on top of size. */
 .card__status {
   margin: 0 0 var(--space);
+  font-family: var(--display);
+  font-stretch: 108%;
   font-size: var(--t-answer);
-  font-weight: 400;
-  line-height: 1.05;
-  letter-spacing: -0.01em;
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+  color: var(--ink);
 }
 
 .card--attention .card__status {
@@ -672,7 +717,9 @@ a:focus-visible {
 }
 
 .state__word {
+  font-family: var(--display);
   font-size: var(--t-h2);
+  font-weight: 500;
   letter-spacing: 0.03em;
 }
 
@@ -722,10 +769,12 @@ a:focus-visible {
 
 .count__value {
   display: block;
+  font-family: var(--display);
   font-size: var(--t-h2);
   font-weight: 600;
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
+  color: var(--ink);
 }
 
 .count__label {
@@ -1265,22 +1314,18 @@ body:not(.on-black) .footer {
 
 .shell--bleed {
   max-width: none;
-  /* Out past the body's gutter, and up under the nav, so the canvas runs to
-   * every edge and the bar sits over it. */
+  /* Out past the body's gutter and up to the very top, so the canvas runs to
+   * every edge and the nav floats over it.
+   *
+   * No negative top margin any more: the nav is fixed in both its states and
+   * takes no space in the flow, so there is nothing to pull back under. The
+   * padding .shell gained for that nav is cancelled here for the same reason. */
   margin-inline: calc(var(--space) * -1);
-  margin-top: calc(var(--nav-height) * -1);
   height: 100dvh;
   min-height: 32rem;
   padding: 0;
   position: relative;
   overflow: hidden;
-}
-
-/* Over the canvas, so it is translucent and blurred rather than opaque. */
-.nav--over {
-  background: color-mix(in srgb, var(--paper-raised) 85%, transparent);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
 }
 
 .page-header--float {
@@ -1345,9 +1390,17 @@ body:not(.on-black) .footer {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: calc(var(--nav-height) + var(--space)) var(--space) var(--space-2);
-  background: color-mix(in srgb, var(--paper-raised) 92%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  /* Near-black, not the page's glass.
+   *
+   * Every other surface on the site is white at a low opacity over a black
+   * ground, which works because the ground is black. This one sits over a lit
+   * 3D city, where white-at-0.05 is effectively transparent and the labels
+   * would be read against whatever building happened to be behind them. It
+   * takes the floating nav's treatment instead — the same fill and blur, since
+   * that is the other surface on this site that has to cover something. */
+  background: rgba(10, 10, 10, 0.85);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   border-left: 1px solid var(--rule);
   font-size: var(--t-small);
   line-height: 1.55;
@@ -1362,11 +1415,14 @@ body:not(.on-black) .footer {
 /* The one answer on the page. */
 .answer {
   margin: 0;
+  font-family: var(--display);
+  font-stretch: 108%;
   font-size: var(--t-answer);
-  font-weight: 400;
+  font-weight: 600;
   line-height: 1;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
   font-variant-numeric: tabular-nums;
+  color: var(--ink);
 }
 
 .answer--waiting {
@@ -1530,7 +1586,7 @@ body:not(.on-black) .footer {
   border: 0;
   padding: 0;
   color: var(--ink-faint);
-  font-family: var(--serif);
+  font-family: var(--body);
   font-size: var(--t-small);
   text-decoration: underline;
   text-underline-offset: 0.16em;
@@ -1591,7 +1647,7 @@ body:not(.on-black) .footer {
   border: 0;
   border-bottom: 1px solid var(--rule);
   color: var(--ink-mid);
-  font-family: var(--serif);
+  font-family: var(--body);
   font-size: var(--t-small);
   text-align: left;
   cursor: pointer;
@@ -1919,4 +1975,37 @@ body:not(.on-black) .footer {
     flex-direction: column;
     gap: 0.2rem;
   }
+}
+
+/* ----------------------------------------------------------------- anchors */
+
+/* The label above a pinned key. /track has one for the referee and /notary one
+ * for Notary itself; both are keys something is checked against, which is the
+ * only reason either is on screen. */
+.pinned__label {
+  margin: var(--space) 0 var(--space-half);
+  font-family: var(--display);
+  font-size: var(--t-micro);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+}
+
+.notary__anchor {
+  padding: var(--space-half) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.notary__anchor:last-child {
+  border-bottom: 0;
+}
+
+/* A 64-character hash on a phone. It breaks anywhere rather than pushing the
+ * page sideways, because the point of showing it is that you can compare it. */
+.notary__anchor-root {
+  margin: 0.35rem 0 0;
+  font-size: var(--t-micro);
+  color: var(--ink-mid);
+  overflow-wrap: anywhere;
 }

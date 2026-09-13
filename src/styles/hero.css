@@ -1,17 +1,20 @@
-/* hero.css — the landing page, and only the landing page.
+/* hero.css — the landing page, and the nav every page shares with it.
  *
- * A different register from the rest of Foolscap on purpose: black rather than
- * navy paper, Saira and Chakra Petch rather than Spectral, and a grid instead of
- * rules and whitespace. Everything here is namespaced under .landing, .hero and
- * .about so none of it can reach /city or /track, which keep foolscap.css
- * exactly as it was.
+ * This used to say "the landing page, and only the landing page", and it used to
+ * be true: a different register on purpose, namespaced so none of it could reach
+ * /city or /track. That was the bug. A visitor crossing from here to a tool
+ * changed ground, typeface and scale in one click and arrived at what looked
+ * like a different site.
  *
- * The palette is black, white and greys. #3FB3C4 is spent only on state here,
- * as everywhere else — the live dot on the card, the focus ring, the agent's
- * sensor — and test/accent.test.ts fails the build if it turns up anywhere it
- * has not been argued for.
+ * So the direction reversed. foolscap.css now holds the tokens this file
+ * introduced — black ground, Saira and Chakra Petch, the white-at-an-opacity
+ * greys — and every page is drawn in them. What is left here is the landing's
+ * own furniture plus .hero__nav, which the shell renders on all four pages.
  *
- * Loaded by the Landing route, so it ships in that route's chunk. */
+ * Loaded globally from main.tsx for exactly that reason.
+ *
+ * #3FB3C4 is spent only on state, as everywhere else, and test/accent.test.ts
+ * fails the build if it turns up anywhere it has not been argued for. */
 
 .hero {
   /* Type */
@@ -431,8 +434,14 @@ body.on-black {
   text-decoration: none;
 }
 
+/* Where you are is state, and state is the one thing the accent is for.
+ *
+ * It was white while this nav was the landing's alone, because the landing is
+ * not one of the six pages and no link was ever current. On a tool page one
+ * always is, so the rule the palette states — "current" is teal — applies
+ * again. Allowlisted in test/accent.test.ts under this selector. */
 .hero__nav-link[aria-current='page'] {
-  color: #fff;
+  color: var(--accent);
 }
 
 .hero__nav-link--soon {

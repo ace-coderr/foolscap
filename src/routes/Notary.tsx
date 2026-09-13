@@ -22,6 +22,7 @@ import { Shell } from '../components/Shell';
 import { num, plural, formatAge } from '../format.ts';
 import { IDENTITY_CUTOFF } from '../lib/contest.ts';
 import {
+  useAnchors,
   useArchive,
   useCoverage,
   useLive,
@@ -33,6 +34,8 @@ import {
   type Cutoff,
   type DidReport,
   type LiveResult,
+  type Anchor,
+  type AnchorLog,
 } from '../useNotary.ts';
 
 /** The contest's own cutoff, offered as the default because it is the question. */
@@ -42,6 +45,7 @@ export default function Notary() {
   const coverage = useCoverage();
   const archive = useArchive();
   const live = useLive();
+  const anchorLog = useAnchors();
 
   const [field, setField] = useState('');
   const [cutoffDay, setCutoffDay] = useState(DEFAULT_CUTOFF);
@@ -130,22 +134,128 @@ export default function Notary() {
             <CutoffAnswer archive={archive.state} live={live.state} asked={asked} />
           </section>
 
+          {/* Each source in its own pane of glass, so the two are visibly two
+              things. The labelling was always in the copy; this puts it in the
+              layout as well. */}
           <section className="section measure" id="archive">
             <h2 className="section__title">
               Archive <span className="notary__source-tag">Notary’s capture</span>
             </h2>
-            <ArchivePanel state={archive.state} />
+            <div className="glass">
+              <ArchivePanel state={archive.state} />
+            </div>
           </section>
 
           <section className="section measure" id="live">
             <h2 className="section__title">
               Live <span className="notary__source-tag">the rings, read here</span>
             </h2>
-            <LivePanel state={live.state} />
+            <div className="glass">
+              <LivePanel state={live.state} />
+            </div>
           </section>
         </>
       )}
+
+      <AnchorPanel state={anchorLog} />
     </Shell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The anchors, and the key they are signed by
+// ---------------------------------------------------------------------------
+
+/**
+ * Why this section exists at all.
+ *
+ * Everything else on this page asks you to believe Notary's clock. The daily
+ * root is the reason you do not have to: it was published into a public room,
+ * signed by a key pinned in this page's own source, before anyone asked about
+ * any particular record. Notary cannot now backdate, remove or move a record
+ * without the published root failing to reproduce.
+ *
+ * THE DID IS PINNED HERE, not read from the API. The API is asked what key it
+ * thinks it has only so the two can be compared — a service that reported its
+ * own identity and was believed would let a wrong key look correct.
+ */
+function AnchorPanel({ state }: { state: Async<AnchorLog & { matchesPinned: boolean; pinned: string }> }) {
+  if (state.phase === 'idle') return null;
+
+  return (
+    <section className="section measure" id="anchors">
+      <h2 className="section__title">
+        Anchors <span className="notary__source-tag">why you need not trust the clock</span>
+      </h2>
+
+      <div className="glass">
+        {state.phase === 'loading' && <p className="empty">Reading the anchor log…</p>}
+        {state.phase === 'failed' && <p className="coverage__problem">{state.error}</p>}
+
+        {state.phase === 'ready' && (
+          <>
+            <p className="notary__note">
+              Once a day Notary builds a Merkle tree over everything it captured that day and
+              publishes the root into <span className="mono">{state.value.anchor_room}</span>,
+              signed by its own key. Fetch any record from the API and it comes with a proof:
+              fold it into the leaf and you reach the root below, or Notary has moved something.
+            </p>
+
+            <p className="pinned__label">Notary’s key, pinned</p>
+            <p className="pinned__did mono">{state.value.pinned}</p>
+            <p className="notary__note">
+              This is the service’s own key, not its author’s, and it signs nothing but anchors.
+              Foolscap never infers it from who posts in a room.
+            </p>
+
+            {!state.value.matchesPinned && (
+              <p className="coverage__problem">
+                The archive reports a different key —{' '}
+                <span className="mono">{state.value.notary_did}</span>. Roots signed by it verify
+                against nothing this page pins, so treat the log below as unwitnessed.
+              </p>
+            )}
+
+            {state.value.can_sign === false && (
+              <p className="coverage__problem">
+                The archive cannot sign right now
+                {state.value.signing_problem ? `: ${state.value.signing_problem}` : ''}. Roots are
+                still computed; until one is published it constrains nothing.
+              </p>
+            )}
+
+            {state.value.anchors.length === 0 ? (
+              <p className="empty">No day has been anchored yet.</p>
+            ) : (
+              <ul className="notary__rooms">
+                {state.value.anchors.map((anchor) => (
+                  <AnchorRow anchor={anchor} room={state.value.anchor_room} key={anchor.day} />
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function AnchorRow({ anchor, room }: { anchor: Anchor; room: string }) {
+  return (
+    <li className="notary__anchor">
+      <p className="notary__record-head">
+        <span className="mono">{anchor.day}</span>
+        <span className="notary__record-when">
+          {anchor.recordCount == null ? '—' : `${num.format(anchor.recordCount)} records`}
+        </span>
+      </p>
+      <p className="notary__anchor-root mono">{anchor.root ?? 'not built'}</p>
+      <p className="notary__record-meta mono">
+        {anchor.publishedAt
+          ? `published to ${room}${anchor.publishedSeq ? ` at seq ${anchor.publishedSeq}` : ''} · ${stamp(anchor.publishedAt)}`
+          : 'computed, not yet published — constrains nothing until it is'}
+      </p>
+    </li>
   );
 }
 

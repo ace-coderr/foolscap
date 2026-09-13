@@ -36,7 +36,7 @@ import {
   CAVEAT,
 } from './archive.ts';
 import { buildProof, isoStamp, leafHash, leafPreimage } from './merkle.ts';
-import { notaryDid } from './anchor.ts';
+import { signingStatus, ANCHOR_ROOM } from './anchor.ts';
 import { RateLimiter, clientKey } from './ratelimit.ts';
 
 /** Where a submission lands when the caller does not name a room. */
@@ -322,13 +322,21 @@ export function createApi({ limiter = new RateLimiter(CAPTURE_LIMIT) }: { limite
           res,
           200,
           {
-            notary_did: await notaryDid(),
-            anchor_room: process.env.NOTARY_ANCHOR_ROOM ?? 'technocore',
+            // The PINNED DID, not one derived from whatever seed this process
+            // happens to hold. `can_sign` is the honest half: it says whether
+            // this service can actually publish as that key.
+            ...(await signingStatus().then((s) => ({
+              notary_did: s.did,
+              can_sign: s.canSign,
+              signing_problem: s.reason,
+            }))),
+            anchor_room: ANCHOR_ROOM,
             anchors: rows,
             unpublished: rows.filter((row) => row.publishedSeq == null).length,
             note:
               'A root with no published_seq has been computed but not yet witnessed by anyone. ' +
-              'Only a published root constrains what Notary can change.',
+              'Only a published root constrains what Notary can change. Verify an anchor by ' +
+              'finding its message in anchor_room and checking the signature against notary_did.',
           },
           { 'cache-control': 'public, max-age=60' }
         );

@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { readRoom, TechnocoreError, type Message } from './lib/technocore.ts';
 import { looksLikeDid, verifyMessage } from './lib/did.ts';
+import { NOTARY_DID } from './lib/notary.ts';
 
 // ---------------------------------------------------------------------------
 // Where the archive lives
@@ -77,6 +78,59 @@ export interface ArchiveRecord {
   sourceSeq: string | null;
   sighting: 'first' | 'last' | null;
   source: 'submitted' | 'mirrored';
+}
+
+export interface Anchor {
+  day: string;
+  root: string | null;
+  recordCount: number | null;
+  publishedSeq: string | null;
+  publishedAt: string | null;
+  firstCapture: string | null;
+  lastCapture: string | null;
+}
+
+export interface AnchorLog {
+  /** What the API says its key is. Compared against the pinned one, never trusted. */
+  notary_did: string;
+  can_sign: boolean;
+  signing_problem: string | null;
+  anchor_room: string;
+  anchors: Anchor[];
+  unpublished: number;
+}
+
+/**
+ * The anchor log, and the one check that matters about it.
+ *
+ * `matchesPinned` is false when the API reports a different DID than the client
+ * pins. That is not a cosmetic mismatch: roots signed by an unpinned key are
+ * roots this page cannot vouch for, and saying so is the difference between a
+ * tamper-evident archive and one that merely claims to be.
+ */
+export function useAnchors(): Async<AnchorLog & { matchesPinned: boolean; pinned: string }> {
+  const [state, setState] = useState<Async<AnchorLog & { matchesPinned: boolean; pinned: string }>>(
+    archiveConfigured() ? { phase: 'loading' } : { phase: 'idle' }
+  );
+
+  useEffect(() => {
+    if (!archiveConfigured()) return;
+    const abort = new AbortController();
+    getJson<AnchorLog>('/api/notary/anchors', abort.signal)
+      .then((value) =>
+        setState({
+          phase: 'ready',
+          value: { ...value, pinned: NOTARY_DID, matchesPinned: value.notary_did === NOTARY_DID },
+        })
+      )
+      .catch((err: Error) => {
+        if (err.name === 'AbortError') return;
+        setState({ phase: 'failed', error: err.message });
+      });
+    return () => abort.abort();
+  }, []);
+
+  return state;
 }
 
 export interface Cutoff {

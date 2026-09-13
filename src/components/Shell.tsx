@@ -10,7 +10,8 @@
 // up on four of six pages. Different chrome, same map.
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { useInView, useParallax } from '../motion';
+import { useInView, useParallax, usePrefersReducedMotion } from '../motion';
+import { startPointerField } from '../pointer';
 import { Link, NavLink } from 'react-router-dom';
 import { PAGES, pageById } from '../pages';
 import { Lockup } from './Mark';
@@ -67,7 +68,14 @@ const FLOAT_AT = 80;
 const SETTLE_AT = 48;
 
 /**
- * The hero's nav: wordmark left, links centred, one action right.
+ * THE SITE'S NAV — every page, including the hero.
+ *
+ * It was the hero's alone, which is why it is still exported as HeroNav. When
+ * the tools joined the landing's design system they took its nav with them:
+ * a second nav with its own scroll behaviour would have been the same two-sites
+ * problem in a different place.
+ *
+ * Wordmark left, links centred, one action right.
  *
  * `currentId` is empty because the hero is not one of the six pages: it is the
  * way in, reached from the wordmark that every other page already carries.
@@ -81,7 +89,13 @@ const SETTLE_AT = 48;
  * At the top it is transparent, full width and sitting exactly where the hero's
  * first row used to put it, so nothing appears to have moved.
  */
-export function HeroNav({ action }: { action: { label: string; to: string } }) {
+export function HeroNav({
+  action,
+  currentId = '',
+}: {
+  action: { label: string; to: string };
+  currentId?: string;
+}) {
   const [floating, setFloating] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -118,7 +132,7 @@ export function HeroNav({ action }: { action: { label: string; to: string } }) {
       </button>
 
       <ul className="hero__nav-links" id="hero-nav-links" data-open={open ? 'true' : 'false'}>
-        <NavItems currentId="" className="hero__nav-link" onNavigate={() => setOpen(false)} />
+        <NavItems currentId={currentId} className="hero__nav-link" onNavigate={() => setOpen(false)} />
       </ul>
 
       <Link className="hero__pill hero__pill--solid hero__nav-action" to={action.to} data-magnetic>
@@ -128,32 +142,56 @@ export function HeroNav({ action }: { action: { label: string; to: string } }) {
   );
 }
 
-function Nav({ currentId, over }: { currentId: string; over: boolean }) {
-  const [open, setOpen] = useState(false);
+/**
+ * The nav's one action.
+ *
+ * Every page offers the same way in — the tracker is the tool with an answer a
+ * stranger can use immediately — except the tracker itself, which would
+ * otherwise carry a button to where you already are.
+ */
+function navAction(currentId: string): { label: string; to: string } {
+  return currentId === 'track'
+    ? { label: 'Open the city', to: '/city' }
+    : { label: 'Open the tracker', to: '/track' };
+}
 
-  return (
-    <nav className={over ? 'nav nav--over' : 'nav'} aria-label="Foolscap">
-      <div className="nav__inner">
-        <Link className="nav__mark" to="/">
-          <Lockup />
-        </Link>
+/**
+ * Reveal every section as it arrives, without each page having to say so.
+ *
+ * One observer in the shell rather than a wrapper component per section: the
+ * pages already mark their sections with `.section`, so the markup that would
+ * have been added carries no information the class does not. Sections already on
+ * screen at load are revealed immediately by the observer's first callback,
+ * which is what stops the top of a page fading in under the reader.
+ */
+function useSectionReveals(deps: unknown): void {
+  const reduced = usePrefersReducedMotion();
 
-        <button
-          className="nav__toggle"
-          type="button"
-          aria-controls="nav-links"
-          aria-expanded={open}
-          onClick={() => setOpen((wasOpen) => !wasOpen)}
-        >
-          {open ? 'Close' : 'Menu'}
-        </button>
+  useEffect(() => {
+    const sections = Array.from(document.querySelectorAll<HTMLElement>('main .section'));
+    if (reduced) {
+      sections.forEach((section) => section.setAttribute('data-in', 'true'));
+      return;
+    }
 
-        <ul className="nav__links" id="nav-links" data-open={open ? 'true' : 'false'}>
-          <NavItems currentId={currentId} className="nav__link" onNavigate={() => setOpen(false)} />
-        </ul>
-      </div>
-    </nav>
-  );
+    sections.forEach((section, i) => {
+      section.setAttribute('data-in', 'false');
+      section.style.setProperty('--rise-i', String(Math.min(i, 3)));
+    });
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          entry.target.setAttribute('data-in', 'true');
+          observer.unobserve(entry.target);
+        }
+      },
+      { rootMargin: '0px 0px -12% 0px' }
+    );
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, [reduced, deps]);
 }
 
 /**
@@ -300,9 +338,32 @@ export function Shell({
 
   const bleed = variant === 'bleed';
 
+  // The same pointer field the landing runs: one listener, one rAF loop, the
+  // glow following the cursor and the grid brightening under it. Queried rather
+  // than passed by ref because the field re-reads its targets, and the grid
+  // comes and goes with `bleed`.
+  useEffect(
+    () =>
+      startPointerField({
+        glow: () => document.querySelector<HTMLElement>('.cursor-glow'),
+        grids: () => Array.from(document.querySelectorAll<HTMLElement>('[data-grid]')),
+        magnets: () => Array.from(document.querySelectorAll<HTMLElement>('[data-magnetic]')),
+      }),
+    []
+  );
+
+  useSectionReveals(current.id);
+
   return (
-    <>
-      <Nav currentId={current.id} over={bleed} />
+    <div className="page">
+      {/* Wallpaper, then the light over it. Both fixed and both inert: they
+          follow the pointer, never the scroll, so a long page does not drag a
+          grid up past its own content. */}
+      {!bleed && <div className="page__grid" aria-hidden="true" data-grid />}
+      <div className="cursor-glow" aria-hidden="true" />
+
+      <HeroNav action={navAction(current.id)} currentId={current.id} />
+
       <main className={bleed ? 'shell shell--bleed' : 'shell'}>
         <header className={bleed ? 'page-header page-header--float' : 'page-header'}>
           <p className="page-header__eyebrow">{current.eyebrow}</p>
@@ -312,6 +373,6 @@ export function Shell({
         {children}
       </main>
       <Footer />
-    </>
+    </div>
   );
 }
