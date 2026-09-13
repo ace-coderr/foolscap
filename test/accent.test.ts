@@ -53,7 +53,6 @@ const ACCENT =
 const ALLOWED: Array<{ selector: string; why: string }> = [
   // --- liveness -----------------------------------------------------------
   { selector: '.state--live', why: 'the referee is answering' },
-  { selector: '.state--lagging', why: 'the referee is answering, behind' },
   { selector: '.hero__dot--live', why: 'the live feed is reading rooms' },
   {
     selector: '.chip--live .chip__dot, .rooms__dot--live, .legend__swatch--live',
@@ -66,7 +65,6 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
   { selector: '.card--attention', why: 'a status the reader has to act on' },
   { selector: '.card--attention .card__status', why: 'the word of that status' },
   { selector: '.row__status--attention', why: 'the same, in a list' },
-  { selector: '.coverage__problem', why: 'a hole in coverage, which invalidates an absence' },
 
   // --- current ------------------------------------------------------------
   // "Current" is in the token's own definition, and where you are is state.

@@ -676,8 +676,14 @@ a:focus-visible {
   letter-spacing: 0.03em;
 }
 
-/* live: filled accent. lagging: hollow accent. quiet: hollow, no accent at all —
- * the absence of the colour is the signal. */
+/* live: filled accent. lagging: hollow --warn. quiet: hollow --ink-faint.
+ *
+ * Only the first of the three is teal, because only the first of the three is
+ * fine. Lagging means the referee is still answering but falling behind, which
+ * is a thing degrading — painting it the same colour as live made a reader
+ * check the dot's fill to learn something the colour should have told them.
+ * --warn is 8.19:1 on --paper and 6.91 on --paper-raised, brighter on all three
+ * surfaces than the accent it replaces. */
 .state--live {
   color: var(--accent);
 }
@@ -687,7 +693,7 @@ a:focus-visible {
 }
 
 .state--lagging {
-  color: var(--accent);
+  color: var(--warn);
 }
 
 .state--quiet {
@@ -805,8 +811,12 @@ a:focus-visible {
   margin: 0 0 var(--space-half);
 }
 
+/* A hole in coverage is uncertainty, not verification. It says a stretch of a
+ * room could not be read — so what Foolscap shows is incomplete, and an absence
+ * inside that stretch proves nothing. The accent would have claimed the
+ * opposite of what the sentence says. */
 .coverage__problem {
-  color: var(--accent);
+  color: var(--warn);
 }
 
 /* ------------------------------------------------------------ landing page */
