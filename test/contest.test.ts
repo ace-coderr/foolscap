@@ -1,17 +1,18 @@
-// node --test test/
+// npm test — vitest, no network, recorded fixtures only.
+// was: node --test test/
 //
 // Every fixture in test/fixtures is a byte-exact recording from technocore.chat
 // taken on 2026-09-11, except forged-synthetic.jsonl, which is generated (the
 // signatures in it are real Ed25519 signatures, so the forgeries are exactly as
 // convincing as an attacker's would be). Nothing here touches the network.
 
-import { test, describe } from 'node:test';
+import { test, describe } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { parseRecord, normalizeMessage } from '../js/technocore.js';
+import { parseRecord, normalizeMessage } from '../src/lib/technocore';
 import {
   REFEREE_DID,
   ROOMS,
@@ -25,7 +26,7 @@ import {
   ReceiptIndex,
   IntakeStats,
   ContestTracker,
-} from '../js/contest.js';
+} from '../src/lib/contest';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 

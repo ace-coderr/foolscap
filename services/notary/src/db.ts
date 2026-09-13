@@ -1,4 +1,4 @@
-// db.mjs — Postgres access for the Notary archive.
+// db.ts — Postgres access for the Notary archive.
 //
 // Nonces are passed to and from Postgres as strings, end to end. node-postgres
 // returns numeric as a string by default and we never coerce it, because the
@@ -10,15 +10,53 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import pg from 'pg';
 
+/**
+ * A record on its way into the archive.
+ *
+ * `nonce` is a string here and stays one all the way to Postgres: it is written
+ * to a numeric(20,0) column, and anything that let it become a JS number would
+ * silently break re-verification for every nonce past 2^53.
+ */
+export interface ArchiveRecord {
+  did: string;
+  room: string;
+  nonce: string;
+  sig: string;
+  text: string;
+  source: 'submitted' | 'mirrored';
+  sourceTs?: string | null;
+  sourceSeq?: number | null;
+  /** Set only for rooms under the sampling policy. */
+  sighting?: 'first' | 'last';
+  activityDay?: string;
+}
+
+export interface GapRow {
+  room: string;
+  kind: 'missed' | 'regenerated' | 'rotated';
+  missing?: number | null;
+  expectedSeq?: number | null;
+  firstSeq?: number | null;
+  generation?: number | null;
+}
+
+export interface ArchiveTotals {
+  records: string;
+  dids: string;
+  missed_gaps: string;
+  first_capture: Date | null;
+  last_capture: Date | null;
+}
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 /** Postgres numeric OID. Left as a string on the way out — see the note above. */
 const NUMERIC_OID = 1700;
 pg.types.setTypeParser(NUMERIC_OID, (value) => value);
 
-let pool = null;
+let pool: pg.Pool | null = null;
 
-export function getPool() {
+export function getPool(): pg.Pool {
   if (pool) return pool;
 
   const connectionString = process.env.DATABASE_URL;
@@ -48,7 +86,7 @@ export function getPool() {
   return pool;
 }
 
-export async function closePool() {
+export async function closePool(): Promise<void> {
   if (!pool) return;
   const p = pool;
   pool = null;
@@ -56,18 +94,18 @@ export async function closePool() {
 }
 
 /** Apply db/schema.sql. Idempotent. */
-export async function migrate() {
+export async function migrate(): Promise<void> {
   const sql = await readFile(join(HERE, '..', 'db', 'schema.sql'), 'utf8');
   await getPool().query(sql);
 }
 
 /** Fail loudly and early rather than a thousand times inside the write loop. */
-export async function assertSchema() {
+export async function assertSchema(): Promise<void> {
   const { rows } = await getPool().query(
     `select table_name from information_schema.tables
       where table_schema = 'public' and table_name in ('records', 'anchors', 'gaps')`
   );
-  const found = new Set(rows.map((r) => r.table_name));
+  const found = new Set(rows.map((r: { table_name: string }) => r.table_name));
   const missing = ['records', 'anchors', 'gaps'].filter((t) => !found.has(t));
   if (missing.length) {
     throw new Error(
@@ -84,11 +122,11 @@ const COLUMNS = ['did', 'room', 'nonce', 'sig', 'text', 'source', 'source_ts', '
  * Agents retry and rings overlap, so re-seeing a message is normal, not an
  * error. Returns how many rows were new.
  */
-export async function insertRecords(records) {
+export async function insertRecords(records: ArchiveRecord[]): Promise<number> {
   if (records.length === 0) return 0;
 
-  const values = [];
-  const params = [];
+  const values: string[] = [];
+  const params: unknown[] = [];
   records.forEach((record, i) => {
     const base = i * COLUMNS.length;
     values.push(
@@ -115,7 +153,7 @@ export async function insertRecords(records) {
      on conflict (did, room, nonce) where sighting is null do nothing`,
     params
   );
-  return rowCount;
+  return rowCount ?? 0;
 }
 
 /**
@@ -129,7 +167,7 @@ export async function insertRecords(records) {
  * on (did, room, activity_day, sighting), and Postgres will not let a single
  * INSERT touch the same conflict target twice.
  */
-export async function upsertSightings(records) {
+export async function upsertSightings(records: ArchiveRecord[]): Promise<number> {
   if (records.length === 0) return 0;
   const pool = getPool();
   let written = 0;
@@ -166,13 +204,20 @@ export async function upsertSightings(records) {
         record.activityDay,
       ]
     );
-    written += rowCount;
+    written += rowCount ?? 0;
   }
   return written;
 }
 
 /** Record a hole in the archive. Returns its id so a later sweep can amend it. */
-export async function insertGap({ room, kind, missing, expectedSeq, firstSeq, generation }) {
+export async function insertGap({
+  room,
+  kind,
+  missing,
+  expectedSeq,
+  firstSeq,
+  generation,
+}: GapRow): Promise<number | null> {
   const { rows } = await getPool().query(
     `insert into gaps (room, kind, missing, expected_seq, first_seq, generation)
      values ($1, $2, $3, $4::bigint, $5::bigint, $6)
@@ -183,13 +228,13 @@ export async function insertGap({ room, kind, missing, expectedSeq, firstSeq, ge
 }
 
 /** Note how much of a hole a re-export got back. */
-export async function markGapRecovered(id, recovered) {
+export async function markGapRecovered(id: number | null, recovered: number): Promise<void> {
   if (id == null) return;
   await getPool().query(`update gaps set recovered = recovered + $2 where id = $1`, [id, recovered]);
 }
 
 /** The highest source_seq held for a room, so a restart resumes where it stopped. */
-export async function lastSeqFor(room) {
+export async function lastSeqFor(room: string): Promise<number> {
   const { rows } = await getPool().query(
     `select max(source_seq) as seq from records where room = $1`,
     [room]
@@ -198,7 +243,7 @@ export async function lastSeqFor(room) {
   return seq == null ? 0 : Number(seq);
 }
 
-export async function archiveStats() {
+export async function archiveStats(): Promise<ArchiveTotals> {
   const { rows } = await getPool().query(
     `select
        (select count(*) from records)                      as records,

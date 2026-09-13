@@ -1,4 +1,4 @@
-// technocore.js — reading rooms: export backfill, long-poll, ring-gap detection.
+// technocore.ts — reading rooms: export backfill, long-poll, ring-gap detection.
 //
 // technocore.chat sends access-control-allow-origin: *, so every read here runs
 // straight from the browser. Nothing in this module signs or verifies; it hands
@@ -13,12 +13,132 @@
 //   GET /r/<room>/export   ->  application/x-ndjson, one record per line,
 //                              plus an x-room-generation header.
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/** A room message, normalised. `nonce` is a string, always — see parseJson. */
+export interface Message {
+  room: string | null;
+  seq: number;
+  ts: string | null;
+  tsMs: number;
+  from: string | null;
+  text: string;
+  nonce: string | null;
+  sig: string | null;
+  raw: RawRecord;
+}
+
+/** A record exactly as the server sent it, before normalisation. */
+/** The JSON body of a room read. */
+export interface RoomReply {
+  room?: string;
+  count?: number;
+  first_seq?: number;
+  last_seq?: number;
+  generation?: number;
+  messages?: RawRecord[];
+  [key: string]: unknown;
+}
+
+/** A record exactly as the server sent it, before normalisation. */
+export interface RawRecord {
+  seq?: number | string;
+  ts?: string;
+  from?: string;
+  did?: string;
+  text?: string;
+  nonce?: string | number;
+  sig?: string;
+  room?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * A hole in a ring.
+ *
+ * 'rotated' is the first read of a room that had already dropped lines — it
+ * bounds coverage rather than losing anything. 'missed' means lines went past
+ * while we were following, which is the one that costs evidence.
+ */
+export interface Gap {
+  kind: 'rotated' | 'missed' | 'regenerated';
+  since?: number;
+  expected?: number;
+  firstSeq?: number | null;
+  missing: number | null;
+  room?: string;
+  previousGeneration?: number | null;
+  generation?: number | null;
+}
+
+export interface Budget {
+  remaining: number | null;
+  limit: number | null;
+  resetSeconds: number | null;
+  source: string | null;
+  raw: unknown;
+  fraction?: number | null;
+  low?: boolean;
+}
+
+export interface ReadResult {
+  room: string;
+  since: number;
+  count: number;
+  firstSeq: number | null;
+  lastSeq: number;
+  generation: number | null;
+  messages: Message[];
+  gap: Gap | null;
+  budget: Budget | null;
+  data: Record<string, unknown>;
+}
+
+export interface ExportResult {
+  room: string;
+  messages: Message[];
+  malformed: Array<{ line: string; error: string }>;
+  truncatedTail: string | null;
+  generation: number | null;
+  firstSeq: number | null;
+  lastSeq: number;
+}
+
+export interface WatcherStatus {
+  room: string;
+  state: 'starting' | 'backfilling' | 'following' | 'retrying' | 'stopped';
+  since: number;
+  generation: number | null;
+  budget?: Budget | null;
+  note?: string;
+  error?: unknown;
+  retryIn?: number;
+}
+
+export interface RoomWatcherOptions {
+  wait?: number;
+  limit?: number;
+  backfill?: boolean;
+  since?: number;
+  minInterval?: number;
+  lowBudgetInterval?: number;
+  maxBackoff?: number;
+  onMessages?: (batch: { room: string; messages: Message[]; source: 'backfill' | 'poll' }) => void;
+  onGap?: (gap: Gap) => void;
+  onBudget?: (budget: Budget) => void;
+  onStatus?: (status: WatcherStatus) => void;
+  onError?: (error: unknown) => void;
+  fetchImpl?: typeof fetch;
+}
+
 export const BASE = 'https://technocore.chat';
 
 /** Room names are lowercase, digits and hyphens. */
 export const ROOM_RE = /^[a-z0-9][a-z0-9-]*$/;
 
-export function assertRoom(room) {
+export function assertRoom(room: unknown): string {
   const value = String(room ?? '').trim();
   if (!ROOM_RE.test(value)) {
     throw new Error(`"${room}" is not a room name. Rooms are lowercase letters, digits and hyphens.`);
@@ -26,13 +146,26 @@ export function assertRoom(room) {
   return value;
 }
 
-export function roomUrl(room) {
+export function roomUrl(room: string): string {
   return `${BASE}/r/${assertRoom(room)}`;
 }
 
 /** An HTTP-level failure, carrying enough to decide whether to retry. */
 export class TechnocoreError extends Error {
-  constructor(message, { status = 0, room = null, body = '', retryAfter = null } = {}) {
+  status: number;
+  room: string | null;
+  body: string;
+  retryAfter: number | null;
+
+  constructor(
+    message: string,
+    {
+      status = 0,
+      room = null,
+      body = '',
+      retryAfter = null,
+    }: { status?: number; room?: string | null; body?: string; retryAfter?: number | null } = {}
+  ) {
     super(message);
     this.name = 'TechnocoreError';
     this.status = status;
@@ -60,13 +193,13 @@ export class TechnocoreError extends Error {
  * as 1789166780447123500 rebuilds a canonical string that no signature matches,
  * so every nonce Foolscap touches stays a string from the moment it is parsed.
  */
-export function parseJson(text, { stringKeys = [] } = {}) {
-  const keep = stringKeys instanceof Set ? stringKeys : new Set(stringKeys);
+export function parseJson(text: string, { stringKeys = [] }: { stringKeys?: Iterable<string> } = {}): any {
+  const keep: Set<string> = stringKeys instanceof Set ? stringKeys : new Set(stringKeys);
   const src = String(text);
   const n = src.length;
   let i = 0;
 
-  const fail = (msg) => {
+  const fail = (msg: string): never => {
     throw new SyntaxError(`${msg} at position ${i}`);
   };
 
@@ -95,7 +228,7 @@ export function parseJson(text, { stringKeys = [] } = {}) {
     return JSON.parse(src.slice(start, i));
   };
 
-  const number = (key) => {
+  const number = (key: string | null) => {
     const start = i;
     if (src[i] === '-') i++;
     while (i < n && src[i] >= '0' && src[i] <= '9') i++;
@@ -114,13 +247,13 @@ export function parseJson(text, { stringKeys = [] } = {}) {
     const raw = src.slice(start, i);
     if (raw === '' || raw === '-') fail('malformed number');
     const value = Number(raw);
-    if (isInt && (keep.has(key) || !Number.isSafeInteger(value))) return raw;
+    if (isInt && ((key != null && keep.has(key)) || !Number.isSafeInteger(value))) return raw;
     return value;
   };
 
-  const array = () => {
+  const array = (): unknown[] => {
     i++; // [
-    const out = [];
+    const out: unknown[] = [];
     ws();
     if (src[i] === ']') {
       i++;
@@ -141,9 +274,9 @@ export function parseJson(text, { stringKeys = [] } = {}) {
     }
   };
 
-  const object = () => {
+  const object = (): Record<string, unknown> => {
     i++; // {
-    const out = {};
+    const out: Record<string, unknown> = {};
     ws();
     if (src[i] === '}') {
       i++;
@@ -170,7 +303,7 @@ export function parseJson(text, { stringKeys = [] } = {}) {
     }
   };
 
-  function value(key) {
+  function value(key: string | null): any {
     ws();
     if (i >= n) fail('unexpected end of JSON');
     const c = src[i];
@@ -200,7 +333,7 @@ export function parseJson(text, { stringKeys = [] } = {}) {
 }
 
 /** Parse one room record, keeping the nonce as a string. */
-export function parseRecord(line) {
+export function parseRecord(line: string): RawRecord {
   return parseJson(line, { stringKeys: ['nonce'] });
 }
 
@@ -214,7 +347,7 @@ export function parseRecord(line) {
  * `text` is left exactly as the server stored it — no trimming, no Unicode
  * normalisation — because it is half of the canonical string.
  */
-export function normalizeMessage(raw, room) {
+export function normalizeMessage(raw: RawRecord, room?: string | null): Message {
   const ts = typeof raw.ts === 'string' ? raw.ts : null;
   return {
     room: room ?? raw.room ?? null,
@@ -243,7 +376,15 @@ export function normalizeMessage(raw, room) {
  *   'missed'  — lines went past while we were following the room. Surface this;
  *               a receipt may have been among them.
  */
-export function detectGap({ since, firstSeq, count }) {
+export function detectGap({
+  since,
+  firstSeq,
+  count,
+}: {
+  since: number;
+  firstSeq: number | null;
+  count: number;
+}): Gap | null {
   if (!count || firstSeq == null) return null;
   const expected = since + 1;
   if (firstSeq <= expected) return null;
@@ -274,8 +415,8 @@ const BUDGET_BODY_KEYS = ['budget', 'read_budget', 'reads_remaining', 'remaining
  * drop below a quarter bucket, and it may say so in the body or in a header, so
  * this looks in both and returns null when nothing says anything.
  */
-export function extractBudget(body, headers) {
-  const out = { remaining: null, limit: null, resetSeconds: null, source: null, raw: null };
+export function extractBudget(body: Record<string, unknown> | null, headers?: Headers): Budget | null {
+  const out: Budget = { remaining: null, limit: null, resetSeconds: null, source: null, raw: null };
 
   if (body && typeof body === 'object') {
     for (const key of BUDGET_BODY_KEYS) {
@@ -286,9 +427,10 @@ export function extractBudget(body, headers) {
         out.source = `body.${key}`;
         out.raw = value;
       } else if (typeof value === 'object') {
-        out.remaining = numberOrNull(value.remaining ?? value.left ?? value.reads);
-        out.limit = numberOrNull(value.limit ?? value.bucket ?? value.capacity);
-        out.resetSeconds = numberOrNull(value.reset ?? value.reset_in ?? value.refill_in);
+        const nested = value as Record<string, unknown>;
+        out.remaining = numberOrNull(nested.remaining ?? nested.left ?? nested.reads);
+        out.limit = numberOrNull(nested.limit ?? nested.bucket ?? nested.capacity);
+        out.resetSeconds = numberOrNull(nested.reset ?? nested.reset_in ?? nested.refill_in);
         out.source = `body.${key}`;
         out.raw = value;
       }
@@ -316,14 +458,14 @@ export function extractBudget(body, headers) {
   }
 
   if (out.remaining == null && out.limit == null) return null;
-  out.fraction = out.limit ? out.remaining / out.limit : null;
+  out.fraction = out.limit && out.remaining != null ? out.remaining / out.limit : null;
   // The server going quiet on the budget means we are above a quarter bucket;
   // being told about it at all is the warning.
   out.low = out.fraction != null ? out.fraction < 0.25 : out.remaining != null;
   return out;
 }
 
-function numberOrNull(value) {
+function numberOrNull(value: unknown): number | null {
   if (value == null) return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
@@ -335,7 +477,15 @@ function numberOrNull(value) {
 
 let bustCounter = 0;
 
-async function request(url, { signal, fetchImpl, room, accept } = {}) {
+async function request(
+  url: string,
+  {
+    signal,
+    fetchImpl,
+    room,
+    accept,
+  }: { signal?: AbortSignal; fetchImpl?: typeof fetch; room?: string; accept?: string } = {}
+): Promise<Response> {
   const doFetch = fetchImpl || globalThis.fetch;
   let res;
   try {
@@ -347,7 +497,7 @@ async function request(url, { signal, fetchImpl, room, accept } = {}) {
       redirect: 'follow',
     });
   } catch (err) {
-    if (err && err.name === 'AbortError') throw err;
+    if (err && (err as Error).name === 'AbortError') throw err;
     throw new TechnocoreError(
       `Could not reach ${BASE}. Check the connection and try again.`,
       { room, body: err instanceof Error ? err.message : String(err) }
@@ -367,7 +517,7 @@ async function request(url, { signal, fetchImpl, room, accept } = {}) {
   return res;
 }
 
-function describeStatus(status, room, body) {
+function describeStatus(status: number, room: string | undefined, body: string): string {
   const detail = body ? ` — ${body.slice(0, 200).trim()}` : '';
   if (status === 404) return `Room ${room} does not exist, or it idled out and was deleted${detail}`;
   if (status === 429) return `Rate limited reading ${room}. Foolscap is backing off${detail}`;
@@ -375,7 +525,7 @@ function describeStatus(status, room, body) {
   return `Reading ${room} failed with ${status}${detail}`;
 }
 
-async function safeText(res) {
+async function safeText(res: Response): Promise<string> {
   try {
     return await res.text();
   } catch {
@@ -391,9 +541,23 @@ async function safeText(res) {
  * unchanged between idle polls and caches will happily answer from memory.
  */
 export async function readRoom(
-  room,
-  { since = 0, wait = 0, limit, signal, fetchImpl, bust = true } = {}
-) {
+  room: string,
+  {
+    since = 0,
+    wait = 0,
+    limit,
+    signal,
+    fetchImpl,
+    bust = true,
+  }: {
+    since?: number;
+    wait?: number;
+    limit?: number;
+    signal?: AbortSignal;
+    fetchImpl?: typeof fetch;
+    bust?: boolean;
+  } = {}
+): Promise<ReadResult> {
   const name = assertRoom(room);
   const params = new URLSearchParams({ format: 'json', since: String(since), wait: String(wait) });
   // The reply is capped — 50 by default, 200 the most the server will give — and
@@ -411,9 +575,9 @@ export async function readRoom(
   });
 
   const body = await res.text();
-  let data;
+  let data: RoomReply;
   try {
-    data = parseRecord(body);
+    data = parseRecord(body) as RoomReply;
   } catch (err) {
     throw new TechnocoreError(`Reading ${name} returned something that is not JSON.`, {
       room: name,
@@ -447,7 +611,10 @@ export async function readRoom(
  * mid-dump can arrive truncated. That tail is dropped and reported rather than
  * parsed into something half-true; the poll that follows will pick it up.
  */
-export async function exportRoom(room, { signal, fetchImpl } = {}) {
+export async function exportRoom(
+  room: string,
+  { signal, fetchImpl }: { signal?: AbortSignal; fetchImpl?: typeof fetch } = {}
+): Promise<ExportResult> {
   const name = assertRoom(room);
   const res = await request(`${BASE}/r/${name}/export`, {
     signal,
@@ -489,7 +656,7 @@ export async function exportRoom(room, { signal, fetchImpl } = {}) {
 // Following a room
 // ---------------------------------------------------------------------------
 
-const sleep = (ms, signal) =>
+const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
   new Promise((resolve, reject) => {
     if (ms <= 0) return resolve();
     const timer = setTimeout(() => {
@@ -503,7 +670,8 @@ const sleep = (ms, signal) =>
     signal?.addEventListener('abort', onAbort, { once: true });
   });
 
-const isAbort = (err) => err && (err.name === 'AbortError' || err.code === 20);
+const isAbort = (err: unknown): boolean =>
+  !!err && ((err as Error).name === 'AbortError' || (err as { code?: number }).code === 20);
 
 /**
  * Backfill a room from /export, then follow it with long polls.
@@ -518,7 +686,28 @@ const isAbort = (err) => err && (err.name === 'AbortError' || err.code === 20);
  * state is 'starting' | 'backfilling' | 'following' | 'retrying' | 'stopped'.
  */
 export class RoomWatcher {
-  constructor(room, options = {}) {
+  room: string;
+  wait: number;
+  limit: number | undefined;
+  backfill: boolean;
+  since: number;
+  generation: number | null;
+  state: WatcherStatus['state'];
+  minInterval: number;
+  lowBudgetInterval: number;
+  maxBackoff: number;
+  onMessages: NonNullable<RoomWatcherOptions['onMessages']>;
+  onGap: NonNullable<RoomWatcherOptions['onGap']>;
+  onBudget: NonNullable<RoomWatcherOptions['onBudget']>;
+  onStatus: NonNullable<RoomWatcherOptions['onStatus']>;
+  onError: NonNullable<RoomWatcherOptions['onError']>;
+  fetchImpl: typeof fetch | undefined;
+  _controller: AbortController | null;
+  _failures: number;
+  _budget: Budget | null;
+  _loop: Promise<void> | null;
+
+  constructor(room: string, options: RoomWatcherOptions = {}) {
     this.room = assertRoom(room);
     this.wait = options.wait ?? 10;
     /** Messages per poll. The server caps this at 200; omit for its default of 50. */
@@ -566,7 +755,7 @@ export class RoomWatcher {
     return this._loop != null;
   }
 
-  _setState(state, extra = {}) {
+  _setState(state: WatcherStatus['state'], extra: Partial<WatcherStatus> = {}) {
     // Only on a real transition: 'following' fires once per poll otherwise, and
     // a status line that repaints every ten seconds reads as churn.
     const changed = this.state !== state;
@@ -583,6 +772,9 @@ export class RoomWatcher {
   }
 
   async _run() {
+    // start() creates the controller before calling this; the check keeps the
+    // invariant visible rather than assumed.
+    if (!this._controller) return;
     const signal = this._controller.signal;
     this._setState('starting');
 
@@ -669,7 +861,7 @@ export class RoomWatcher {
    * sequence numbers starting over. Following it with the old `since` would sit
    * silent forever, so reset and re-backfill.
    */
-  _handleGeneration(generation) {
+  _handleGeneration(generation: number | null): boolean {
     if (generation == null) return false;
     if (this.generation == null) {
       this.generation = generation;
@@ -696,7 +888,7 @@ export class RoomWatcher {
     return this.minInterval;
   }
 
-  _backoff(err) {
+  _backoff(err: unknown): number {
     if (err instanceof TechnocoreError && err.retryAfter != null) {
       return Math.min(err.retryAfter * 1000, this.maxBackoff);
     }
@@ -709,7 +901,7 @@ export class RoomWatcher {
  * Follow several rooms at once. Returns { watchers, stop } — handlers are shared
  * and every callback carries its room.
  */
-export function watchRooms(rooms, options = {}) {
+export function watchRooms(rooms: string[], options: RoomWatcherOptions = {}) {
   const watchers = rooms.map((room) => new RoomWatcher(room, options));
   watchers.forEach((w) => w.start());
   return {
@@ -731,7 +923,19 @@ export function watchRooms(rooms, options = {}) {
  * `text` must be the swept text that was signed, and `nonce` a string — not a
  * Number that has been through a JSON round trip.
  */
-export function saySignedUrl({ room, did, sig, nonce, text }) {
+export function saySignedUrl({
+  room,
+  did,
+  sig,
+  nonce,
+  text,
+}: {
+  room: string;
+  did: string;
+  sig: string;
+  nonce: string | number;
+  text: string;
+}): string {
   const name = assertRoom(room);
   return (
     `${BASE}/r/${name}/say-signed/` +
@@ -747,7 +951,16 @@ export function saySignedUrl({ room, did, sig, nonce, text }) {
  * Returns the parsed reply. A 400 saying `nonce <n> is not greater than <n>`
  * means the earlier message already landed — that is not a failure to retry.
  */
-export async function postSigned({ room, did, sig, nonce, text }, { signal, fetchImpl } = {}) {
+export async function postSigned(
+  {
+    room,
+    did,
+    sig,
+    nonce,
+    text,
+  }: { room: string; did: string; sig: string; nonce: string | number; text: string },
+  { signal, fetchImpl }: { signal?: AbortSignal; fetchImpl?: typeof fetch } = {}
+): Promise<unknown> {
   const name = assertRoom(room);
   const doFetch = fetchImpl || globalThis.fetch;
   const res = await doFetch(`${BASE}/r/${name}`, {
@@ -771,7 +984,7 @@ export async function postSigned({ room, did, sig, nonce, text }, { signal, fetc
   }
 }
 
-function describePostFailure(status, body) {
+function describePostFailure(status: number, body: string): string {
   const text = (body || '').trim();
   const nonceClash = text.match(/nonce (\d+) is not greater than (\d+)/);
   if (nonceClash) {

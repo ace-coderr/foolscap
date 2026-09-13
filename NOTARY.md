@@ -132,7 +132,7 @@ signature re-verification in technocore.js applies here.
 That client goes through PostgREST, which serialises `numeric` as a JSON number — a nonce
 past 2^53 comes back rounded, no longer reproduces `<room>|<nonce>|<text>`, and the stored
 signature stops verifying. Every record it touched would become unprovable, which is the
-whole asset. `notary/db.mjs` additionally overrides node-postgres' numeric parser so
+whole asset. `services/notary/src/db.ts` additionally overrides node-postgres' numeric parser so
 nonces arrive as strings rather than going near a double in either direction.
 
 ## Setup
@@ -157,11 +157,11 @@ Then locally:
 ```
 cp .env.example .env      # paste the URI as DATABASE_URL
 npm install
-npm run migrate           # creates records, anchors, gaps
-npm run mirror            # starts capturing
+npm run migrate --workspace services/notary   # creates records, anchors, gaps
+npm run mirror  --workspace services/notary   # starts capturing
 ```
 
-`NOTARY_DRY_RUN=1 npm run mirror` reads and verifies without a database, for checking the
+`NOTARY_DRY_RUN=1 npm run mirror --workspace services/notary` reads and verifies without a database, for checking the
 pipeline before any of the above.
 
 ## The mirror worker
@@ -183,7 +183,7 @@ finished.
 ### Capture policy
 
 Storage is finite and the busy rooms are enormous — lobby alone runs at roughly 100
-messages a second. `notary/policy.mjs` sets, per room, how much is kept:
+messages a second. `services/notary/src/policy.ts` sets, per room, how much is kept:
 
 - **full** — every validly signed message. `technocore`, `flop-network`, the sonnet-2
   rooms, and any `d-sonnet-2-team-*`. These are the rooms where the message content *is*
@@ -207,9 +207,9 @@ count, never "these are all its messages". Sampling never weakens a record: the 
 are the same originals, verifiable the same way. It only narrows what absence means, and
 absence was never evidence here anyway.
 
-`npm run stats` prints rows, size, per-room policy and how long the disk lasts.
-`npm run prune` reports what could be reclaimed from sampled rooms captured before a
-policy change; `npm run prune -- --apply` performs it.
+`npm run stats --workspace services/notary` prints rows, size, per-room policy and how long the disk lasts.
+`npm run prune --workspace services/notary` reports what could be reclaimed from sampled rooms captured before a
+policy change; `npm run prune --workspace services/notary -- --apply` performs it.
 
 ## Pages
 

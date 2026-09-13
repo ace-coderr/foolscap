@@ -1,20 +1,20 @@
-// stats.mjs — where the archive stands, and how long the disk lasts.
+// stats.ts — where the archive stands, and how long the disk lasts.
 //
 //   npm run stats
 //
 // Everything here is measured from the database rather than estimated, except
 // the runway projection, which is labelled as a projection.
 
-import { getPool, closePool } from './db.mjs';
-import { ROOM_POLICY, DEFAULT_POLICY, POLICY } from './policy.mjs';
+import { getPool, closePool } from './db.ts';
+import { ROOM_POLICY, DEFAULT_POLICY, POLICY } from './policy.ts';
 
 /** Supabase free tier. Override with NOTARY_DISK_MB if the plan changes. */
 const DISK_MB = Number(process.env.NOTARY_DISK_MB ?? 500);
 
-const mb = (bytes) => Number(bytes) / 1024 / 1024;
-const n = (v) => Number(v ?? 0).toLocaleString('en');
+const mb = (bytes: unknown): number => Number(bytes) / 1024 / 1024;
+const n = (v: unknown): string => Number(v ?? 0).toLocaleString('en');
 
-function bar(fraction, width = 28) {
+function bar(fraction: number, width = 28): string {
   const filled = Math.max(0, Math.min(width, Math.round(fraction * width)));
   return `[${'#'.repeat(filled)}${'.'.repeat(width - filled)}]`;
 }
@@ -105,7 +105,7 @@ try {
 
   console.log(`\nPolicies: ${Object.values(POLICY).join(', ')}. See notary/policy.mjs.\n`);
 } catch (err) {
-  console.error(`stats failed: ${err.message}`);
+  console.error(`stats failed: ${(err as Error).message}`);
   process.exitCode = 1;
 } finally {
   await closePool();

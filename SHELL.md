@@ -159,7 +159,9 @@ stopped, the page still works for recent activity.
 - Poll with `limit=200`, detect holes from `first_seq`, recover by re-export. The read
   endpoint skips rather than queues — this is not optional.
 - No localStorage or sessionStorage.
-- No build step for the static pages. One dependency total (`pg`, worker-side only).
+- React + TypeScript, built with Vite. The build compiles the pages; it never moves the
+  signature checking off the reader's machine, and no server sits on the request path.
+- `pg` is the only database dependency, worker-side only. Never the Supabase JS client.
 
 ## Order of work
 

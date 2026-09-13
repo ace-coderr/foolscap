@@ -1,12 +1,202 @@
-// contest.js — message classification, the receipt index, intake statistics,
+// contest.ts — message classification, the receipt index, intake statistics,
 // batch lookup and referee liveness.
 //
 // Everything an agent is told about where their request stands is computed here,
 // and every authoritative claim is derived from a signature that verified against
 // one hardcoded key. Nothing in this file infers who the referee is.
 
-import { looksLikeDid, verifyMessage } from './did.js';
-import { parseJson } from './technocore.js';
+import { looksLikeDid, verifyMessage } from './did.ts';
+import { parseJson } from './technocore.ts';
+import type { Message } from './technocore.ts';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/** A parsed sonnet.* payload. Fields are optional because the wire decides. */
+export interface SonnetPayload {
+  type?: string;
+  contest_id?: string;
+  request_id?: string;
+  role?: string;
+  subject?: string;
+  status?: string;
+  reason?: string;
+  detail?: string;
+  count?: number;
+  intake_seq?: number;
+  received_at?: number;
+  sender_did?: string;
+  participant_did?: string;
+  counts?: Record<string, number>;
+  uptime_seconds?: number;
+  [key: string]: unknown;
+}
+
+export type Kind =
+  | 'request'
+  | 'receipt'
+  | 'forged-receipt'
+  | 'forged-referee'
+  | 'referee-notice'
+  | 'chatter';
+
+export interface Forgery {
+  reason: 'wrong-signer' | 'signature-invalid';
+  detail: string;
+  /** The specific verification failure, kept out of the prose. */
+  cause: string | null;
+  selfSignatureValid: boolean;
+}
+
+/** A receipt, as the tracker uses it. */
+export interface Receipt {
+  intakeSeq: number;
+  receivedAt: number;
+  receivedAtMs: number;
+  requestId: string;
+  senderDid: string | null;
+  participantDid: string | null;
+  status: string | null;
+  /** The referee's own words. Never reworded. */
+  reason: string;
+  role: string | null;
+  contestId: string | null;
+  room: string | null;
+  seq: number;
+  issuedAtMs: number;
+  payload: SonnetPayload;
+}
+
+export interface Classification {
+  kind: Kind;
+  room: string | null;
+  seq: number;
+  tsMs: number;
+  from: string | null;
+  type: string | null;
+  payload: SonnetPayload | null;
+  requestId: string | null;
+  /** null when the signature was not checked — requests are counted, not believed. */
+  verified: boolean | null;
+  forgery: Forgery | null;
+  receipt: Receipt | null;
+  message: Message;
+}
+
+export interface NotReceiptedNotice {
+  tsMs: number;
+  count: number | null;
+  reason: string | null;
+  detail: string | null;
+  room: string | null;
+  seq: number;
+  payload: SonnetPayload;
+}
+
+export interface Frontier {
+  intakeSeq: number;
+  receivedAt: number | undefined;
+  receivedAtMs: number;
+  receipt: ReceiptPoint;
+}
+
+/** The minimum a receipt needs to contribute to intake statistics. */
+export interface ReceiptPoint {
+  intakeSeq: number;
+  receivedAt?: number;
+  receivedAtMs: number;
+  issuedAtMs?: number;
+}
+
+export interface Throughput {
+  perMinute: number | null;
+  p25: number | null;
+  median: number | null;
+  p75: number | null;
+  samples: number;
+  receiptsConsidered: number;
+  windowMs: number;
+}
+
+export interface Eta {
+  ahead: number;
+  position: number;
+  perMinute: number | null;
+  throughput: Throughput;
+  fastestMinutes: number | null;
+  likelyMinutes: number | null;
+  slowestMinutes: number | null;
+  estimate: true;
+}
+
+export type StatusCode =
+  | 'NOT_SEEN'
+  | 'QUEUED'
+  | 'ACCEPTED'
+  | 'REJECTED'
+  | 'UNANSWERED'
+  | 'NO_RECEIPT_EXPECTED';
+
+export interface LookupEntry {
+  requestId: string | null;
+  request: Classification | null;
+  receipt: Receipt | null;
+  type: string | null;
+  room: string | null;
+  tsMs: number | null;
+  sortKey: number;
+  frontier: Frontier | null;
+  status: StatusCode;
+  copy: string;
+  rawStatus?: string | null;
+  reason?: string;
+  intakeSeq?: number;
+  receivedAtMs?: number;
+  waitedMs?: number | null;
+  eta?: Eta | null;
+  frontierKnown?: boolean;
+  behindFrontierMs?: number;
+  unansweredKind?: 'deferred' | 'submission' | 'not-receipted';
+  notice?: NotReceiptedNotice;
+  role?: string;
+  knownUnreceipted?: boolean;
+}
+
+export interface LookupResult {
+  query: string;
+  queryKind: 'did' | 'request_id' | null;
+  status: StatusCode;
+  copy: string;
+  entry?: LookupEntry;
+  entries: LookupEntry[];
+}
+
+export interface Liveness {
+  state: 'live' | 'lagging' | 'quiet';
+  reasons: string[];
+  nowMs: number;
+  lastRefereeMessage: { tsMs: number; ageMs: number | null; room: string | null; seq: number; kind: Kind } | null;
+  secondsSinceLastReferee: number | null;
+  receipts5: number;
+  receipts15: number;
+  receipts60: number;
+  frontier: Frontier | null;
+  frontierLagMs: number | null;
+  frontierSummary: string;
+  status: {
+    tsMs: number;
+    ageMs: number | null;
+    overdue: boolean;
+    counts: Record<string, number> | null;
+    uptimeSeconds: number | null;
+    payload: SonnetPayload | null;
+  } | null;
+  verified: number;
+  unverified: number;
+  forgeries: Classification[];
+  throughput: Throughput;
+}
 
 // ---------------------------------------------------------------------------
 // The trust anchor
@@ -100,8 +290,8 @@ export const UNRECEIPTED_TYPES = new Set([
 ]);
 
 /** Does this type have an intake queue at all? */
-export function isReceiptedType(type) {
-  return RECEIPTED_TYPES.has(type);
+export function isReceiptedType(type: string | null): boolean {
+  return type != null && RECEIPTED_TYPES.has(type);
 }
 
 /** Writer and voter need signed Technocore activity strictly before this. */
@@ -166,9 +356,9 @@ export const COPY = {
  * frontier, and telling someone not to re-post implies they are waiting for
  * something. They are not.
  */
-export function noReceiptCopy(type) {
+export function noReceiptCopy(type: string | null): string {
   const name = type ?? 'this message type';
-  if (UNRECEIPTED_TYPES.has(type)) {
+  if (type != null && UNRECEIPTED_TYPES.has(type)) {
     return (
       `The referee does not issue receipts for ${name}. There is no intake queue for it, so ` +
       'there is nothing here to wait for and nothing to chase — the message is in the room, ' +
@@ -194,9 +384,15 @@ export function noReceiptCopy(type) {
  * their registration is dead when it might not be is as bad as telling them to
  * keep waiting when it is.
  */
-export function notReceiptedCopy(notice, { count = notice?.count, at = notice?.tsMs } = {}) {
+export function notReceiptedCopy(
+  notice: NotReceiptedNotice | null,
+  { count = notice?.count, at = notice?.tsMs }: { count?: number | null; at?: number } = {}
+): string {
   // To the minute: the notice is hourly, so seconds and milliseconds are noise.
-  const when = Number.isFinite(at) ? `${new Date(at).toISOString().slice(0, 16).replace('T', ' ')}Z` : null;
+  const when =
+    at != null && Number.isFinite(at)
+      ? `${new Date(at).toISOString().slice(0, 16).replace('T', ' ')}Z`
+      : null;
   const stated =
     count == null
       ? 'the referee has stated that registrations in this window were not receipted individually'
@@ -229,10 +425,10 @@ export const KIND = {
   REFEREE_NOTICE: 'referee-notice',
   /** Anything else. */
   CHATTER: 'chatter',
-};
+} as const;
 
 /** Parse a message body as a sonnet payload, or null if it is not one. */
-export function parsePayload(text) {
+export function parsePayload(text: unknown): SonnetPayload | null {
   if (typeof text !== 'string' || text.length === 0 || text[0] !== '{') return null;
   try {
     const value = parseJson(text);
@@ -243,7 +439,7 @@ export function parsePayload(text) {
 }
 
 /** Actionable per the spec: parses as JSON, sonnet.* type, not from the referee. */
-export function isActionable(message, payload = parsePayload(message.text)) {
+export function isActionable(message: Message, payload: SonnetPayload | null = parsePayload(message.text)): boolean {
   if (message.from === REFEREE_DID) return false;
   return typeof payload?.type === 'string' && payload.type.startsWith('sonnet.');
 }
@@ -257,7 +453,7 @@ export function isActionable(message, payload = parsePayload(message.text)) {
  * them. Foolscap checks the signer on every one of these shapes, so a fake is
  * named as a fake instead of being quietly counted as ordinary traffic.
  */
-export function isRefereeOnlyShape(payload) {
+export function isRefereeOnlyShape(payload: SonnetPayload | null): boolean {
   if (!payload || typeof payload.type !== 'string') return false;
   if (payload.type === RECEIPT_TYPE) return true;
   if (payload.type === LAUNCH_TYPE) return true;
@@ -276,7 +472,14 @@ export function isRefereeOnlyShape(payload) {
  * Ordinary participant requests are only ever counted, never believed, so they
  * are verified only when `verifyRequests` asks for it.
  */
-export async function classify(message, { room, cryptoImpl, verifyRequests = false } = {}) {
+export async function classify(
+  message: Message,
+  {
+    room,
+    cryptoImpl,
+    verifyRequests = false,
+  }: { room?: string | null; cryptoImpl?: Crypto; verifyRequests?: boolean } = {}
+): Promise<Classification> {
   const roomName = room ?? message.room ?? null;
   const payload = parsePayload(message.text);
   const type = typeof payload?.type === 'string' ? payload.type : null;
@@ -284,7 +487,7 @@ export async function classify(message, { room, cryptoImpl, verifyRequests = fal
   const claimsReferee = message.from === REFEREE_DID;
   const refereeShaped = isRefereeOnlyShape(payload);
 
-  const base = {
+  const base: Classification = {
     kind: KIND.CHATTER,
     room: roomName,
     seq: message.seq,
@@ -303,7 +506,7 @@ export async function classify(message, { room, cryptoImpl, verifyRequests = fal
     const { verified, error } = await verifyMessage(message, { room: roomName, cryptoImpl });
 
     if (claimsReferee && verified) {
-      if (claimsReceipt) {
+      if (claimsReceipt && payload) {
         const receipt = readReceipt(payload, base);
         if (!receipt) {
           // Signed by the referee but not shaped like a receipt. Not a forgery —
@@ -372,7 +575,7 @@ export async function classify(message, { room, cryptoImpl, verifyRequests = fal
 }
 
 /** Pull the tracked fields out of a receipt payload, or null if it is malformed. */
-function readReceipt(payload, base) {
+function readReceipt(payload: SonnetPayload, base: Classification): Receipt | null {
   const intakeSeq = payload.intake_seq;
   const receivedAt = payload.received_at;
   if (typeof intakeSeq !== 'number' || typeof receivedAt !== 'number') return null;
@@ -411,21 +614,25 @@ function readReceipt(payload, base) {
  * fake acceptance needs to be told, not left wondering why nothing appears.
  */
 export class ReceiptIndex {
-  #byRequestId = new Map();
-  #bySenderDid = new Map();
-  #all = [];
-  #forgeries = [];
+  #byRequestId = new Map<string, Receipt>();
+  #bySenderDid = new Map<string, Receipt[]>();
+  #all: Receipt[] = [];
+  #forgeries: Classification[] = [];
   #duplicates = 0;
 
   /** Add a classification. Anything that is not a verified receipt is ignored here. */
-  add(classification) {
+  add(classification: Classification): boolean {
     if (classification.kind === KIND.FORGED_RECEIPT || classification.kind === KIND.FORGED_REFEREE) {
       this.#forgeries.push(classification);
       return false;
     }
     if (classification.kind !== KIND.RECEIPT || classification.verified !== true) return false;
 
+    // classify() only ever produces KIND.RECEIPT with a receipt attached; this
+    // says so to the type system rather than trusting it.
     const receipt = classification.receipt;
+    if (!receipt) return false;
+
     if (this.#byRequestId.has(receipt.requestId)) {
       // A retry returns the original receipt, so the same one can be posted more
       // than once. First wins; the original is the one that matters.
@@ -445,11 +652,11 @@ export class ReceiptIndex {
     return true;
   }
 
-  byRequestId(requestId) {
+  byRequestId(requestId: string): Receipt | null {
     return this.#byRequestId.get(requestId) ?? null;
   }
 
-  bySenderDid(did) {
+  bySenderDid(did: string): Receipt[] {
     return this.#bySenderDid.get(did) ?? [];
   }
 
@@ -481,20 +688,22 @@ const MINUTE = 60 * 1000;
  * stream of actionable messages.
  */
 export class IntakeStats {
-  #receipts = [];
-  #actionable = [];
-  #seen = new Set();
-  #frontier = null;
-  #sortedReceipts = null;
-  #sortedActionable = null;
+  #receipts: ReceiptPoint[] = [];
+  #actionable: number[] = [];
+  #seen = new Set<string>();
+  #frontier: ReceiptPoint | null = null;
+  #sortedReceipts: ReceiptPoint[] | null = null;
+  #sortedActionable: number[] | null = null;
+  sampleSize: number;
+  windowMs: number;
 
-  constructor({ sampleSize = 300, windowMs = MINUTE } = {}) {
+  constructor({ sampleSize = 300, windowMs = MINUTE }: { sampleSize?: number; windowMs?: number } = {}) {
     this.sampleSize = sampleSize;
     this.windowMs = windowMs;
   }
 
   /** Record a verified receipt. */
-  addReceipt(receipt) {
+  addReceipt(receipt: ReceiptPoint): void {
     this.#receipts.push(receipt);
     this.#sortedReceipts = null;
     if (!this.#frontier || receipt.intakeSeq > this.#frontier.intakeSeq) {
@@ -503,7 +712,7 @@ export class IntakeStats {
   }
 
   /** Record an actionable message, for counting queue depth. */
-  addActionable(classification) {
+  addActionable(classification: Pick<Classification, 'room' | 'seq' | 'tsMs'>): void {
     const key = `${classification.room}#${classification.seq}`;
     if (this.#seen.has(key)) return;
     this.#seen.add(key);
@@ -555,9 +764,9 @@ export class IntakeStats {
    * takes the rate at every offset, then reports the quartiles: the median is the
    * honest central estimate and p25/p75 give the ETA its range.
    */
-  throughput({ sampleSize = this.sampleSize, windowMs = this.windowMs } = {}) {
+  throughput({ sampleSize = this.sampleSize, windowMs = this.windowMs }: { sampleSize?: number; windowMs?: number } = {}): Throughput {
     const points = this.#receiptsByTime().slice(-sampleSize);
-    const rates = [];
+    const rates: number[] = [];
 
     let j = 0;
     for (let i = 0; i < points.length; i++) {
@@ -571,7 +780,7 @@ export class IntakeStats {
     }
 
     rates.sort((a, b) => a - b);
-    const p = (f) => {
+    const p = (f: number): number | null => {
       if (rates.length === 0) return null;
       const k = (rates.length - 1) * f;
       const lo = Math.floor(k);
@@ -596,7 +805,7 @@ export class IntakeStats {
    * Counts strictly before `tsMs`, so the answer is the number of things ahead of
    * you, not including you.
    */
-  aheadOf(tsMs) {
+  aheadOf(tsMs: number): number | null {
     const frontier = this.frontier;
     if (!frontier || !Number.isFinite(tsMs)) return null;
     const from = frontier.receivedAtMs;
@@ -610,12 +819,12 @@ export class IntakeStats {
    * Queue position and an ETA range for a message posted at `tsMs`.
    * Always a range, always labelled an estimate by the caller.
    */
-  etaFor(tsMs) {
+  etaFor(tsMs: number): Eta | null {
     const ahead = this.aheadOf(tsMs);
     if (ahead == null) return null;
     const rate = this.throughput();
 
-    const minutes = (r) => (r && r > 0 ? ahead / r : null);
+    const minutes = (r: number | null): number | null => (r && r > 0 ? ahead / r : null);
     return {
       ahead,
       position: ahead + 1,
@@ -631,9 +840,9 @@ export class IntakeStats {
 }
 
 /** The frontier in plain words. This is the number people actually came for. */
-function describeFrontier(frontier, lagMs) {
+function describeFrontier(frontier: Frontier | null, lagMs: number | null): string {
   if (!frontier) return 'No verified receipt seen yet, so the referee\'s position is unknown.';
-  if (lagMs < MINUTE) return 'The referee is caught up — it is taking in requests as they arrive.';
+  if (lagMs == null || lagMs < MINUTE) return 'The referee is caught up — it is taking in requests as they arrive.';
   const minutes = Math.round(lagMs / MINUTE);
   if (minutes < 60) {
     return `The referee is working on requests received ${minutes} minute${minutes === 1 ? '' : 's'} ago.`;
@@ -647,7 +856,7 @@ function describeFrontier(frontier, lagMs) {
   );
 }
 
-function lowerBound(sorted, value) {
+function lowerBound(sorted: number[], value: number): number {
   let lo = 0;
   let hi = sorted.length;
   while (lo < hi) {
@@ -658,7 +867,7 @@ function lowerBound(sorted, value) {
   return lo;
 }
 
-function upperBound(sorted, value) {
+function upperBound(sorted: number[], value: number): number {
   let lo = 0;
   let hi = sorted.length;
   while (lo < hi) {
@@ -681,7 +890,7 @@ export const STATUS = {
   UNANSWERED: 'UNANSWERED',
   /** Posted, and no receipt was ever coming — this type has no intake queue. */
   NO_RECEIPT_EXPECTED: 'NO_RECEIPT_EXPECTED',
-};
+} as const;
 
 /**
  * Statuses that say something about a request's progress. A DID's headline
@@ -689,7 +898,7 @@ export const STATUS = {
  * so that a note posted a minute ago does not outrank a registration that was
  * actually answered.
  */
-const MEANINGFUL_STATUSES = new Set([
+const MEANINGFUL_STATUSES: ReadonlySet<StatusCode> = new Set<StatusCode>([
   STATUS.QUEUED,
   STATUS.ACCEPTED,
   STATUS.REJECTED,
@@ -700,7 +909,7 @@ export const LIVENESS = {
   LIVE: 'live',
   LAGGING: 'lagging',
   QUIET: 'quiet',
-};
+} as const;
 
 const DEFAULT_THRESHOLDS = {
   /** No verified referee message for this long and the referee is quiet. */
@@ -721,16 +930,28 @@ const DEFAULT_THRESHOLDS = {
  */
 export class ContestTracker {
   #receipts = new ReceiptIndex();
-  #stats;
-  #requestsById = new Map();
-  #requestsByDid = new Map();
-  #refereeMessages = [];
-  #statusPosts = [];
-  #notReceipted = [];
-  #seen = new Set();
+  #stats: IntakeStats;
+  #requestsById = new Map<string, Classification>();
+  #requestsByDid = new Map<string, Classification[]>();
+  #refereeMessages: Classification[] = [];
+  #statusPosts: Classification[] = [];
+  #notReceipted: NotReceiptedNotice[] = [];
+  #seen = new Set<string>();
+  thresholds: typeof DEFAULT_THRESHOLDS;
+  cryptoImpl: Crypto | undefined;
   #counts = { receipts: 0, requests: 0, forgeries: 0, notices: 0, chatter: 0, duplicates: 0 };
 
-  constructor({ sampleSize = 300, windowMs = MINUTE, thresholds = {}, cryptoImpl } = {}) {
+  constructor({
+    sampleSize = 300,
+    windowMs = MINUTE,
+    thresholds = {},
+    cryptoImpl,
+  }: {
+    sampleSize?: number;
+    windowMs?: number;
+    thresholds?: Partial<typeof DEFAULT_THRESHOLDS>;
+    cryptoImpl?: Crypto;
+  } = {}) {
     this.#stats = new IntakeStats({ sampleSize, windowMs });
     this.thresholds = { ...DEFAULT_THRESHOLDS, ...thresholds };
     this.cryptoImpl = cryptoImpl;
@@ -764,7 +985,7 @@ export class ContestTracker {
    * A message newer than every notice is not covered by anything — the next
    * notice has not been posted yet — and gets no claim made about it.
    */
-  noticeCovering(tsMs) {
+  noticeCovering(tsMs: number): NotReceiptedNotice | null {
     if (!Number.isFinite(tsMs)) return null;
     return this.#notReceipted.find((notice) => notice.tsMs >= tsMs) ?? null;
   }
@@ -773,7 +994,7 @@ export class ContestTracker {
    * Classify and absorb a batch of messages. Safe to call repeatedly with
    * overlapping batches; a message is only counted once per room and seq.
    */
-  async ingest(messages, room) {
+  async ingest(messages: Message[], room?: string): Promise<Classification[]> {
     const added = [];
     for (const message of messages) {
       const roomName = room ?? message.room;
@@ -788,11 +1009,11 @@ export class ContestTracker {
     return added;
   }
 
-  #absorb(c) {
+  #absorb(c: Classification): void {
     switch (c.kind) {
       case KIND.RECEIPT:
         this.#receipts.add(c);
-        this.#stats.addReceipt(c.receipt);
+        if (c.receipt) this.#stats.addReceipt(c.receipt);
         this.#refereeMessages.push(c);
         this.#counts.receipts++;
         break;
@@ -856,7 +1077,7 @@ export class ContestTracker {
    * headline follows the most recent request, because that is the one the user is
    * asking about; the rest are listed underneath.
    */
-  lookup(query, { nowMs = Date.now() } = {}) {
+  lookup(query: unknown, { nowMs = Date.now() }: { nowMs?: number } = {}): LookupResult {
     const value = String(query ?? '').trim();
     if (value === '') {
       return { query: value, queryKind: null, status: STATUS.NOT_SEEN, copy: COPY.NOT_SEEN, entries: [] };
@@ -895,7 +1116,7 @@ export class ContestTracker {
     const entries = [...ids.values()]
       .map((entry) => this.#describe(entry, nowMs))
       .sort((a, b) => {
-        const rank = (e) => (MEANINGFUL_STATUSES.has(e.status) ? 1 : 0);
+        const rank = (e: LookupEntry): number => (MEANINGFUL_STATUSES.has(e.status) ? 1 : 0);
         return rank(b) - rank(a) || (b.sortKey ?? 0) - (a.sortKey ?? 0);
       });
 
@@ -913,7 +1134,10 @@ export class ContestTracker {
     };
   }
 
-  #describe({ requestId, request, receipt }, nowMs) {
+  #describe(
+    { requestId, request, receipt }: { requestId: string | null; request: Classification | null; receipt: Receipt | null },
+    _nowMs: number
+  ): LookupEntry {
     const frontier = this.#stats.frontier;
     const base = {
       requestId: requestId ?? null,
@@ -927,19 +1151,20 @@ export class ContestTracker {
     };
 
     if (receipt) {
-      const accepted = receipt.status === 'accepted';
-      const rejected = receipt.status === 'rejected';
+      const found: Receipt = receipt;
+      const accepted = found.status === 'accepted';
+      const rejected = found.status === 'rejected';
       return {
         ...base,
         status: accepted ? STATUS.ACCEPTED : rejected ? STATUS.REJECTED : STATUS.REJECTED,
-        rawStatus: receipt.status,
+        rawStatus: found.status,
         // Verbatim, always.
-        reason: receipt.reason,
+        reason: found.reason,
         copy: accepted ? COPY.ACCEPTED : COPY.REJECTED,
-        intakeSeq: receipt.intakeSeq,
-        receivedAtMs: receipt.receivedAtMs,
+        intakeSeq: found.intakeSeq,
+        receivedAtMs: found.receivedAtMs,
         waitedMs:
-          request && Number.isFinite(request.tsMs) ? receipt.receivedAtMs - request.tsMs : null,
+          request && Number.isFinite(request.tsMs) ? found.receivedAtMs - request.tsMs : null,
       };
     }
 
@@ -955,7 +1180,7 @@ export class ContestTracker {
         ...base,
         status: STATUS.NO_RECEIPT_EXPECTED,
         copy: noReceiptCopy(request.type),
-        knownUnreceipted: UNRECEIPTED_TYPES.has(request.type),
+        knownUnreceipted: request.type != null && UNRECEIPTED_TYPES.has(request.type),
       };
     }
 
@@ -965,7 +1190,7 @@ export class ContestTracker {
       return {
         ...base,
         status: STATUS.UNANSWERED,
-        unansweredKind: 'submission',
+        unansweredKind: 'submission' as const,
         copy: COPY.UNANSWERED_SUBMISSION,
       };
     }
@@ -980,7 +1205,7 @@ export class ContestTracker {
       const unanswered = {
         ...base,
         status: STATUS.UNANSWERED,
-        unansweredKind: 'deferred',
+        unansweredKind: 'deferred' as const,
         copy: COPY.UNANSWERED,
         behindFrontierMs: frontier.receivedAtMs - request.tsMs,
       };
@@ -989,14 +1214,16 @@ export class ContestTracker {
       // referee's notice is about. Organizer needs no pre-start evidence, and
       // every other request type is unrelated, so both keep the plain wording.
       const role = request.payload?.role;
-      if (request.type !== REGISTER_TYPE || !EVIDENCE_ROLES.has(role)) return unanswered;
+      if (request.type !== REGISTER_TYPE || role == null || !EVIDENCE_ROLES.has(role)) {
+      return unanswered;
+    }
 
       const notice = this.noticeCovering(request.tsMs);
       if (!notice) return unanswered;
 
       return {
         ...unanswered,
-        unansweredKind: 'not-receipted',
+        unansweredKind: 'not-receipted' as const,
         role,
         notice,
         copy: notReceiptedCopy(notice),
@@ -1023,7 +1250,7 @@ export class ContestTracker {
    * and reported, never used — a green light computed off an unverified message
    * is worse than no light at all.
    */
-  liveness(nowMs = Date.now()) {
+  liveness(nowMs: number = Date.now()): Liveness {
     const { quietMs, lagMs, statusGraceMs } = this.thresholds;
 
     let last = null;
@@ -1035,15 +1262,17 @@ export class ContestTracker {
     // Receipts are counted by when the referee issued them, which is the room
     // timestamp — received_at is when it took the request in, which is a
     // different clock and would overstate recent activity during a catch-up.
-    const issuedWithin = (ms) =>
-      this.#receipts.all.filter((r) => Number.isFinite(r.issuedAtMs) && nowMs - r.issuedAtMs <= ms)
+    const issuedWithin = (ms: number): number =>
+      this.#receipts.all.filter(
+        (r: Receipt) => Number.isFinite(r.issuedAtMs) && nowMs - r.issuedAtMs <= ms
+      )
         .length;
 
     const frontier = this.#stats.frontier;
     const frontierLagMs = frontier ? nowMs - frontier.receivedAtMs : null;
     const sinceLastMs = last ? nowMs - last.tsMs : null;
 
-    const status = this.#statusPosts.reduce(
+    const status = this.#statusPosts.reduce<Classification | null>(
       (newest, post) => (!newest || post.tsMs > newest.tsMs ? post : newest),
       null
     );
@@ -1098,7 +1327,7 @@ export class ContestTracker {
         ? {
             tsMs: status.tsMs,
             ageMs: statusAgeMs,
-            overdue: statusAgeMs > STATUS_INTERVAL_MS + statusGraceMs,
+            overdue: statusAgeMs != null && statusAgeMs > STATUS_INTERVAL_MS + statusGraceMs,
             counts: status.payload?.counts ?? null,
             uptimeSeconds: status.payload?.uptime_seconds ?? null,
             payload: status.payload,

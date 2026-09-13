@@ -1,12 +1,69 @@
-// did.js — did:key, Ed25519, and Technocore canonicalisation.
+// did.ts — did:key, Ed25519, and Technocore canonicalisation.
 //
 // Pure and dependency-free on purpose: no DOM, no network, no imports. Everything
 // here can be exercised from Node or a bare test page, which matters because this
 // is the module that decides whether a receipt is genuine.
 //
+// Ported from js/did.js unchanged apart from types. The behaviour is the audited
+// part; the annotations only write down what it already did.
+//
 // Foolscap trusts exactly one key: the referee DID pinned in contest.js. This
 // module has no opinion about which DID that is — it only turns a did:key string
 // into a public key and answers yes or no on a signature.
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/** Anything that can be read as a byte sequence. */
+export type BytesLike = Uint8Array | ArrayBuffer | ArrayBufferView | number[];
+
+/**
+ * A Uint8Array backed by a plain ArrayBuffer.
+ *
+ * WebCrypto will not accept a view over a SharedArrayBuffer, and since TS 5.7
+ * Uint8Array carries its buffer type, so the distinction has to be written down
+ * rather than assumed.
+ */
+export type Bytes = Uint8Array<ArrayBuffer>;
+
+export interface Canonicalised {
+  room: string;
+  nonce: string;
+  /** The text after the sweep — this is what gets signed. */
+  text: string;
+  original: string;
+  changed: boolean;
+  canonical: string;
+}
+
+export interface SignatureCheck {
+  ok: boolean;
+  /** Empty when ok; otherwise says what to do about it. */
+  reason: string;
+  signature?: string;
+}
+
+export interface NonceCheck {
+  ok: boolean;
+  reason: string;
+  nonce?: string;
+}
+
+/** The parts of a room message a signature is computed over. */
+export interface VerifiableMessage {
+  from?: string | null;
+  /** Always a string: a nonce that has been through a double no longer verifies. */
+  nonce?: string | null;
+  text?: string | null;
+  sig?: string | null;
+  room?: string | null;
+}
+
+export interface VerifyResult {
+  verified: boolean;
+  error: string | null;
+}
 
 // ---------------------------------------------------------------------------
 // base58btc
@@ -24,7 +81,7 @@ const B58_MAP = (() => {
 })();
 
 /** Decode a base58btc string to bytes. Throws naming the offending character. */
-export function base58btcDecode(str) {
+export function base58btcDecode(str: string): Bytes {
   if (typeof str !== 'string') throw new TypeError('base58btc: input must be a string');
   if (str.length === 0) throw new Error('base58btc: input is empty');
 
@@ -53,11 +110,11 @@ export function base58btcDecode(str) {
   // Each leading '1' is a leading zero byte.
   for (let i = 0; i < str.length && str[i] === '1'; i++) bytes.push(0);
 
-  return Uint8Array.from(bytes.reverse());
+  return Uint8Array.from(bytes.reverse()) as Bytes;
 }
 
 /** Encode bytes as base58btc. */
-export function base58btcEncode(bytes) {
+export function base58btcEncode(bytes: BytesLike): string {
   const input = toBytes(bytes);
   if (input.length === 0) return '';
 
@@ -97,7 +154,7 @@ const B64URL_MAP = (() => {
 })();
 
 /** Decode unpadded (or padded) base64url to bytes. */
-export function base64urlDecode(str) {
+export function base64urlDecode(str: string): Bytes {
   if (typeof str !== 'string') throw new TypeError('base64url: input must be a string');
   const s = str.replace(/=+$/, '');
   if (s.length % 4 === 1) {
@@ -124,11 +181,11 @@ export function base64urlDecode(str) {
       out[o++] = (acc >>> bits) & 0xff;
     }
   }
-  return out.subarray(0, o);
+  return out.subarray(0, o) as Bytes;
 }
 
 /** Encode bytes as unpadded base64url. */
-export function base64urlEncode(bytes) {
+export function base64urlEncode(bytes: BytesLike): string {
   const input = toBytes(bytes);
   let out = '';
   for (let i = 0; i < input.length; i += 3) {
@@ -146,7 +203,7 @@ export function base64urlEncode(bytes) {
 }
 
 /** Decode hex (optionally 0x-prefixed) to bytes. */
-export function hexDecode(str) {
+export function hexDecode(str: string): Bytes {
   const s = String(str).trim().replace(/^0x/i, '');
   if (s.length % 2 !== 0) throw new Error('hex: odd number of characters');
   if (/[^0-9a-fA-F]/.test(s)) throw new Error('hex: input contains a non-hex character');
@@ -156,7 +213,7 @@ export function hexDecode(str) {
 }
 
 /** Encode bytes as lowercase hex. */
-export function hexEncode(bytes) {
+export function hexEncode(bytes: BytesLike): string {
   const input = toBytes(bytes);
   let out = '';
   for (let i = 0; i < input.length; i++) out += input[i].toString(16).padStart(2, '0');
@@ -173,7 +230,7 @@ export const MULTICODEC_ED25519_PUB = Uint8Array.from([0xed, 0x01]);
 export const DID_KEY_ED25519_RE = /^did:key:z[1-9A-HJ-NP-Za-km-z]{40,}$/;
 
 // Only so a wrong-key-type error can say which type it was.
-const MULTICODEC_NAMES = {
+const MULTICODEC_NAMES: Record<string, string> = {
   e701: 'secp256k1',
   '8024': 'P-256',
   '8124': 'P-384',
@@ -181,7 +238,7 @@ const MULTICODEC_NAMES = {
 };
 
 /** Cheap shape test. Use publicKeyFromDid when you need the real answer. */
-export function looksLikeDid(value) {
+export function looksLikeDid(value: unknown): value is string {
   return typeof value === 'string' && DID_KEY_ED25519_RE.test(value.trim());
 }
 
@@ -189,7 +246,7 @@ export function looksLikeDid(value) {
  * did:key:z... -> the 32 raw Ed25519 public key bytes.
  * Throws an error that names what is actually wrong with the string.
  */
-export function publicKeyFromDid(did) {
+export function publicKeyFromDid(did: string): Bytes {
   if (typeof did !== 'string') throw new TypeError('DID must be a string');
   const value = did.trim();
 
@@ -225,7 +282,7 @@ export function publicKeyFromDid(did) {
 }
 
 /** 32 raw Ed25519 public key bytes -> did:key:z... */
-export function didFromPublicKey(publicKey) {
+export function didFromPublicKey(publicKey: BytesLike): string {
   const key = toBytes(publicKey);
   if (key.length !== 32) {
     throw new Error(`An Ed25519 public key is 32 bytes; got ${key.length}`);
@@ -251,12 +308,12 @@ const SWEEP_RE = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Zl}\p{Zp}]/gu;
  * NFD of the same word are different messages with different signatures, so user
  * text passes through unchanged apart from the sweep itself.
  */
-export function sweep(text) {
+export function sweep(text: string): string {
   return String(text).replace(SWEEP_RE, ' ').replace(/^\s+|\s+$/gu, '');
 }
 
 /** True when the sweep would change the text — worth showing before they sign. */
-export function sweepChanges(text) {
+export function sweepChanges(text: string): boolean {
   return sweep(text) !== String(text);
 }
 
@@ -264,7 +321,7 @@ export function sweepChanges(text) {
  * The exact string that gets signed: `<room>|<nonce>|<text>`, UTF-8.
  * `text` must already be swept — call sweep() first, or use canonicalize().
  */
-export function canonicalString(room, nonce, text) {
+export function canonicalString(room: string, nonce: string | number, text: string): string {
   return `${room}|${nonce}|${text}`;
 }
 
@@ -272,7 +329,7 @@ export function canonicalString(room, nonce, text) {
  * One call for the whole write lane: sweep the text, build the canonical string,
  * and report whether the sweep changed anything so the UI can show the difference.
  */
-export function canonicalize({ room, nonce, text }) {
+export function canonicalize({ room, nonce, text }: { room: string; nonce: string | number; text: string }): Canonicalised {
   const original = String(text);
   const swept = sweep(original);
   return {
@@ -300,7 +357,7 @@ export const SIGNATURE_RE = /^[A-Za-z0-9_-]{85}[AQgw]$/;
  * Validate a pasted signature's shape. Returns { ok, reason, signature } with a
  * reason that says what to do, because this is the box users get wrong.
  */
-export function validateSignature(sig) {
+export function validateSignature(sig: unknown): SignatureCheck {
   if (typeof sig !== 'string' || sig.trim().length === 0) {
     return {
       ok: false,
@@ -342,7 +399,7 @@ export function validateSignature(sig) {
 export const NONCE_RE = /^[0-9]{1,19}$/;
 
 /** Validate nonce shape. Nonces are 1–19 digits and are handled as strings throughout. */
-export function validateNonce(nonce) {
+export function validateNonce(nonce: unknown): NonceCheck {
   const value = String(nonce ?? '').trim();
   if (value.length === 0) {
     return { ok: false, reason: 'Nonce is required. Press New nonce for a clock-based one.' };
@@ -361,7 +418,7 @@ export function validateNonce(nonce) {
  * exceed 2^53, and a rounded nonce produces a signature that will not re-verify.
  * Returns -1, 0 or 1.
  */
-export function compareNonce(a, b) {
+export function compareNonce(a: string | number, b: string | number): -1 | 0 | 1 {
   const x = String(a).replace(/^0+(?=\d)/, '');
   const y = String(b).replace(/^0+(?=\d)/, '');
   if (x.length !== y.length) return x.length < y.length ? -1 : 1;
@@ -370,7 +427,7 @@ export function compareNonce(a, b) {
 }
 
 /** A millisecond clock reading, as a string. Strictly increasing in practice. */
-export function newNonce(now = Date.now()) {
+export function newNonce(now: number = Date.now()): string {
   return String(now);
 }
 
@@ -378,13 +435,13 @@ export function newNonce(now = Date.now()) {
  * The next nonce to use in a room, given the highest one this key has already
  * used there. The clock is normally ahead; when it is not, step past by one.
  */
-export function nextNonce(lastUsed, now = Date.now()) {
+export function nextNonce(lastUsed: string | null | undefined, now: number = Date.now()): string {
   const clock = String(now);
   if (lastUsed == null || lastUsed === '') return clock;
   return compareNonce(clock, lastUsed) > 0 ? clock : incrementDecimal(String(lastUsed));
 }
 
-function incrementDecimal(value) {
+function incrementDecimal(value: string): string {
   const digits = value.split('');
   let i = digits.length - 1;
   for (; i >= 0; i--) {
@@ -404,15 +461,15 @@ function incrementDecimal(value) {
 // ---------------------------------------------------------------------------
 
 const ED25519 = { name: 'Ed25519' };
-const publicKeyCache = new Map();
+const publicKeyCache = new Map<string, Promise<CryptoKey>>();
 const encoder = new TextEncoder();
 
 /** UTF-8 encode a string. */
-export function utf8(value) {
-  return encoder.encode(String(value));
+export function utf8(value: string): Bytes {
+  return encoder.encode(String(value)) as Bytes;
 }
 
-function subtle(cryptoImpl) {
+function subtle(cryptoImpl?: Crypto): SubtleCrypto {
   const c = cryptoImpl || globalThis.crypto;
   if (!c || !c.subtle) {
     throw new Error(
@@ -427,8 +484,8 @@ const UNSUPPORTED =
   'Foolscap will not show a signature as verified without checking it.';
 
 /** Is Ed25519 usable in this browser's WebCrypto? Cached after the first call. */
-let ed25519Support = null;
-export async function ed25519Available(cryptoImpl) {
+let ed25519Support: boolean | null = null;
+export async function ed25519Available(cryptoImpl?: Crypto): Promise<boolean> {
   if (ed25519Support !== null) return ed25519Support;
   try {
     // An all-zero 32-byte value is a well-formed point encoding for import purposes.
@@ -441,7 +498,7 @@ export async function ed25519Available(cryptoImpl) {
 }
 
 /** Import 32 raw public key bytes as a WebCrypto verify key. */
-export async function importPublicKey(publicKey, cryptoImpl) {
+export async function importPublicKey(publicKey: BytesLike, cryptoImpl?: Crypto): Promise<CryptoKey> {
   const key = toBytes(publicKey);
   if (key.length !== 32) throw new Error(`An Ed25519 public key is 32 bytes; got ${key.length}`);
   try {
@@ -453,7 +510,7 @@ export async function importPublicKey(publicKey, cryptoImpl) {
 }
 
 /** Import (and cache) the verify key for a did:key string. */
-export async function keyForDid(did, cryptoImpl) {
+export async function keyForDid(did: string, cryptoImpl?: Crypto): Promise<CryptoKey> {
   const value = String(did ?? '').trim();
   let cached = publicKeyCache.get(value);
   if (!cached) {
@@ -476,7 +533,12 @@ export async function keyForDid(did, cryptoImpl) {
  * to be a referee receipt the caller should treat both as the same answer: not
  * authentic.
  */
-export async function verify(did, message, signature, cryptoImpl) {
+export async function verify(
+  did: string,
+  message: string | BytesLike,
+  signature: string | BytesLike,
+  cryptoImpl?: Crypto
+): Promise<boolean> {
   const key = await keyForDid(did, cryptoImpl);
   const sig = typeof signature === 'string' ? base64urlDecode(signature.trim()) : toBytes(signature);
   if (sig.length !== 64) {
@@ -493,14 +555,17 @@ export async function verify(did, message, signature, cryptoImpl) {
  * Returns { verified, error } and never throws, so a wall of messages can be
  * checked without one bad record stopping the render.
  */
-export async function verifyMessage(message, { room, cryptoImpl } = {}) {
+export async function verifyMessage(
+  message: VerifiableMessage,
+  { room, cryptoImpl }: { room?: string | null; cryptoImpl?: Crypto } = {}
+): Promise<VerifyResult> {
   try {
     const roomName = room ?? message.room;
     if (!roomName) return { verified: false, error: 'No room name — the canonical string cannot be rebuilt.' };
     if (!message.sig) return { verified: false, error: 'Message carries no signature.' };
     if (message.nonce == null) return { verified: false, error: 'Message carries no nonce.' };
     const canonical = canonicalString(roomName, String(message.nonce), message.text ?? '');
-    const verified = await verify(message.from, canonical, message.sig, cryptoImpl);
+    const verified = await verify(message.from ?? '', canonical, message.sig, cryptoImpl);
     return {
       verified,
       error: verified ? null : 'Signature does not match this DID over <room>|<nonce>|<text>.',
@@ -521,7 +586,7 @@ const PKCS8_PREFIX = Uint8Array.from([
 ]);
 
 /** Wrap a 32-byte Ed25519 seed in the PKCS#8 envelope WebCrypto wants. */
-export function seedToPkcs8(seed) {
+export function seedToPkcs8(seed: BytesLike): Bytes {
   const bytes = toBytes(seed);
   if (bytes.length !== 32) throw new Error(`An Ed25519 seed is 32 bytes; got ${bytes.length}`);
   const out = new Uint8Array(PKCS8_PREFIX.length + 32);
@@ -534,7 +599,7 @@ export function seedToPkcs8(seed) {
  * Accept a seed as 64 hex characters, or as base64/base64url of 32 bytes.
  * Returns 32 bytes or throws saying what was expected.
  */
-export function parseSeed(input) {
+export function parseSeed(input: unknown): Bytes {
   const value = String(input ?? '').trim();
   if (value.length === 0) throw new Error('No key material given.');
   if (/^(0x)?[0-9a-fA-F]{64}$/.test(value)) return hexDecode(value);
@@ -547,7 +612,7 @@ export function parseSeed(input) {
 }
 
 /** Import a seed as a WebCrypto signing key. Extractable so the DID can be derived. */
-export async function importSeed(seed, cryptoImpl) {
+export async function importSeed(seed: BytesLike, cryptoImpl?: Crypto): Promise<CryptoKey> {
   try {
     return await subtle(cryptoImpl).importKey('pkcs8', seedToPkcs8(seed), ED25519, true, ['sign']);
   } catch (err) {
@@ -557,14 +622,19 @@ export async function importSeed(seed, cryptoImpl) {
 }
 
 /** The did:key a seed corresponds to — show it so the user can confirm the key is theirs. */
-export async function didFromSeed(seed, cryptoImpl) {
+export async function didFromSeed(seed: BytesLike, cryptoImpl?: Crypto): Promise<string> {
   const key = await importSeed(seed, cryptoImpl);
   const jwk = await subtle(cryptoImpl).exportKey('jwk', key);
+  // An Ed25519 private JWK always carries the public half in `x`; this says so
+  // rather than trusting it silently.
+  if (typeof jwk.x !== 'string') {
+    throw new Error('WebCrypto returned an Ed25519 key with no public component.');
+  }
   return didFromPublicKey(base64urlDecode(jwk.x));
 }
 
 /** Sign a message with a raw seed. Returns 86 base64url characters. */
-export async function signWithSeed(seed, message, cryptoImpl) {
+export async function signWithSeed(seed: BytesLike, message: string | BytesLike, cryptoImpl?: Crypto): Promise<string> {
   const key = await importSeed(seed, cryptoImpl);
   const data = typeof message === 'string' ? utf8(message) : toBytes(message);
   const sig = await subtle(cryptoImpl).sign(ED25519, key, data);
@@ -573,10 +643,10 @@ export async function signWithSeed(seed, message, cryptoImpl) {
 
 // ---------------------------------------------------------------------------
 
-function toBytes(value) {
-  if (value instanceof Uint8Array) return value;
+function toBytes(value: BytesLike): Bytes {
+  if (value instanceof Uint8Array) return value as Bytes;
   if (ArrayBuffer.isView(value)) {
-    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength) as Bytes;
   }
   if (value instanceof ArrayBuffer) return new Uint8Array(value);
   if (Array.isArray(value)) return Uint8Array.from(value);

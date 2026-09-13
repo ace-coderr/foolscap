@@ -1,7 +1,7 @@
-// prune.mjs — bring already-captured rows into line with the capture policy.
+// prune.ts — bring already-captured rows into line with the capture policy.
 //
 //   npm run prune           what it would do, and nothing else
-//   npm run prune -- --apply   actually delete
+//   npm run prune --workspace services/notary -- --apply   actually delete
 //
 // Only rooms under the 'sightings' policy are touched, and within those only the
 // messages between a DID's first and last sighting on a given day. The first and
@@ -10,11 +10,11 @@
 //
 // Dry run by default. Deleting captured evidence is a decision, not a detail.
 
-import { getPool, closePool } from './db.mjs';
-import { ROOM_POLICY, POLICY } from './policy.mjs';
+import { getPool, closePool } from './db.ts';
+import { ROOM_POLICY, POLICY } from './policy.ts';
 
 const APPLY = process.argv.includes('--apply');
-const n = (v) => Number(v ?? 0).toLocaleString('en');
+const n = (v: unknown): string => Number(v ?? 0).toLocaleString('en');
 
 const SAMPLED = Object.entries(ROOM_POLICY)
   .filter(([, policy]) => policy === POLICY.SIGHTINGS)
@@ -85,7 +85,7 @@ try {
         `delete from records where id in (select id from (${SELECT_DOOMED}) d limit 20000)`,
         [SAMPLED]
       );
-      if (rowCount === 0) break;
+      if (!rowCount) break;
       removed += rowCount;
       process.stdout.write(`  ${n(removed)} deleted\r`);
     }
@@ -96,7 +96,7 @@ try {
     console.log(`  records table now ${(Number(after.rows[0].bytes) / 1024 / 1024).toFixed(1)} MB\n`);
   }
 } catch (err) {
-  console.error(`prune failed: ${err.message}`);
+  console.error(`prune failed: ${(err as Error).message}`);
   process.exitCode = 1;
 } finally {
   await closePool();

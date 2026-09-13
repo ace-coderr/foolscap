@@ -1,17 +1,17 @@
-// node --test test/notary.test.mjs
+// npm test — vitest
 //
 // The mirror worker's gatekeeping, tested against recorded fixtures. No
 // database and no network: these cover the decision of what is allowed into the
 // archive, which is the part that has to be right before anything is captured.
 
-import { test, describe } from 'node:test';
+import { test, describe } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { parseRecord, normalizeMessage } from '../js/technocore.js';
-import { verifyBatch, MIRROR_ROOMS } from '../notary/mirror.mjs';
+import { parseRecord, normalizeMessage } from '../src/lib/technocore';
+import { verifyBatch, MIRROR_ROOMS } from '../services/notary/src/mirror';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const ROOM = 'mb-sonnet-2-registration';
@@ -132,7 +132,7 @@ describe('rooms to mirror', () => {
 
 // ---------------------------------------------------------------------------
 
-import { reduceToSightings, policyFor, isFullRoom, POLICY, DEFAULT_POLICY } from '../notary/policy.mjs';
+import { reduceToSightings, policyFor, isFullRoom, POLICY, DEFAULT_POLICY } from '../services/notary/src/policy';
 
 const sighting = (did, seq, ts) => ({
   did,

@@ -1,4 +1,4 @@
-// mirror.mjs — the Notary mirror worker.
+// mirror.ts — the Notary mirror worker.
 //
 // Follows the busy public rooms and stores every validly signed message before
 // the rings drop it. This is where the archive comes from, and it accrues
@@ -10,21 +10,23 @@
 // between how the archive reads a room and how the site reads it would be a
 // source of exactly the silent inconsistency this product cannot afford.
 //
-//   node notary/mirror.mjs
+//   npm run mirror --workspace services/notary
 //
 // Stop it with Ctrl-C; it drains what it has verified and closes cleanly.
 
 import { pathToFileURL } from 'node:url';
-import { RoomWatcher, exportRoom } from '../js/technocore.js';
-import { verifyMessage, validateNonce, looksLikeDid } from '../js/did.js';
-import { WATCHED_ROOMS as SONNET_ROOMS } from '../js/contest.js';
+import type { Message, Gap } from '../../../src/lib/technocore.ts';
+import type { ArchiveRecord } from './db.ts';
+import { RoomWatcher, exportRoom } from '../../../src/lib/technocore.ts';
+import { verifyMessage, validateNonce, looksLikeDid } from '../../../src/lib/did.ts';
+import { WATCHED_ROOMS as SONNET_ROOMS } from '../../../src/lib/contest.ts';
 import {
   isFullRoom,
   policyFor,
   reduceToSightings,
   throttleSightings,
   pruneThrottleCache,
-} from './policy.mjs';
+} from './policy.ts';
 import {
   assertSchema,
   insertRecords,
@@ -34,7 +36,7 @@ import {
   closePool,
   archiveStats,
   lastSeqFor,
-} from './db.mjs';
+} from './db.ts';
 
 /**
  * The busy public rooms, plus the sonnet-2 rooms. Ordered so the fastest-
@@ -98,7 +100,14 @@ const stats = {
   startedAt: Date.now(),
 };
 
-const log = (...parts) => console.log(`[${new Date().toISOString()}]`, ...parts);
+const log = (...parts: unknown[]): void => console.log(`[${new Date().toISOString()}]`, ...parts);
+
+/** A sequence range polling stepped over, and the gap row recording it. */
+interface Hole {
+  id: number | null;
+  from: number;
+  to: number;
+}
 
 /**
  * Open holes, by room: { id, from, to } sequence ranges that polling skipped.
@@ -107,11 +116,12 @@ const log = (...parts) => console.log(`[${new Date().toISOString()}]`, ...parts)
  * naive "anything newer than the high-water mark" sweep useless — the skipped
  * messages are older than what arrived after them.
  */
-const holes = new Map();
+const holes = new Map<string, Hole[]>();
 
-const addHole = (room, hole) => {
-  if (!holes.has(room)) holes.set(room, []);
-  holes.get(room).push(hole);
+const addHole = (room: string, hole: Hole): void => {
+  const existing = holes.get(room);
+  if (existing) existing.push(hole);
+  else holes.set(room, [hole]);
 };
 
 // ---------------------------------------------------------------------------
@@ -125,7 +135,7 @@ const addHole = (room, hole) => {
  * out against its own sender — storing either would put records in the archive
  * that prove nothing, which is worse than not having them.
  */
-export async function verifyBatch(messages, room) {
+export async function verifyBatch(messages: Message[], room: string): Promise<ArchiveRecord[]> {
   const checked = await Promise.all(
     messages.map(async (message) => {
       stats.seen++;
@@ -146,7 +156,7 @@ export async function verifyBatch(messages, room) {
         return null;
       }
 
-      return {
+      const record: ArchiveRecord = {
         did: message.from,
         room,
         // String all the way to Postgres.
@@ -158,10 +168,11 @@ export async function verifyBatch(messages, room) {
         sourceTs: message.ts ?? null,
         sourceSeq: Number.isFinite(message.seq) ? message.seq : null,
       };
+      return record;
     })
   );
 
-  return checked.filter(Boolean);
+  return checked.filter((record): record is ArchiveRecord => record !== null);
 }
 
 /**
@@ -172,7 +183,7 @@ export async function verifyBatch(messages, room) {
  * counted as `sampledAway`, because silently discarding evidence would be the
  * same sin as silently losing it.
  */
-async function store(records, room) {
+async function store(records: ArchiveRecord[], room: string): Promise<void> {
   if (records.length === 0) return;
 
   if (isFullRoom(room)) {
@@ -201,7 +212,7 @@ async function store(records, room) {
 }
 
 /** Verify and store a run of messages, in batches, without holding it all at once. */
-async function absorb(messages, room) {
+async function absorb(messages: Message[], room: string): Promise<void> {
   for (let i = 0; i < messages.length; i += VERIFY_BATCH) {
     const batch = messages.slice(i, i + VERIFY_BATCH);
     await store(await verifyBatch(batch, room), room);
@@ -212,7 +223,7 @@ async function absorb(messages, room) {
 // Holes
 // ---------------------------------------------------------------------------
 
-async function recordGap(room, gap) {
+async function recordGap(room: string, gap: Gap): Promise<void> {
   const detail = {
     room,
     kind: gap.kind,
@@ -227,12 +238,12 @@ async function recordGap(room, gap) {
     if (!DRY_RUN) id = await insertGap(detail);
   } catch (err) {
     stats.errors++;
-    log(`[${room}] could not record a ${gap.kind} gap: ${err.message}`);
+    log(`[${room}] could not record a ${gap.kind} gap: ${(err as Error).message}`);
   }
 
   if (gap.kind === 'missed') {
     stats.gapsMissed++;
-    if (Number.isFinite(gap.expected) && Number.isFinite(gap.firstSeq)) {
+    if (gap.expected != null && gap.firstSeq != null) {
       addHole(room, { id, from: gap.expected, to: gap.firstSeq - 1 });
     }
     // Loud on purpose. The archive is now missing these and always will be.
@@ -257,7 +268,7 @@ async function recordGap(room, gap) {
  * Sequential rather than parallel: it bounds memory to a single room's export
  * and keeps the read budget from being spent all at once.
  */
-async function backfill(room) {
+async function backfill(room: string): Promise<{ lastSeq: number; generation: number | null }> {
   const resumeFrom = DRY_RUN ? 0 : await lastSeqFor(room);
   const dump = await exportRoom(room);
 
@@ -266,7 +277,7 @@ async function backfill(room) {
     return { lastSeq: resumeFrom, generation: dump.generation };
   }
 
-  if (dump.firstSeq > 1) {
+  if (dump.firstSeq != null && dump.firstSeq > 1) {
     await recordGap(room, { kind: 'rotated', firstSeq: dump.firstSeq, missing: null });
   }
 
@@ -284,7 +295,7 @@ async function backfill(room) {
   return { lastSeq: dump.lastSeq, generation: dump.generation };
 }
 
-function follow(room, since) {
+function follow(room: string, since: number): RoomWatcher {
   const watcher = new RoomWatcher(room, {
     since,
     backfill: false,
@@ -295,7 +306,7 @@ function follow(room, since) {
         await absorb(messages, room);
       } catch (err) {
         stats.errors++;
-        log(`[${room}] write failed: ${err.message}`);
+        log(`[${room}] write failed: ${(err as Error).message}`);
       }
     },
     onGap: (gap) => {
@@ -303,7 +314,7 @@ function follow(room, since) {
     },
     onError: (err) => {
       stats.errors++;
-      log(`[${room}] ${err.message}`);
+      log(`[${room}] ${(err as Error).message}`);
     },
     onBudget: (budget) => {
       if (budget?.low) log(`[${room}] read budget low (${budget.remaining}); backing off.`);
@@ -325,7 +336,7 @@ function follow(room, since) {
  * the only question is whether the ring still holds them. If it has rotated past
  * the hole, those messages are gone for good and the gap row keeps the count.
  */
-async function sweep() {
+async function sweep(): Promise<void> {
   for (const [room, roomHoles] of holes) {
     if (roomHoles.length === 0) continue;
 
@@ -334,7 +345,7 @@ async function sweep() {
       dump = await exportRoom(room);
     } catch (err) {
       stats.errors++;
-      log(`[${room}] sweep failed: ${err.message}`);
+      log(`[${room}] sweep failed: ${(err as Error).message}`);
       continue;
     }
 
@@ -375,7 +386,7 @@ async function sweep() {
 
 // ---------------------------------------------------------------------------
 
-function report() {
+function report(): void {
   const mins = (Date.now() - stats.startedAt) / 60_000;
   log(
     `captured ${stats.captured.toLocaleString('en')} | dup ${stats.duplicate.toLocaleString('en')} | ` +
@@ -388,7 +399,7 @@ function report() {
   );
 }
 
-async function main() {
+async function main(): Promise<void> {
   log(`Notary mirror starting${DRY_RUN ? ' — DRY RUN, nothing will be written' : ''}.`);
 
   if (!DRY_RUN) {
@@ -400,10 +411,10 @@ async function main() {
     );
   }
 
-  const watchers = [];
+  const watchers: RoomWatcher[] = [];
   let stopping = false;
 
-  const shutdown = async (signal) => {
+  const shutdown = async (signal: string): Promise<void> => {
     if (stopping) return;
     stopping = true;
     log(`${signal} — stopping.`);
@@ -458,11 +469,11 @@ async function main() {
       log(`[${room}] following from seq ${lastSeq} (${policyFor(room)}).`);
     } catch (err) {
       stats.errors++;
-      log(`[${room}] backfill failed, following from the live head instead: ${err.message}`);
+      log(`[${room}] backfill failed, following from the live head instead: ${(err as Error).message}`);
       try {
         watchers.push(follow(room, 0));
       } catch (inner) {
-        log(`[${room}] could not follow at all: ${inner.message}`);
+        log(`[${room}] could not follow at all: ${(inner as Error).message}`);
       }
     }
     report();
@@ -478,7 +489,7 @@ export const mirrorStats = stats;
 // tested without opening a connection or following a room.
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   main().catch(async (err) => {
-    console.error(`[fatal] ${err.stack ?? err.message}`);
+    console.error(`[fatal] ${err.stack ?? (err as Error).message}`);
     await closePool().catch(() => {});
     process.exit(1);
   });

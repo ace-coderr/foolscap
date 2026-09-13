@@ -5,7 +5,7 @@ the referee's intake queue, whether the referee is alive, and what actually happ
 `request_id` or DID.
 
 **[foolscap-xi.vercel.app](https://foolscap-xi.vercel.app/)** — or go straight to the
-[tracker](https://foolscap-xi.vercel.app/track.html).
+[tracker](https://foolscap-xi.vercel.app/track).
 
 ---
 
@@ -86,63 +86,70 @@ whose signature is internally valid but made with some other key is labelled exa
 
 ## What it is not
 
-No backend. No accounts. No keys, no wallet, no seed phrase, no signing — **this page reads
-and nothing else.** There is no key input anywhere in it.
+No accounts. No keys, no wallet, no seed phrase, no signing — **these pages read and nothing
+else.** There is no key input anywhere in them.
 
 `technocore.chat` sends `access-control-allow-origin: *`, so every read runs straight from
-your browser against the live service. There is no server in between that could show you
-something different from what is really in the rooms. It is a static page: read the source,
-or open the network tab and watch it do exactly what it says.
+your browser against the live service. Nothing sits between you and the rooms: the signature
+checking that decides what you are shown happens on your machine. Read the source, or open the
+network tab and watch it do exactly what it says.
 
 ## Where it runs
 
-Deployed on Vercel from this repository, as static files:
+Deployed on Vercel from this repository:
 **[foolscap-xi.vercel.app](https://foolscap-xi.vercel.app/)**
 
-There is no build step, no framework and no server-side code — Vercel is serving the same
-files you can read here, and every request to `technocore.chat` goes from your browser
-directly to the service. Nothing in the deployment sits between you and the rooms, which is
-the point: the hosting is not something you have to trust.
+It is a React app built with Vite, so there is a build step — what Vercel serves is compiled
+from the TypeScript in `src/`, not the files themselves. What that does not change is the part
+that matters: there is still **no server-side code on the request path**. Every read goes from
+your browser straight to `technocore.chat`, and every signature that decides what you are shown
+is checked on your machine. The only backend anywhere in Foolscap is the Notary archive, which
+is a separate service that stores what the rings are about to drop.
 
-## Run it locally
-
-You do not have to take the deployment's word for any of this. Clone the repository and
-serve it yourself — it is the same code, and the page will read the same live rooms:
+If you would rather not take the deployment's word for it, the source is here and the build is
+reproducible:
 
 ```bash
-python -m http.server 8731
+npm install
+npm run dev
 ```
 
-Then open <http://localhost:8731/track.html>.
-
-It must be served over HTTP — ES modules and WebCrypto will not work from a `file://` URL.
-Any static server will do. There is no build step and there are no dependencies.
+Then open <http://localhost:5173>. `npm run build` produces exactly what is deployed.
 
 ## Tests
 
-`js/did.js` is pure and dependency-free so it can be tested without a network. The contest
-logic is tested against recorded fixtures — byte-exact captures of the live rooms — so the
-suite is deterministic and offline:
+`src/lib/did.ts` is pure and dependency-free so it can be tested without a network. The contest
+logic is tested against recorded fixtures — byte-exact captures of the live rooms — so the suite
+is deterministic and offline:
 
 ```bash
-node --test test/contest.test.mjs
+npm test
 ```
 
-The only fixture that is not a recording is `test/fixtures/forged-synthetic.jsonl`, which is
-generated. The signatures in it are real Ed25519 signatures, so the forgeries in the test
-suite are exactly as convincing as an attacker's would be.
+98 tests, none of which touch the network. The only fixture that is not a recording is
+`test/fixtures/forged-synthetic.jsonl`, which is generated; the signatures in it are real Ed25519
+signatures, so the forgeries in the suite are exactly as convincing as an attacker's would be.
 
 ## Layout
 
 ```
-track.html          batch tracker and referee panel
-css/foolscap.css
-js/did.js           base58, did:key -> public key, verify, sweep, canonical string
-js/technocore.js    read, poll, export, backfill, ring-gap detection
-js/contest.js       classification, receipt index, intake stats, liveness
-js/ui.js
-test/               node:test suite and recorded fixtures
+src/
+  lib/              the audited core — no DOM, no framework, no network in did.ts
+    did.ts          base58, did:key -> public key, verify, sweep, canonical string
+    technocore.ts   read, poll, export, backfill, ring-gap detection
+    contest.ts      classification, receipt index, intake stats, lookup, liveness
+  components/       Shell: nav, page header, colophon — every page, one source
+  routes/           City, Track
+  pages.ts          the map of the site: nav label, route, header, availability
+  useTracker.ts     two-pass verification, hole recovery
+  styles/
+services/
+  notary/           the archive: mirror worker, schema, policy. Node + TypeScript.
+test/               the suite and its recorded fixtures
 ```
+
+`src/lib` is the part worth auditing. It has no framework in it, it is imported unchanged by
+both the browser and the Notary worker, and its tests run offline.
 
 ## Licence
 
