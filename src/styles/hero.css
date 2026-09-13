@@ -2,8 +2,9 @@
  *
  * A different register from the rest of Foolscap on purpose: black rather than
  * navy paper, Saira and Chakra Petch rather than Spectral, and a grid instead of
- * rules and whitespace. Everything here is namespaced under .hero so none of it
- * can reach /city or /track, which keep foolscap.css exactly as it was.
+ * rules and whitespace. Everything here is namespaced under .landing, .hero and
+ * .about so none of it can reach /city or /track, which keep foolscap.css
+ * exactly as it was.
  *
  * The palette is black, white and greys. #3FB3C4 appears in two places and both
  * of them mean the same thing — a signature verified — which is the same rule
@@ -48,6 +49,20 @@
 
 .landing {
   background: #000;
+
+  /* The page's shared tokens, so the sections below the hero can use them. The
+   * hero declares the same three on itself, above, and is left alone: this file
+   * is being extended, not rewritten. They are identical and must stay so. */
+  --hero-display: Saira, "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
+  --hero-body: "Chakra Petch", ui-monospace, "SF Mono", Menlo, system-ui, sans-serif;
+  --hero-line: rgba(255, 255, 255, 0.06);
+  --hero-gutter: clamp(1.15rem, 2.4vw, 2.25rem);
+
+  /* Structure below the hero. Twice the weight of the grid, so a divider reads
+   * as a divider and the grid stays wallpaper. */
+  --about-rule: rgba(255, 255, 255, 0.1);
+  --about-quiet: #6e6e6e;
+  --about-label: #a8a8a8;
 }
 
 /* Body carries a gutter and a navy ground for every other page. The hero is
@@ -546,5 +561,184 @@ body.on-black {
    * and it is the only thing on this page that reports anything. */
   .hero__pill {
     transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------- about */
+
+/* The case that the forgetting is real, made with figures this project
+ * measured rather than adjectives.
+ *
+ * No accent anywhere in here, and that is a rule rather than a preference: the
+ * accent means state, nothing on this section is state, and a teal number would
+ * be claiming a liveness these figures explicitly do not have. Black, white and
+ * two greys. */
+
+.about {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+  font-family: var(--hero-body);
+  font-weight: 300;
+  padding: clamp(3.5rem, 11vh, 7.5rem) 0 clamp(3.5rem, 10vh, 6.5rem);
+}
+
+/* The hero's grid, continued. Its horizontal pitch is 20% of a hero that is
+ * exactly one screen tall, so 20dvh here lands the lines in phase across the
+ * seam. On narrow the hero is allowed to grow past one screen and the phase
+ * drifts; both are one-percent-white hairlines, and nothing hangs on it. */
+.about__grid {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, var(--hero-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--hero-line) 1px, transparent 1px);
+  background-size: 16.6667% 20dvh;
+}
+
+.about__inner {
+  position: relative;
+  z-index: 1;
+  max-width: 74rem;
+  margin-inline: auto;
+  padding-inline: var(--hero-gutter);
+}
+
+.about__eyebrow {
+  margin: 0 0 clamp(0.9rem, 2.2vh, 1.5rem);
+  font-family: var(--hero-display);
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--about-quiet);
+}
+
+.about__title {
+  /* Around twenty characters to the line, which is where "The network forgets."
+   * breaks by itself rather than by a rule about it. */
+  max-width: 20ch;
+  margin: 0 0 clamp(1.4rem, 3vh, 2.1rem);
+  font-family: var(--hero-display);
+  font-stretch: 112%;
+  font-weight: 600;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  color: #fff;
+}
+
+.about__copy {
+  max-width: 34rem;
+  font-size: 15px;
+  line-height: 1.66;
+  color: var(--hero-text, rgba(255, 255, 255, 0.75));
+}
+
+.about__copy p {
+  margin: 0 0 0.9rem;
+}
+
+.about__copy p:last-child {
+  margin-bottom: 0;
+}
+
+/* ------------------------------------------------------------------- stats */
+
+.about__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: clamp(2.5rem, 6vh, 4rem) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.about__stat {
+  padding-inline: clamp(1rem, 2.4vw, 2rem);
+}
+
+.about__stat:first-child {
+  padding-left: 0;
+}
+
+/* Between the blocks, never around them: three figures with a box drawn round
+ * each would be a table pretending not to be one. */
+.about__stat + .about__stat {
+  border-left: 1px solid var(--about-rule);
+}
+
+.about__figure {
+  display: block;
+  margin-bottom: 0.55rem;
+  font-family: var(--hero-display);
+  font-stretch: 112%;
+  font-weight: 600;
+  font-size: clamp(2.5rem, 5vw, 3.75rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.about__ast {
+  margin-left: 0.1em;
+  font-size: 0.4em;
+  line-height: 1;
+  vertical-align: super;
+  letter-spacing: 0;
+  color: var(--about-quiet);
+}
+
+.about__label {
+  display: block;
+  max-width: 16rem;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--about-label);
+}
+
+.about__note {
+  max-width: 34rem;
+  margin: clamp(1.2rem, 3vh, 1.9rem) 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--about-quiet);
+}
+
+.about__close {
+  max-width: 34rem;
+  margin: clamp(2.4rem, 6vh, 3.75rem) 0 0;
+  padding-top: clamp(1.6rem, 4vh, 2.4rem);
+  border-top: 1px solid var(--about-rule);
+  font-size: 20px;
+  line-height: 1.45;
+  color: #fff;
+}
+
+/* ------------------------------------------------------------------ narrow */
+
+@media (max-width: 56rem) {
+  .about__stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .about__stat {
+    padding-inline: 0;
+  }
+
+  /* The verticals lie down. Same hairline, same job. */
+  .about__stat + .about__stat {
+    border-left: 0;
+    border-top: 1px solid var(--about-rule);
+    margin-top: 1.6rem;
+    padding-top: 1.6rem;
+  }
+
+  .about__label {
+    max-width: 30rem;
   }
 }

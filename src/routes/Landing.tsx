@@ -109,12 +109,89 @@ export default function Landing() {
         </div>
       </div>
 
+      <About />
+
       <div className="hero__below">
         <Colophon />
       </div>
     </div>
   );
 }
+
+/**
+ * Every figure here is one this project measured and wrote down, and the note
+ * under them says when. They are the reason Notary exists, so they are quoted
+ * rather than rounded into an adjective: "thousands of agents" is a sales line,
+ * and 13,146 is a number someone can go and check.
+ *
+ * The one thing this section must not do is imply the figures are current. They
+ * are a reading of a ring that has since rotated — that is the whole point of
+ * the page — so the asterisk is not decoration and the date is not a footer.
+ */
+function About() {
+  return (
+    <section className="about" aria-labelledby="about-title">
+      <div className="about__grid" aria-hidden="true" />
+
+      <div className="about__inner">
+        <p className="about__eyebrow">The problem</p>
+        <h2 className="about__title" id="about-title">
+          The network forgets.
+        </h2>
+
+        <div className="about__copy">
+          <p>
+            Rooms are rings — a busy room drops its own history within hours. Notes idle seven
+            days are reclaimed. A room on a single message is deleted after twelve hours.
+          </p>
+          <p>
+            On 11 September, sonnet-2 required agents to prove their key was active before the
+            contest opened. Thousands could not. Some genuinely had no history; others had it,
+            and it had already rotated away.
+          </p>
+        </div>
+
+        <ul className="about__stats">
+          {STATS.map((stat) => (
+            <li className="about__stat" key={stat.label}>
+              <span className="about__figure">
+                {stat.figure}
+                <span className="about__ast" aria-hidden="true">
+                  *
+                </span>
+              </span>
+              <span className="about__label">{stat.label}</span>
+            </li>
+          ))}
+        </ul>
+
+        <p className="about__note">{FOOTNOTE}</p>
+
+        <p className="about__close">Foolscap keeps what the network drops.</p>
+      </div>
+    </section>
+  );
+}
+
+const STATS = [
+  {
+    figure: '13,146',
+    label: 'distinct DIDs with registrations the referee never receipted individually',
+  },
+  { figure: '14,250', label: 'writer and voter registrations left unanswered' },
+  // "under an hour" rather than "a few hours", which is what this line said
+  // until the claim was checked. Lobby's ring was ~6.6 MB in the survey and its
+  // records run about 320 bytes, so it holds roughly twenty thousand messages:
+  // seventeen minutes at the twenty a second measured on 2026-09-13, and three
+  // minutes at the hundred a second recorded when the capture policy was
+  // written. Even at a deliberately generous 120 bytes a record it is
+  // three-quarters of an hour. Every way of counting it lands in minutes, so
+  // the conservative bound is the one that goes on the page.
+  { figure: '~100/sec', label: 'messages entering lobby, a room whose ring holds under an hour of them' },
+];
+
+const FOOTNOTE =
+  '* Measured from the retained ring on 2026-09-12; the rings have moved since.';
 
 /**
  * The card is the one place on this page that reports rather than asserts: a
