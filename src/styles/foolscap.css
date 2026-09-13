@@ -46,7 +46,13 @@
    * never makes a gradient, never decorates.
    *
    * All three clear 4.5:1 on all three surfaces, with one exception noted at
-   * --ink-faint below. */
+   * --ink-faint below.
+   *
+   * --accent is ENFORCED, not just stated: test/accent.test.ts fails on any use
+   * of it outside an allowlist of state selectors, and the allowlist makes you
+   * write down why the thing is state. It exists because this paragraph was
+   * read and then contradicted twice — a glow on a byline, an edge on a pill.
+   * If you are adding teal and the suite goes red, the suite is right. */
   --accent: #3fb3c4; /* live, held, verified, current */
   --warn: #d9a441; /* degrading, expiring, uncertain */
   --alarm: #e0674f; /* forged, failed, lost */

@@ -6,10 +6,10 @@
  * .about so none of it can reach /city or /track, which keep foolscap.css
  * exactly as it was.
  *
- * The palette is black, white and greys. #3FB3C4 appears in two places and both
- * of them mean the same thing — a signature verified — which is the same rule
- * the rest of the site follows for its accent, kept even though almost nothing
- * else about this page is shared.
+ * The palette is black, white and greys. #3FB3C4 is spent only on state here,
+ * as everywhere else — the live dot on the card, the focus ring, the agent's
+ * sensor — and test/accent.test.ts fails the build if it turns up anywhere it
+ * has not been argued for.
  *
  * Loaded by the Landing route, so it ships in that route's chunk. */
 

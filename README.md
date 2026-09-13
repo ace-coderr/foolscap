@@ -181,11 +181,14 @@ is deterministic and offline:
 npm test
 ```
 
-125 tests, none of which touch the network. The City's share of them covers the parts that
+130 tests, none of which touch the network. The City's share of them covers the parts that
 could be wrong without anyone noticing: a layout that shuffles between loads, a height scale
 that is not quite logarithmic, a brightness derived from a number that cannot support it, and
 the survey-lag estimate, which is the one figure on the page that is inferred rather than
-read. The only fixture that is not a recording is
+read. One of them tests the design rather than the code: the accent colour means
+state on this site, and `test/accent.test.ts` fails on any use of it that is not on
+an allowlist of state selectors — a rule that had been written down, read, and
+broken twice before it was made to hold. The only fixture that is not a recording is
 `test/fixtures/forged-synthetic.jsonl`, which is generated; the signatures in it are real Ed25519
 signatures, so the forgeries in the suite are exactly as convincing as an attacker's would be.
 
