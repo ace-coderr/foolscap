@@ -24,8 +24,8 @@ import { useCountUp, useInView, usePrefersReducedMotion } from '../motion';
 import { startPointerField, tiltProps } from '../pointer';
 import '../styles/hero.css';
 
-/** Three.js is the City's weight and the hero's; neither makes the Tracker pay. */
-const SignatureSphere = lazy(() => import('../hero/SignatureSphere'));
+/** The sonnet is SVG and small, but it still need not block the first paint. */
+const DrawingSonnet = lazy(() => import('../components/DrawingSonnet'));
 
 export default function Landing() {
   const feed = useLivePulse();
@@ -94,8 +94,10 @@ export default function Landing() {
           </span>
         </div>
 
+        {/* Behind the title, not over it: unlike the sphere's additive points,
+            ink drawn across white glyphs would show. */}
         <Suspense fallback={null}>
-          <SignatureSphere subscribe={feed.subscribe} reducedMotion={reducedMotion} />
+          <DrawingSonnet className="hero__sonnet" reducedMotion={reducedMotion} />
         </Suspense>
 
         <div className="hero__chrome">

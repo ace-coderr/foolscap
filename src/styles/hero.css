@@ -126,12 +126,11 @@ body.on-black {
 
 /* ------------------------------------------------------------------ layers */
 
-/* 0 grid · 1 glow · 2 arc · 3 wordmark · 4 sphere · 5 chrome.
+/* 0 grid · 1 glow · 2 sonnet · 3 arc · 4 wordmark · 5 chrome.
  *
- * The sphere sits ABOVE the wordmark deliberately. Its blending is additive, so
- * over white glyphs it adds nothing that can be seen; the points can only appear
- * in the black between and below the letters. The overlap is therefore exactly
- * the one wanted, and cannot muddy the type however bright the sphere gets. */
+ * The verse is UNDER the wordmark. The sphere it replaced sat above, which was
+ * safe only because additive points add nothing to white; a 0.32-white stroke
+ * drawn across the glyphs would show, so the order changes with the object. */
 
 .hero__grid {
   position: absolute;
@@ -170,7 +169,7 @@ body.on-black {
   transform: translate(-50%, -50%);
   width: min(128vw, 1040px);
   aspect-ratio: 1;
-  z-index: 2;
+  z-index: 3;
   pointer-events: none;
   color: rgba(255, 255, 255, 0.16);
   overflow: visible;
@@ -179,7 +178,7 @@ body.on-black {
 .hero__wordmark {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 4;
   display: grid;
   place-items: center;
   pointer-events: none;
@@ -205,21 +204,21 @@ body.on-black {
   white-space: nowrap;
 }
 
-.hero__sphere {
+/* Behind the wordmark, not over it. The sphere sat above because additive
+ * points add nothing to white; ink would show. Three, so it is under the
+ * wordmark at four and over the arc at two. */
+.hero__sonnet {
   position: absolute;
   left: 50%;
-  top: 63%;
+  top: 62%;
   transform: translate(-50%, -50%);
-  width: min(88vw, 76dvh, 700px);
-  aspect-ratio: 1;
-  z-index: 4;
+  /* Three to four, portrait, sized so the wordmark falls across the upper
+   * third of the page of verse. */
+  width: min(64vw, 46dvh, 420px);
+  aspect-ratio: 3 / 4;
+  z-index: 2;
   pointer-events: none;
-}
-
-.hero__sphere canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
+  overflow: hidden;
 }
 
 .hero__chrome {
@@ -563,9 +562,9 @@ body.on-black {
     padding-top: 21vh;
   }
 
-  .hero__sphere {
-    top: 31vh;
-    transform: translate(-50%, -46%);
+  .hero__sonnet {
+    top: 30vh;
+    transform: translate(-50%, -42%);
   }
 
   .hero__glow {
@@ -611,8 +610,8 @@ body.on-black {
     transform: none;
   }
 
-  .hero__sphere {
-    width: min(86vw, 44dvh, 380px);
+  .hero__sonnet {
+    width: min(74vw, 34dvh, 300px);
   }
 
   .hero__foot {
