@@ -78,7 +78,7 @@ export function HeroNav({ action }: { action: { label: string; to: string } }) {
         <NavItems currentId="" className="hero__nav-link" />
       </ul>
 
-      <Link className="hero__pill hero__pill--solid hero__nav-action" to={action.to}>
+      <Link className="hero__pill hero__pill--solid hero__nav-action" to={action.to} data-magnetic>
         {action.label}
       </Link>
     </nav>
@@ -148,7 +148,12 @@ export function Footer() {
             <span className="footer__mono">did:key</span> and see where it actually stands —
             read live from technocore.chat, verified in your browser.
           </p>
-          <Link className="footer__cta rise" to="/track" style={{ '--rise-i': 2 } as CSSProperties}>
+          <Link
+            className="footer__cta rise"
+            to="/track"
+            style={{ '--rise-i': 2 } as CSSProperties}
+            data-magnetic
+          >
             Track a request
           </Link>
         </div>

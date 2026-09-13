@@ -14,13 +14,14 @@
 // between the letters, which is exactly the overlap wanted and impossible to get
 // wrong.
 
-import { lazy, Suspense, useEffect, type CSSProperties } from 'react';
+import { lazy, Suspense, useEffect, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { Footer, HeroNav } from '../components/Shell';
 import { PAGES } from '../pages';
 import { useLivePulse, type LiveFeed } from '../hero/useLivePulse';
 import { num } from '../format';
 import { useCountUp, useInView, usePrefersReducedMotion } from '../motion';
+import { startPointerField, tiltProps } from '../pointer';
 import '../styles/hero.css';
 
 /** Three.js is the City's weight and the hero's; neither makes the Tracker pay. */
@@ -38,10 +39,36 @@ export default function Landing() {
     return () => document.body.classList.remove('on-black');
   }, []);
 
+  // One pointer field for the whole page. It no-ops on touch and under reduced
+  // motion, so nothing below needs to ask again.
+  useEffect(
+    () =>
+      startPointerField({
+        glow: () => document.querySelector<HTMLElement>('.cursor-glow'),
+        grids: () => Array.from(document.querySelectorAll<HTMLElement>('[data-grid]')),
+        magnets: () => Array.from(document.querySelectorAll<HTMLElement>('[data-magnetic]')),
+      }),
+    []
+  );
+
+  // The wordmark is above the fold, so its reveal is "on mount" rather than on
+  // scroll. A frame's wait lets the first paint happen at the start state.
+  const [lit, setLit] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setLit(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
   return (
     <div className="landing">
+      {/* A light, not a layer: it blends with `screen`, so it lifts the black
+          and the hairlines under it and leaves white type exactly as white. That
+          is also what lets one fixed element cover sections that each build
+          their own stacking context. */}
+      <div className="cursor-glow" aria-hidden="true" />
+
       <div className="hero">
-        <div className="hero__grid" aria-hidden="true" />
+        <div className="hero__grid" data-grid aria-hidden="true" />
         <div className="hero__glow" aria-hidden="true" />
 
         <svg className="hero__arc" viewBox="0 0 1000 1000" aria-hidden="true">
@@ -55,8 +82,16 @@ export default function Landing() {
           />
         </svg>
 
-        <div className="hero__wordmark" aria-hidden="true">
-          <span>Foolscap</span>
+        <div className="hero__wordmark" data-in={lit} aria-hidden="true">
+          <span>
+            {/* Per letter, not per word — FOOLSCAP is one word, and a one-unit
+                stagger is just the block reveal again. */}
+            {'Foolscap'.split('').map((letter, i) => (
+              <span className="word" key={i} style={{ '--word-i': i } as CSSProperties}>
+                {letter}
+              </span>
+            ))}
+          </span>
         </div>
 
         <Suspense fallback={null}>
@@ -83,7 +118,7 @@ export default function Landing() {
               <p className="hero__copy-strong">
                 No key, no wallet, nothing posted on your behalf.
               </p>
-              <Link className="hero__pill hero__pill--solid" to="/track">
+              <Link className="hero__pill hero__pill--solid" to="/track" data-magnetic>
                 Track a request
               </Link>
             </div>
@@ -122,7 +157,7 @@ function About() {
 
   return (
     <section className="about" aria-labelledby="about-title" ref={ref} data-in={seen}>
-      <div className="about__grid" aria-hidden="true" />
+      <div className="about__grid" data-grid aria-hidden="true" />
 
       <div className="about__inner">
         {/* Eyebrow and heading left, the argument right. The three are grid
@@ -131,8 +166,12 @@ function About() {
             than by a padding that guesses the eyebrow's height. */}
         <div className="about__head">
           <p className="about__eyebrow rise">The problem</p>
-          <h2 className="about__title rise" id="about-title" style={rise(1)}>
-            The network forgets.
+          <h2 className="about__title" id="about-title">
+            {'The network forgets.'.split(' ').map((word, i) => (
+              <span className="word" key={i} style={{ '--word-i': i } as CSSProperties}>
+                {word}{' '}
+              </span>
+            ))}
           </h2>
 
           <div className="about__copy rise" style={rise(2)}>
@@ -152,7 +191,9 @@ function About() {
       {/* A band rather than a column: these are the section's evidence, and
           hairlines the full width of the page say so more plainly than a
           heading would. */}
-      <div className="about__band rise" ref={bandRef} style={rise(3)}>
+      {/* The rules draw in from the left before the figures move, so the band
+          is built and then filled rather than both at once. */}
+      <div className="about__band" ref={bandRef} data-in={bandSeen}>
         <ul className="about__stats">
           {STATS.map((stat) => (
             <li className="about__stat" key={stat.label}>
@@ -179,7 +220,9 @@ function About() {
 const rise = (index: number) => ({ '--rise-i': index }) as CSSProperties;
 
 function Figure({ value, unit, active }: { value: number; unit?: string; active: boolean }) {
-  const shown = useCountUp(value, active);
+  // BAND_DRAW later than the band's own reveal: the hairlines finish, then the
+  // numbers start.
+  const shown = useCountUp(value, active, 900, BAND_DRAW);
   return (
     <span className="about__figure">
       {num.format(shown)}
@@ -192,6 +235,9 @@ function Figure({ value, unit, active }: { value: number; unit?: string; active:
     </span>
   );
 }
+
+/** How long the band's hairlines take to draw, in ms. Mirrors the stylesheet. */
+const BAND_DRAW = 500;
 
 const STATS: { value: number; unit?: string; label: string }[] = [
   {
@@ -239,7 +285,7 @@ function Tools() {
 
   return (
     <section className="tools" aria-labelledby="tools-title" ref={ref} data-in={seen}>
-      <div className="tools__grid" aria-hidden="true" />
+      <div className="tools__grid" data-grid aria-hidden="true" />
 
       <div className="tools__inner">
         <p className="tools__eyebrow rise">The tools</p>
@@ -257,6 +303,7 @@ function Tools() {
               key={page.id}
               data-available={page.available}
               style={rise(3 + i)}
+              {...(page.available ? tiltProps() : {})}
             >
               <p className="tools__name">
                 {page.available && <span className="hero__dot hero__dot--live" aria-hidden="true" />}
@@ -266,7 +313,7 @@ function Tools() {
               <p className="tools__what">{page.line}</p>
 
               {page.available ? (
-                <Link className="hero__pill hero__pill--ghost tools__open" to={page.path}>
+                <Link className="hero__pill hero__pill--ghost tools__open" to={page.path} data-magnetic>
                   Open {page.label}
                 </Link>
               ) : (
@@ -297,7 +344,7 @@ function LiveCard({ feed }: { feed: LiveFeed }) {
           : 'Live';
 
   return (
-    <aside className="hero__card" aria-label="Live from technocore.chat">
+    <aside className="hero__card" aria-label="Live from technocore.chat" {...tiltProps()}>
       <p className="hero__card-state">
         <span className={`hero__dot hero__dot--${feed.state}`} aria-hidden="true" />
         {label}
@@ -321,7 +368,7 @@ function LiveCard({ feed }: { feed: LiveFeed }) {
           : 'One room every eight seconds. Each point that lights is one message whose signature verified.'}
       </p>
 
-      <Link className="hero__pill hero__pill--ghost" to="/city">
+      <Link className="hero__pill hero__pill--ghost" to="/city" data-magnetic>
         Open the city
       </Link>
     </aside>

@@ -28,6 +28,7 @@
 
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { pointerWithin } from '../pointer';
 
 export interface SignatureSphereProps {
   /** Register for verified-message counts. Each one lights a point. */
@@ -49,6 +50,12 @@ const FLARE_BACK = 1.1;
 const FLARE_DRIFT = 0.6;
 
 const FLARE_GAP_MS = [900, 2400] as const;
+
+/** Radians a second the sphere turns at rest. */
+const SPIN = 0.055;
+/** ...and with the pointer over it. A fifth faster, eased into over a second. */
+const SPIN_ATTENDED = SPIN * 1.2;
+const SPIN_EASE = 0.06;
 const FLARE_BURST = [1, 3] as const;
 
 const VERTEX = /* glsl */ `
@@ -236,6 +243,18 @@ export default function SignatureSphere({ subscribe, reducedMotion }: SignatureS
     let frame = 0;
     let previous = performance.now();
     let dirty = true;
+    let spin = SPIN;
+    // The host's box, cached. Reading it inside the draw loop would be a layout
+    // read every frame, in the same frame the pointer field is writing custom
+    // properties — which is a forced synchronous recalculation of the whole
+    // page, sixty times a second, to answer a question that changes only when
+    // the page scrolls or resizes.
+    let hostBox: DOMRect | null = null;
+    let boxStale = true;
+    const markStale = () => {
+      boxStale = true;
+    };
+    window.addEventListener('scroll', markStale, { passive: true });
 
     // --- sizing ------------------------------------------------------------
     const resize = () => {
@@ -248,6 +267,7 @@ export default function SignatureSphere({ subscribe, reducedMotion }: SignatureS
       // Points scale with the sphere, so a small sphere is not a coarse one.
       material.uniforms.uScale.value = height / 620;
       material.uniforms.uPixelRatio.value = renderer.getPixelRatio();
+      boxStale = true;
       dirty = true;
     };
     const observer = new ResizeObserver(resize);
@@ -263,7 +283,15 @@ export default function SignatureSphere({ subscribe, reducedMotion }: SignatureS
       let moved = false;
 
       if (!reducedMotion) {
-        points.rotation.y += dt * 0.055;
+        // Eased rather than switched: a rotation that changed speed the instant
+        // the pointer crossed the edge would read as a glitch, not as attention.
+        if (boxStale) {
+          hostBox = host.getBoundingClientRect();
+          boxStale = false;
+        }
+        const wanted = hostBox && pointerWithin(hostBox) ? SPIN_ATTENDED : SPIN;
+        spin += (wanted - spin) * SPIN_EASE;
+        points.rotation.y += dt * spin;
         moved = true;
 
         if (time >= nextFlareAt) {
@@ -318,6 +346,7 @@ export default function SignatureSphere({ subscribe, reducedMotion }: SignatureS
 
     return () => {
       cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', markStale);
       observer.disconnect();
       unsubscribe();
       geometry.dispose();

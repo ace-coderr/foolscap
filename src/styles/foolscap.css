@@ -295,8 +295,29 @@ a:focus-visible {
   transform: none;
 }
 
+/* Headlines arrive a word at a time rather than as a block. Same idea as
+ * .rise, further and slower per unit, and the index is again just a delay. */
+.word {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 420ms ease-out,
+    transform 420ms ease-out;
+  transition-delay: calc(var(--word-i, 0) * 50ms);
+  /* A split word is still a word: keep the spaces from collapsing and the
+   * inline-blocks from being broken across lines mid-letter. */
+  white-space: pre;
+}
+
+[data-in='true'] .word {
+  opacity: 1;
+  transform: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .rise {
+  .rise,
+  .word {
     opacity: 1;
     transform: none;
     transition: none;
@@ -921,6 +942,7 @@ body:not(.on-black) .footer {
 
 .footer__cta {
   display: inline-block;
+  transform: translate3d(var(--mx, 0), var(--my, 0), 0);
   border-radius: 999px;
   padding: 0.62rem 1.25rem;
   background: #fff;
@@ -936,7 +958,8 @@ body:not(.on-black) .footer {
   transition:
     background-color 120ms ease,
     border-color 120ms ease,
-    color 120ms ease;
+    color 120ms ease,
+    transform 260ms ease-out;
 }
 
 /* Inverted, not dimmed: the same pill with its two colours swapped. */
@@ -1628,5 +1651,45 @@ body:not(.on-black) .footer {
   .footer__link::after,
   .footer__wordmark {
     transition: none;
+  }
+}
+
+/* ------------------------------------------------------------- cursor glow */
+
+/* A light rather than a layer.
+ *
+ * `screen` is doing real work here: the sections each build a stacking context,
+ * so no ordinary element can be slipped between a section's grid and its
+ * content. Blending sidesteps the problem — the glow sits above everything and
+ * still reads as underneath, because screen against white type is white and
+ * against black is +6%. It lifts the ground and leaves the words alone.
+ *
+ * .landing isolates so the blend cannot escape to the rest of the document. */
+
+.cursor-glow {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 420px;
+  height: 420px;
+  margin: -210px 0 0 -210px;
+  z-index: 40;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background: radial-gradient(
+    circle closest-side,
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 255, 255, 0.035) 45%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  opacity: var(--glow-on, 0);
+  transition: opacity 220ms ease;
+  transform: translate3d(var(--gx, -9999px), var(--gy, -9999px), 0);
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce), (hover: none), (pointer: coarse) {
+  .cursor-glow {
+    display: none;
   }
 }

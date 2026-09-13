@@ -49,6 +49,8 @@
 
 .landing {
   background: #000;
+  /* Keeps the cursor glow's blending inside the page. */
+  isolation: isolate;
 
   /* The page's shared tokens, so the sections below the hero can use them. The
    * hero declares the same three on itself, above, and is left alone: this file
@@ -76,6 +78,50 @@
 body.on-black {
   background: #000;
   padding: 0;
+}
+
+/* The hairlines brighten where the glow passes over them.
+ *
+ * A masked duplicate of the grid, not a per-line calculation: same element, so
+ * `background-size: inherit` and a shared origin make the bright lines land
+ * exactly on the dim ones with nothing to keep in sync.
+ *
+ * 0.085 rather than 0.14 because it is drawn OVER the 0.06 beneath it, and
+ * 0.06 + 0.085 × 0.94 is the 0.14 asked for. The pointer arrives in the layer's
+ * own coordinates as --lx/--ly, which is the one thing JS has to supply. */
+.hero__grid::after,
+.about__grid::after,
+.tools__grid::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.085) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.085) 1px, transparent 1px);
+  background-size: inherit;
+  -webkit-mask-image: radial-gradient(
+    circle 210px at var(--lx, -9999px) var(--ly, -9999px),
+    #000 0%,
+    rgba(0, 0, 0, 0.55) 45%,
+    transparent 78%
+  );
+  mask-image: radial-gradient(
+    circle 210px at var(--lx, -9999px) var(--ly, -9999px),
+    #000 0%,
+    rgba(0, 0, 0, 0.55) 45%,
+    transparent 78%
+  );
+  opacity: var(--glow-on, 0);
+  transition: opacity 220ms ease;
+}
+
+@media (prefers-reduced-motion: reduce), (hover: none), (pointer: coarse) {
+  .hero__grid::after,
+  .about__grid::after,
+  .tools__grid::after {
+    display: none;
+  }
 }
 
 /* ------------------------------------------------------------------ layers */
@@ -303,10 +349,13 @@ body.on-black {
   text-transform: uppercase;
   text-decoration: none;
   white-space: nowrap;
+  /* The pull is a transform, so no other rule may give these one. */
+  transform: translate3d(var(--mx, 0), var(--my, 0), 0);
   transition:
     background-color 120ms ease,
     border-color 120ms ease,
-    color 120ms ease;
+    color 120ms ease,
+    transform 260ms ease-out;
 }
 
 .hero__pill--solid {
@@ -377,6 +426,29 @@ body.on-black {
 }
 
 /* -------------------------------------------------------------- glass card */
+
+/* Catching light, not flipping: four degrees at the corners, and the easing
+ * back is the only part that is animated. While the pointer is on the card the
+ * transition is off, so the tilt tracks the cursor instead of chasing it a
+ * frame behind. */
+.hero__card,
+.tools__card {
+  perspective: 900px;
+  transform-style: preserve-3d;
+  transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+}
+
+.hero__card,
+.tools__card {
+  transition:
+    border-color 140ms ease,
+    transform 400ms ease-out;
+}
+
+.hero__card[data-tilt='on'],
+.tools__card[data-tilt='on'] {
+  transition: border-color 140ms ease;
+}
 
 .hero__card {
   width: 100%;
@@ -569,9 +641,27 @@ body.on-black {
    * stay — a colour change is feedback, not movement — and the underline still
    * appears, it simply does not wipe. */
   .hero__pill,
+  .hero__card,
   .tools__card,
   .tools__name,
   .hero__nav-link::after {
+    transition: none;
+  }
+
+  /* No pull, no tilt, and the band's rules are simply there. */
+  .hero__pill,
+  .footer__cta {
+    transform: none;
+  }
+
+  .hero__card,
+  .tools__card {
+    transform: none;
+  }
+
+  .about__band::before,
+  .about__band::after {
+    transform: scaleX(1);
     transition: none;
   }
 
@@ -704,11 +794,39 @@ body.on-black {
 /* Hairlines the full width of the section, which says "this is the evidence"
  * more plainly than a heading would. The figures inside keep the same measure
  * and gutter as the prose above, so the first column still lines up with it. */
+/* The rules are drawn rather than bordered, so they can arrive from one end.
+ * 500ms, and the figures start counting as they land — BAND_DRAW in Landing.tsx
+ * is the same number. */
 .about__band {
+  position: relative;
   margin: clamp(3rem, 7vh, 4.5rem) 0 0;
   padding-block: clamp(2.25rem, 5.5vh, 3.5rem);
-  border-top: 1px solid var(--about-rule);
-  border-bottom: 1px solid var(--about-rule);
+}
+
+.about__band::before,
+.about__band::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--about-rule);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 500ms ease-out;
+}
+
+.about__band::before {
+  top: 0;
+}
+
+.about__band::after {
+  bottom: 0;
+}
+
+.about__band[data-in='true']::before,
+.about__band[data-in='true']::after {
+  transform: scaleX(1);
 }
 
 .about__stats {
@@ -898,7 +1016,6 @@ body.on-black {
   border: 1px solid var(--hero-edge);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-  transition: border-color 140ms ease;
 }
 
 /* Only where there is something to open. A card that lit up and then did

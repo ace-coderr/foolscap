@@ -80,7 +80,7 @@ export function useInView<T extends HTMLElement>(): [RefObject<T>, boolean] {
  * reduced motion the target is simply the value from the first render — the
  * figure is the content, and the counting is decoration on top of it.
  */
-export function useCountUp(target: number, active: boolean, duration = 900): number {
+export function useCountUp(target: number, active: boolean, duration = 900, delay = 0): number {
   const reduced = usePrefersReducedMotion();
   const [value, setValue] = useState(() => (reduced ? target : 0));
 
@@ -98,14 +98,16 @@ export function useCountUp(target: number, active: boolean, duration = 900): num
 
     const step = (now: number) => {
       start ??= now;
-      const t = Math.min(1, (now - start) / duration);
+      // The delay is spent here rather than in a setTimeout so the whole thing
+      // runs off one clock and a tab that was backgrounded cannot land halfway.
+      const t = Math.min(1, Math.max(0, now - start - delay) / duration);
       setValue(Math.round(target * (1 - (1 - t) ** 3)));
       if (t < 1) frame = requestAnimationFrame(step);
     };
     frame = requestAnimationFrame(step);
 
     return () => cancelAnimationFrame(frame);
-  }, [target, active, duration, reduced]);
+  }, [target, active, duration, delay, reduced]);
 
   return value;
 }
