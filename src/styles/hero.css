@@ -659,20 +659,44 @@ body.on-black {
   max-width: 20ch;
 }
 
-/* Side by side rather than stacked, and left-anchored: two columns grown to
- * fill the page would be a measure nobody can read. */
-.about__copy {
+/* Heading one side, argument the other, using the width instead of running a
+ * strip down the left of an empty page.
+ *
+ * Three grid children rather than two nested columns, so the heading can be put
+ * on the same ROW as the first paragraph and top-align with it exactly. Nesting
+ * would have meant padding the right column by a guess at the eyebrow's height,
+ * which is wrong the moment the type scale moves. */
+.about__head {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 26rem));
-  justify-content: start;
-  gap: clamp(1.5rem, 3.5vw, 3rem);
+  grid-template-columns: repeat(2, minmax(0, 45%));
+  justify-content: space-between;
+  align-items: start;
+}
+
+.about__eyebrow {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.about__title {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.about__copy {
+  grid-column: 2;
+  grid-row: 2;
   font-size: 15px;
   line-height: 1.66;
-  color: var(--hero-text, rgba(255, 255, 255, 0.75));
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .about__copy p {
-  margin: 0;
+  margin: 0 0 0.95rem;
+}
+
+.about__copy p:last-child {
+  margin-bottom: 0;
 }
 
 /* ------------------------------------------------------------------- stats */
@@ -746,12 +770,14 @@ body.on-black {
   color: var(--about-label);
 }
 
+/* Its own grey, lighter than the one the asterisk and the "not built yet"
+ * labels use: this is a sentence people have to read, not a marker. */
 .about__note {
   max-width: 40rem;
   margin: clamp(1.4rem, 3.5vh, 2.2rem) 0 0;
   font-size: 13px;
   line-height: 1.55;
-  color: var(--about-quiet);
+  color: #9a9a9a;
 }
 
 .about__close {
@@ -766,15 +792,23 @@ body.on-black {
 
 /* ------------------------------------------------------------------ narrow */
 
-@media (max-width: 62rem) {
-  /* Two columns of prose need two columns' worth of page. */
-  .about__copy {
-    grid-template-columns: minmax(0, 34rem);
-    gap: 0.9rem;
-  }
-}
-
 @media (max-width: 56rem) {
+  /* One column, in reading order: eyebrow, heading, argument. */
+  .about__head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .about__eyebrow,
+  .about__title,
+  .about__copy {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .about__title {
+    max-width: 20ch;
+  }
+
   .about__stats {
     grid-template-columns: minmax(0, 1fr);
   }

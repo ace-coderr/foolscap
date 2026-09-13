@@ -1031,12 +1031,18 @@ body:not(.on-black) .footer {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: 1.5rem clamp(1.5rem, 4vw, 3rem);
-  margin-top: clamp(6rem, 17vw, 13rem);
+  /* Enough to separate this from the nav and no more. The band is one thing,
+   * not two stacked with a corridor between them. */
+  margin-top: clamp(2.5rem, 6vw, 4.5rem);
   /* Measured against the wordmark rather than the viewport, because that is
-   * what it has to sit inside. The glyphs occupy the 0.64em above the footer's
-   * edge; 0.36em of padding puts this row in their upper third instead of
-   * across their baseline. */
-  padding-bottom: calc(var(--footer-mark) * 0.43);
+   * what it sits inside rather than above. The letters occupy the 0.647em
+   * above the footer edge; holding this block 0.13em off that edge drops it
+   * across their middle, which is where the reference puts it. At 0.43em it
+   * cleared the top of the word entirely and left a corridor behind it.
+   *
+   * The floor is a page margin: at narrow widths 0.13em of a small wordmark is
+   * not enough space to end a page on. */
+  padding-bottom: max(2rem, calc(var(--footer-mark) * 0.13));
 }
 
 .footer__lockup {
@@ -1122,7 +1128,7 @@ body:not(.on-black) .footer {
   .footer__meta {
     grid-template-columns: minmax(0, 1fr);
     align-items: start;
-    margin-top: clamp(5rem, 26vw, 9rem);
+    margin-top: clamp(2rem, 8vw, 3.5rem);
   }
 
   .footer__refs {

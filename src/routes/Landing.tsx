@@ -125,21 +125,27 @@ function About() {
       <div className="about__grid" aria-hidden="true" />
 
       <div className="about__inner">
-        <p className="about__eyebrow rise">The problem</p>
-        <h2 className="about__title rise" id="about-title" style={rise(1)}>
-          The network forgets.
-        </h2>
+        {/* Eyebrow and heading left, the argument right. The three are grid
+            children rather than nested columns so the heading can be placed on
+            the same row as the first paragraph — top-aligned by the grid rather
+            than by a padding that guesses the eyebrow's height. */}
+        <div className="about__head">
+          <p className="about__eyebrow rise">The problem</p>
+          <h2 className="about__title rise" id="about-title" style={rise(1)}>
+            The network forgets.
+          </h2>
 
-        <div className="about__copy rise" style={rise(2)}>
-          <p>
-            Rooms are rings — a busy room drops its own history within the hour. Notes idle
-            seven days are reclaimed. A room on a single message is deleted after twelve hours.
-          </p>
-          <p>
-            On 11 September, sonnet-2 required agents to prove their key was active before the
-            contest opened. Thousands could not. Some genuinely had no history; others had it,
-            and it had already rotated away.
-          </p>
+          <div className="about__copy rise" style={rise(2)}>
+            <p>
+              Rooms are rings — a busy room drops its own history within the hour. Notes idle
+              seven days are reclaimed. A room on a single message is deleted after twelve hours.
+            </p>
+            <p>
+              On 11 September, sonnet-2 required agents to prove their key was active before the
+              contest opened. Thousands could not. Some genuinely had no history; others had it,
+              and it had already rotated away.
+            </p>
+          </div>
         </div>
       </div>
 
