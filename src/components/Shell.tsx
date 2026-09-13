@@ -4,16 +4,16 @@
 // rest; it never writes a nav link of its own. Ported from js/shell.js, with
 // PAGES still the single source of truth.
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { PAGES, pageById } from '../pages';
 import { REFEREE_DID } from '../lib/contest.ts';
 
-function Nav({ currentId }: { currentId: string }) {
+function Nav({ currentId, over }: { currentId: string; over: boolean }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <nav className="nav" aria-label="Foolscap">
+    <nav className={over ? 'nav nav--over' : 'nav'} aria-label="Foolscap">
       <div className="nav__inner">
         <Link className="nav__mark" to="/">
           Foolscap
@@ -86,24 +86,52 @@ function Colophon() {
 }
 
 /**
+ * How the page holds its content.
+ *
+ * `column` is every page: a measure-wide column under the header. `bleed` is the
+ * City and, so far, only the City — a canvas under everything with the header
+ * floating over it and the content in a panel. The variant changes the frame the
+ * page sits in and nothing else; the nav, the header and the colophon are the
+ * same parts from the same source either way.
+ */
+export type ShellVariant = 'column' | 'bleed';
+
+/**
  * Wrap a route in the shell.
  *
  * `page` names an entry in PAGES; the header comes from there, so the nav label
  * and the page title cannot drift apart.
  */
-export function Shell({ page, children }: { page: string; children: ReactNode }) {
+export function Shell({
+  page,
+  variant = 'column',
+  children,
+}: {
+  page: string;
+  variant?: ShellVariant;
+  children: ReactNode;
+}) {
   const current = pageById(page);
+
+  // Above the guard below, so the hook runs on every render this component has.
+  // The tab title is part of the page header, so it comes from the same place —
+  // routing between pages without it would leave every tab saying "City".
+  useEffect(() => {
+    if (current) document.title = `${current.label} · Foolscap`;
+  }, [current]);
 
   if (!current) {
     // Better a nav with nothing marked than a silent mismatch with the map.
     throw new Error(`Shell: no page registered as "${page}".`);
   }
 
+  const bleed = variant === 'bleed';
+
   return (
     <>
-      <Nav currentId={current.id} />
-      <main className="shell">
-        <header className="page-header">
+      <Nav currentId={current.id} over={bleed} />
+      <main className={bleed ? 'shell shell--bleed' : 'shell'}>
+        <header className={bleed ? 'page-header page-header--float' : 'page-header'}>
           <p className="page-header__eyebrow">{current.eyebrow}</p>
           <h1 className="page-header__title">{current.title}</h1>
           <p className="page-header__line">{current.line}</p>

@@ -773,10 +773,429 @@ a:focus-visible {
   color: var(--ink-mid);
 }
 
+/* -------------------------------------------------------------- the city */
+
+/* The one page that is not a column. A canvas fills the frame, the page header
+ * floats over it, and the content sits in a panel on the right. Everything the
+ * canvas draws is also in that panel as text — the list is not a fallback, it is
+ * the same page, and the canvas is the part that is allowed to be missing. */
+
+.shell--bleed {
+  max-width: none;
+  /* Out past the body's gutter, and up under the nav, so the canvas runs to
+   * every edge and the bar sits over it. */
+  margin-inline: calc(var(--space) * -1);
+  margin-top: calc(var(--nav-height) * -1);
+  height: 100dvh;
+  min-height: 32rem;
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Over the canvas, so it is translucent and blurred rather than opaque. */
+.nav--over {
+  background: color-mix(in srgb, var(--paper-raised) 85%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.page-header--float {
+  position: absolute;
+  z-index: 2;
+  top: var(--nav-height);
+  left: 0;
+  max-width: 27rem;
+  padding: var(--space);
+  /* The header is a caption on the picture; dragging through it orbits. */
+  pointer-events: none;
+}
+
+.page-header--float .page-header__line {
+  font-size: var(--t-small);
+}
+
+.city {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 25rem;
+}
+
+/* Under everything, including the panel: the city carries on behind it. */
+.city__stage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.city__gl {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* The wheel zooms the city rather than scrolling the page. */
+  touch-action: none;
+}
+
+.city__labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.city__label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------- city panel */
+
+.panel {
+  grid-column: 2;
+  z-index: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(var(--nav-height) + var(--space)) var(--space) var(--space-2);
+  background: color-mix(in srgb, var(--paper-raised) 92%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-left: 1px solid var(--rule);
+  font-size: var(--t-small);
+  line-height: 1.55;
+}
+
+.panel > * + * {
+  margin-top: var(--space);
+  padding-top: var(--space);
+  border-top: 1px solid var(--rule);
+}
+
+/* The one answer on the page. */
+.answer {
+  margin: 0;
+  font-size: var(--t-answer);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.answer--waiting {
+  color: var(--ink-faint);
+  font-size: var(--t-h1);
+}
+
+.panel__caption {
+  margin: var(--space-half) 0 0;
+  color: var(--ink-mid);
+}
+
+.panel__caption--warn {
+  color: var(--warn);
+}
+
+.panel__caption a {
+  color: inherit;
+}
+
+.feed {
+  margin: var(--space) 0 0;
+  color: var(--ink-faint);
+}
+
+.feed--warn {
+  color: var(--warn);
+}
+
+.feed--alarm {
+  color: var(--alarm);
+}
+
+.panel__counts {
+  margin: var(--space) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4em;
+  color: var(--ink-mid);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A 6px square, and the only place these colours appear in the panel other than
+ * on the state word itself. State is marked, never used as decoration. */
+.chip__dot,
+.rooms__dot,
+.legend__swatch {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: 0 0 auto;
+  background: var(--ink-faint);
+  align-self: center;
+}
+
+.chip--live .chip__dot,
+.rooms__dot--live,
+.legend__swatch--live {
+  background: var(--accent);
+}
+
+.chip--quiet .chip__dot,
+.rooms__dot--quiet {
+  background: var(--warn);
+}
+
+.chip--failing .chip__dot,
+.rooms__dot--failing {
+  background: var(--alarm);
+}
+
+.rooms__dot--unwatched {
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+}
+
+.panel__title {
+  margin: 0 0 var(--space-half);
+  font-size: var(--t-micro);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space);
+}
+
+.panel__title-note {
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+/* ----------------------------------------------------------------- legend */
+
+.legend {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  gap: var(--space-half) var(--space);
+}
+
+.legend dt {
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.legend dd {
+  margin: 0;
+  color: var(--ink-mid);
+}
+
+.legend__key--live {
+  color: var(--accent);
+}
+
+.legend__key--quiet {
+  color: var(--warn);
+}
+
+.legend__key--failing {
+  color: var(--alarm);
+}
+
+/* ----------------------------------------------------------- room detail */
+
+.detail__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space);
+}
+
+.detail__state {
+  margin: 0;
+  font-size: var(--t-h2);
+  color: var(--ink-faint);
+}
+
+.detail__state--live {
+  color: var(--accent);
+}
+
+.detail__state--quiet {
+  color: var(--warn);
+}
+
+.detail__state--failing {
+  color: var(--alarm);
+}
+
+.detail__clear {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--ink-faint);
+  font-family: var(--serif);
+  font-size: var(--t-small);
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+  cursor: pointer;
+}
+
+.detail__name {
+  margin: var(--space-half) 0 var(--space);
+  color: var(--ink);
+}
+
+.facts__note {
+  display: block;
+  color: var(--ink-faint);
+}
+
+.detail__problem {
+  margin: var(--space) 0 0;
+  color: var(--alarm);
+}
+
+.detail__topic {
+  margin-top: var(--space);
+  padding: var(--space-half) var(--space);
+  background: var(--paper-sunk);
+  border-left: 2px solid var(--rule-strong);
+}
+
+.detail__topic-label {
+  margin: 0;
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+}
+
+.detail__topic-text {
+  margin: var(--space-half) 0 0;
+  color: var(--ink-mid);
+}
+
+/* ------------------------------------------------------------- room list */
+
+.rooms {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rooms__row {
+  display: grid;
+  grid-template-columns: 0.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6em;
+  width: 100%;
+  padding: 0.3rem 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-mid);
+  font-family: var(--serif);
+  font-size: var(--t-small);
+  text-align: left;
+  cursor: pointer;
+}
+
+.rooms__row:hover {
+  color: var(--ink);
+}
+
+.rooms__row[aria-pressed='true'] {
+  color: var(--ink);
+  border-bottom-color: var(--rule-strong);
+}
+
+.rooms__row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.rooms__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rooms__volume {
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------- narrow */
+
+/* Under 62rem the panel cannot be a column beside the canvas without squeezing
+ * both. The canvas takes the top half and the panel scrolls under it. */
+@media (max-width: 62rem) {
+  /* Stacked, and in flow rather than absolute — the canvas cannot sit under the
+   * page header here, because there is no width to put the header beside. */
+  .city {
+    display: flex;
+    flex-direction: column;
+    padding-top: calc(var(--nav-height) + 4.8rem);
+  }
+
+  .city__stage {
+    position: relative;
+    inset: auto;
+    flex: 0 0 38dvh;
+    min-height: 14rem;
+  }
+
+  .panel {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding-top: var(--space);
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .page-header--float {
+    max-width: none;
+  }
+
+  .page-header--float .page-header__title {
+    font-size: var(--t-h2);
+  }
+
+  .page-header--float .page-header__line {
+    display: none;
+  }
+
+  .legend {
+    grid-template-columns: 6.5rem 1fr;
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
   .progress__fill {
+    transition: none;
+  }
+
+  /* The canvas honours this itself — no entry animation, no transitions between
+   * readings, no damping on the controls. Nothing here can reach into WebGL, so
+   * this block is only the DOM half; see CityCanvas.tsx for the rest. */
+  .city__label {
     transition: none;
   }
 }

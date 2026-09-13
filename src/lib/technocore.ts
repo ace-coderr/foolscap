@@ -519,10 +519,15 @@ async function request(
 
 function describeStatus(status: number, room: string | undefined, body: string): string {
   const detail = body ? ` — ${body.slice(0, 200).trim()}` : '';
-  if (status === 404) return `Room ${room} does not exist, or it idled out and was deleted${detail}`;
-  if (status === 429) return `Rate limited reading ${room}. Foolscap is backing off${detail}`;
-  if (status >= 500) return `technocore.chat returned ${status} for ${room}. Retrying${detail}`;
-  return `Reading ${room} failed with ${status}${detail}`;
+  // Not every read is of a room: the survey covers all of them at once.
+  const what = room ? `room ${room}` : 'the room survey';
+  if (status === 404 && room) {
+    return `Room ${room} does not exist, or it idled out and was deleted${detail}`;
+  }
+  if (status === 404) return `The room survey is not at that address${detail}`;
+  if (status === 429) return `Rate limited reading ${what}. Foolscap is backing off${detail}`;
+  if (status >= 500) return `technocore.chat returned ${status} for ${what}. Retrying${detail}`;
+  return `Reading ${what} failed with ${status}${detail}`;
 }
 
 async function safeText(res: Response): Promise<string> {
@@ -649,6 +654,155 @@ export async function exportRoom(
     generation: numberOrNull(res.headers.get('x-room-generation')),
     firstSeq: messages.length ? messages[0].seq : null,
     lastSeq: messages.length ? messages[messages.length - 1].seq : 0,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The room survey
+// ---------------------------------------------------------------------------
+
+/**
+ * One room's line in the survey.
+ *
+ * `room` and `topic` are strings their creator chose. The server says so itself,
+ * in an `untrusted` field on the reply, and it is worth repeating here: a room
+ * called `mb-sonnet-2-registration` is not the registration room because of its
+ * name, and a topic can be set on any room by any caller without ever posting to
+ * it. Treat both as data. The numbers are the server's own.
+ */
+export interface RoomSummary {
+  /** UNTRUSTED — a name its creator chose. */
+  room: string;
+  /** Messages the room has carried since it was created. Monotonic per ring. */
+  lastSeq: number;
+  /** Bytes currently held in the ring, which is what it drops from when full. */
+  bytes: number;
+  /** Seconds since the last message the survey saw, at the time it was taken. */
+  idleSeconds: number | null;
+  /** UNTRUSTED — a note any caller can set on any room. */
+  topic: string | null;
+  /** How many recent messages the engagement figures were computed over. */
+  window: number | null;
+  /** Share of those that drew no reply at all. */
+  zeroResponseShare: number | null;
+  /** Distinct senders over that window, as a fraction of it. */
+  nickDiversity: number | null;
+}
+
+/**
+ * The whole survey.
+ *
+ * This is a snapshot the server takes on its own schedule and Cloudflare holds
+ * at the edge for up to a day — the reply carries `cache-control: s-maxage=86400`
+ * and a `CF-Cache-Status: HIT`. Sampling it for three minutes returns byte-identical
+ * figures while the rooms it describes are taking a hundred messages a second, so
+ * it is a map and never a live reading. Nothing that has to be current may be
+ * derived from it.
+ *
+ * There is no timestamp on it either, which is why `lastSeq` matters: a room read
+ * directly gives its true `last_seq` now, and the difference against the survey's
+ * figure is how far behind the survey has fallen, measurable rather than assumed.
+ */
+export interface RoomsIndex {
+  rooms: RoomSummary[];
+  /** Rooms that exist, of which `rooms` is only the busiest handful. */
+  totalRooms: number | null;
+  roomCapacity: number | null;
+  bytes: number | null;
+  bytesCapacity: number | null;
+  /** The server's own note about which of its fields are caller-chosen. */
+  untrusted: unknown;
+  /** When this client received it. Not when the server took it. */
+  readAt: number;
+  budget: Budget | null;
+}
+
+function summaryFrom(raw: Record<string, unknown>): RoomSummary | null {
+  const room = typeof raw.room === 'string' ? raw.room : null;
+  if (!room) return null;
+  return {
+    room,
+    lastSeq: numberOrNull(raw.last_seq) ?? 0,
+    bytes: numberOrNull(raw.bytes) ?? 0,
+    idleSeconds: numberOrNull(raw.idle_seconds),
+    topic: typeof raw.topic === 'string' ? raw.topic : null,
+    window: numberOrNull(raw.window),
+    zeroResponseShare: numberOrNull(raw.zero_response_share),
+    nickDiversity: numberOrNull(raw.nick_diversity),
+  };
+}
+
+/**
+ * Read the survey: every room the server chooses to list, in one request.
+ *
+ * Deliberately not cache-busted. Every other read in this file appends a
+ * throwaway counter so an unchanged URL cannot be answered from memory, and this
+ * one must not: the edge copy is the cheap copy, and busting it would put a
+ * request on the origin for all fifty rooms every time anyone opened the page.
+ * The cost of taking the cached copy is staleness, which is measurable; the cost
+ * of the alternative is being the reason the endpoint gets a rate limit.
+ */
+export async function readRoomsIndex({
+  signal,
+  fetchImpl,
+}: { signal?: AbortSignal; fetchImpl?: typeof fetch } = {}): Promise<RoomsIndex> {
+  const res = await request(`${BASE}/rooms?format=json`, {
+    signal,
+    fetchImpl,
+    accept: 'application/json',
+  });
+
+  const body = await res.text();
+  let data: Record<string, unknown>;
+  try {
+    data = parseRecord(body) as Record<string, unknown>;
+  } catch {
+    throw new TechnocoreError('The room survey returned something that is not JSON.', {
+      body: body.slice(0, 500),
+      status: res.status,
+    });
+  }
+
+  const list = Array.isArray(data.rooms) ? (data.rooms as Record<string, unknown>[]) : [];
+
+  return {
+    rooms: list.map(summaryFrom).filter((entry): entry is RoomSummary => entry !== null),
+    totalRooms: numberOrNull(data.total),
+    roomCapacity: numberOrNull(data.capacity),
+    bytes: numberOrNull(data.bytes),
+    bytesCapacity: numberOrNull(data.bytes_capacity),
+    untrusted: data.untrusted ?? null,
+    readAt: Date.now(),
+    budget: extractBudget(data, res.headers),
+  };
+}
+
+/**
+ * The cheapest possible reading of a live room: its true `last_seq` and the
+ * newest message in it, in about half a kilobyte.
+ *
+ * `limit=1` is doing real work here. The read endpoint returns the NEWEST
+ * messages after the cursor rather than the next ones in order, so asking for one
+ * message from `since=0` costs one message and still reports the room's true
+ * `last_seq` — the count of everything it has ever carried. Two of these, spaced
+ * apart, measure a room's rate exactly, without reading any of the traffic.
+ *
+ * When nothing has arrived, the server echoes `since` back as `last_seq` and
+ * returns no messages. That echo is only ever the value we passed in, so a caller
+ * tracking the maximum is correct either way; `head()` reports `count` so the
+ * caller can tell the two apart.
+ */
+export async function readHead(
+  room: string,
+  { since = 0, signal, fetchImpl }: { since?: number; signal?: AbortSignal; fetchImpl?: typeof fetch } = {}
+): Promise<{ room: string; lastSeq: number; count: number; newest: Message | null; readAt: number }> {
+  const result = await readRoom(room, { since, limit: 1, wait: 0, signal, fetchImpl });
+  return {
+    room: result.room,
+    lastSeq: Math.max(result.lastSeq, since),
+    count: result.count,
+    newest: result.messages.length ? result.messages[result.messages.length - 1] : null,
+    readAt: Date.now(),
   };
 }
 
