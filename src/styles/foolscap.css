@@ -1160,16 +1160,76 @@ body:not(.on-black) .footer {
 /* Only the prose links. A blanket `.footer a` outranks .footer__cta and
  * .footer__link on specificity, which paints the pill white on white and
  * underlines six nav items that are not prose. */
-.footer__by a,
 .footer__links a {
   color: rgba(255, 255, 255, 0.82);
   text-decoration: underline;
   text-underline-offset: 0.16em;
 }
 
-.footer__by a:hover,
 .footer__links a:hover {
   color: #fff;
+}
+
+/* ------------------------------------------------------------------ byline */
+
+/* The signature. Bare until it is pointed at, and then three things arrive
+ * together over the same 160ms: a rule wipes in from the left, the name picks
+ * up an accent glow, and the arrow steps away from it.
+ *
+ * The name and the arrow are separate spans so the rule underlines the name
+ * alone rather than running out under the arrow, while both remain inside the
+ * one anchor and so inside one click target. */
+
+.byline,
+.byline:hover {
+  color: #fff;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.byline__name {
+  position: relative;
+  display: inline-block;
+  /* line-height 1 puts the box bottom one descender under the baseline. For
+   * the 13px Chakra Petch this sits in that measured 2px, so the rule below
+   * takes another pixel to land at the 3px wanted. */
+  line-height: 1;
+  transition: text-shadow 160ms ease-out;
+}
+
+.byline:hover .byline__name {
+  text-shadow: 0 0 12px rgba(63, 179, 196, 0.5);
+}
+
+.byline__name::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 160ms ease-out;
+}
+
+.byline:hover .byline__name::after {
+  transform: scaleX(1);
+}
+
+/* --footer-faint rather than a --grey-dim, which this stylesheet does not
+ * have; it is the dim grey the footer already uses for secondary marks. */
+.byline__arrow {
+  display: inline-block;
+  margin-left: 0.28em;
+  font-size: 0.88em;
+  color: var(--footer-faint);
+  transition: transform 160ms ease-out;
+}
+
+.byline:hover .byline__arrow {
+  transform: translate(2px, -2px);
 }
 
 .footer a:focus-visible {
@@ -1649,8 +1709,16 @@ body:not(.on-black) .footer {
 @media (prefers-reduced-motion: reduce) {
   .footer__cta,
   .footer__link::after,
-  .footer__wordmark {
+  .footer__wordmark,
+  .byline__name,
+  .byline__name::after,
+  .byline__arrow {
     transition: none;
+  }
+
+  /* The rule and the glow still arrive; the arrow does not travel. */
+  .byline:hover .byline__arrow {
+    transform: none;
   }
 }
 
