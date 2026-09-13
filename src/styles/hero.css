@@ -562,9 +562,12 @@ body.on-black {
     padding-top: 21vh;
   }
 
+  /* A phone hero has no room to spare: the wordmark ends at 234 and the copy
+   * starts at 295, so the figure is sized and placed to drop its head into that
+   * gap rather than to fill the screen. Below it the copy wins. */
   .hero__agent {
-    top: 30vh;
-    transform: translate(-50%, -42%);
+    top: 31.5vh;
+    transform: translate(-50%, -50%);
   }
 
   .hero__glow {
@@ -611,7 +614,7 @@ body.on-black {
   }
 
   .hero__agent {
-    width: min(74vw, 34dvh, 300px);
+    width: min(46vw, 28dvh, 180px);
   }
 
   .hero__foot {

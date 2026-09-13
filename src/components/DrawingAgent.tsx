@@ -1,9 +1,13 @@
-// DrawingAgent.tsx — a constructed intelligence, drawn and unmade on a loop.
+// DrawingAgent.tsx — a robot head, drawn and unmade on a loop.
 //
-// Head and shoulders in three-quarter turn, as an engineering schematic rather
-// than a face: contour for the skull, jaw, neck and shoulder, a faceted web
-// across the cranium, a few panel seams, and one sensor. It draws in the order
-// it would be constructed, holds, and is swept away in the same order.
+// Twelve strokes: a rounded head, a faceplate inset evenly inside it,
+// headphones over the top with an earcup each side, an antenna, two eyes and a
+// mouth. It draws in the order it would be built, holds, and is swept away in
+// the same order.
+//
+// Line art rather than a schematic. Everything is a rounded rectangle, a circle,
+// or one arc — no construction lines, no detail for its own sake. The whole
+// figure is a dozen shapes a child would recognise.
 //
 // ---------------------------------------------------------------------------
 // THE INK, unchanged from the sonnet this replaces, because it was right.
@@ -54,9 +58,6 @@ const INK_DRY = 'rgba(255, 255, 255, 0.30)';
  */
 const EYE = '#3fb3c4';
 
-const HEAVY = 1.8;
-const LIGHT = 1;
-
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 // ---------------------------------------------------------------------------
@@ -106,6 +107,19 @@ class Pen {
     return this;
   }
 
+  /**
+   * A circular arc to a point. The caller states its length, because for the
+   * quarter-circles this figure is made of it is exactly πr/2 and working it
+   * out from the endpoints would be arithmetic in service of nothing.
+   */
+  arcTo(r: number, sweep: 0 | 1, x: number, y: number, arcLen: number): this {
+    this.parts.push(`A${r} ${r} 0 0 ${sweep} ${x} ${y}`);
+    this.len += arcLen;
+    this.x = x;
+    this.y = y;
+    return this;
+  }
+
   /** A full circle, as two arcs. Its length is known exactly. */
   circle(cx: number, cy: number, r: number): this {
     this.parts.push(
@@ -135,83 +149,117 @@ const stroke = (width: number, build: (pen: Pen) => void, eye = false): Stroke =
   return { d: pen.d(), len: pen.len, width, eye };
 };
 
-const chord = (x1: number, y1: number, x2: number, y2: number): Stroke =>
-  stroke(LIGHT, (p) => p.move(x1, y1).line(x2, y2));
+/** A quarter circle's length. Every corner in the figure is one of these. */
+const q = (r: number) => (Math.PI * r) / 2;
+
+/** A rounded rectangle, clockwise from the top-left corner, as one stroke. */
+const box = (width: number, x: number, y: number, w: number, h: number, r: number): Stroke =>
+  stroke(width, (p) =>
+    p
+      .move(x + r, y)
+      .line(x + w - r, y)
+      .arcTo(r, 1, x + w, y + r, q(r))
+      .line(x + w, y + h - r)
+      .arcTo(r, 1, x + w - r, y + h, q(r))
+      .line(x + r, y + h)
+      .arcTo(r, 1, x, y + h - r, q(r))
+      .line(x, y + r)
+      .arcTo(r, 1, x + r, y, q(r))
+  );
 
 // ---------------------------------------------------------------------------
 // The figure, in construction order
 // ---------------------------------------------------------------------------
 
+// The head is 156 x 160 — square enough to read as one — in a 300 x 400 frame.
+// Everything else is placed off its edges rather than by eye, so the faceplate's
+// border is even on all four sides by construction and not by adjustment.
+const HEAD_X = 72;
+const HEAD_Y = 154;
+const HEAD_W = 156;
+const HEAD_H = 160;
+const HEAD_R = 34;
+/** The faceplate's inset, and therefore its border, on every side. */
+const INSET = 22;
+
+const PLATE_X = HEAD_X + INSET;
+const PLATE_Y = HEAD_Y + INSET;
+const PLATE_W = HEAD_W - INSET * 2;
+const PLATE_H = HEAD_H - INSET * 2;
+const PLATE_R = 22;
+
+const HEAVY = 2;
+const PLATE = 1.6;
+const FINE = 1.4;
+
 /**
- * Skull, then jaw and neck, then shoulder, then the web across the cranium,
- * then the seams, and the sensor last — the order it would be built in, which
- * is also the order it is taken apart in.
+ * Head, faceplate, headphones, earcups, antenna, eyes, mouth — which is the
+ * order it is drawn in and the order it is taken away in.
+ *
+ * The head and the faceplate are each split into two strokes meeting at their
+ * side midpoints, so the outline arrives as two sweeps rather than one long
+ * crawl around the perimeter. With round caps the join is invisible.
  */
 function buildAgent(): Stroke[] {
-  // The web's vertices. Named once and used twice, so the chords cannot drift
-  // off the ring curves that share them.
-  const P1 = [108, 190] as const; // brow, front
-  const P2 = [134, 152] as const;
-  const P3 = [168, 132] as const; // crown
-  const P4 = [204, 150] as const;
-  const P5 = [228, 190] as const; // occiput
-  const P6 = [124, 222] as const; // cheek
-  const P7 = [156, 198] as const;
-  const P8 = [194, 190] as const;
-  const P9 = [218, 224] as const;
-  const P10 = [140, 250] as const; // jaw, front
-  const P11 = [176, 240] as const;
+  const midY = HEAD_Y + HEAD_H / 2;
+  const plateMidY = PLATE_Y + PLATE_H / 2;
 
   return [
-    // --- skull ------------------------------------------------------------
-    stroke(HEAVY, (p) => p.move(100, 182).curve(100, 126, 136, 100, 168, 102).curve(210, 104, 234, 140, 232, 182)),
-    stroke(HEAVY, (p) => p.move(232, 182).curve(231, 212, 220, 232, 204, 244)),
-    stroke(HEAVY, (p) => p.move(100, 182).curve(98, 200, 104, 214, 114, 222)),
-    stroke(HEAVY, (p) => p.move(114, 222).curve(121, 238, 123, 252, 119, 266)),
+    // --- head outline -----------------------------------------------------
+    stroke(HEAVY, (p) =>
+      p
+        .move(HEAD_X, midY)
+        .line(HEAD_X, HEAD_Y + HEAD_R)
+        .arcTo(HEAD_R, 1, HEAD_X + HEAD_R, HEAD_Y, q(HEAD_R))
+        .line(HEAD_X + HEAD_W - HEAD_R, HEAD_Y)
+        .arcTo(HEAD_R, 1, HEAD_X + HEAD_W, HEAD_Y + HEAD_R, q(HEAD_R))
+        .line(HEAD_X + HEAD_W, midY)
+    ),
+    stroke(HEAVY, (p) =>
+      p
+        .move(HEAD_X + HEAD_W, midY)
+        .line(HEAD_X + HEAD_W, HEAD_Y + HEAD_H - HEAD_R)
+        .arcTo(HEAD_R, 1, HEAD_X + HEAD_W - HEAD_R, HEAD_Y + HEAD_H, q(HEAD_R))
+        .line(HEAD_X + HEAD_R, HEAD_Y + HEAD_H)
+        .arcTo(HEAD_R, 1, HEAD_X, HEAD_Y + HEAD_H - HEAD_R, q(HEAD_R))
+        .line(HEAD_X, midY)
+    ),
 
-    // --- jaw and neck -----------------------------------------------------
-    stroke(HEAVY, (p) => p.move(119, 266).curve(142, 280, 176, 274, 199, 252)),
-    stroke(HEAVY, (p) => p.move(199, 252).curve(203, 249, 204, 246, 204, 244)),
-    stroke(HEAVY, (p) => p.move(134, 274).curve(132, 290, 130, 300, 128, 308)),
-    stroke(HEAVY, (p) => p.move(194, 270).curve(197, 288, 201, 300, 205, 310)),
+    // --- faceplate --------------------------------------------------------
+    stroke(PLATE, (p) =>
+      p
+        .move(PLATE_X, plateMidY)
+        .line(PLATE_X, PLATE_Y + PLATE_R)
+        .arcTo(PLATE_R, 1, PLATE_X + PLATE_R, PLATE_Y, q(PLATE_R))
+        .line(PLATE_X + PLATE_W - PLATE_R, PLATE_Y)
+        .arcTo(PLATE_R, 1, PLATE_X + PLATE_W, PLATE_Y + PLATE_R, q(PLATE_R))
+        .line(PLATE_X + PLATE_W, plateMidY)
+    ),
+    stroke(PLATE, (p) =>
+      p
+        .move(PLATE_X + PLATE_W, plateMidY)
+        .line(PLATE_X + PLATE_W, PLATE_Y + PLATE_H - PLATE_R)
+        .arcTo(PLATE_R, 1, PLATE_X + PLATE_W - PLATE_R, PLATE_Y + PLATE_H, q(PLATE_R))
+        .line(PLATE_X + PLATE_R, PLATE_Y + PLATE_H)
+        .arcTo(PLATE_R, 1, PLATE_X, PLATE_Y + PLATE_H - PLATE_R, q(PLATE_R))
+        .line(PLATE_X, plateMidY)
+    ),
 
-    // --- shoulders --------------------------------------------------------
-    stroke(HEAVY, (p) => p.move(128, 308).curve(106, 314, 84, 326, 70, 346)),
-    stroke(HEAVY, (p) => p.move(70, 346).curve(60, 358, 56, 372, 54, 400)),
-    stroke(HEAVY, (p) => p.move(205, 310).curve(229, 316, 251, 330, 263, 350)),
-    stroke(HEAVY, (p) => p.move(263, 350).curve(271, 364, 275, 380, 277, 400)),
-    stroke(HEAVY, (p) => p.move(128, 308).curve(152, 320, 182, 322, 205, 310)),
+    // --- headphones -------------------------------------------------------
+    // A band, not a halo: it clears the crown by twenty units and comes down
+    // onto the earcups, which are centred on the head rather than hung below it.
+    stroke(HEAVY, (p) => p.move(65, 208).curve(65, 154, 104, 134, 150, 134).curve(196, 134, 235, 154, 235, 208)),
+    box(PLATE, 52, 204, 26, 58, 12),
+    box(PLATE, 222, 204, 26, 58, 12),
 
-    // --- the web across the cranium ---------------------------------------
-    stroke(LIGHT, (p) => p.move(...P2).quad(168, 140, ...P4)),
-    stroke(LIGHT, (p) => p.move(...P1).quad(168, 176, ...P5)),
-    stroke(LIGHT, (p) => p.move(...P6).quad(170, 238, ...P9)),
-    chord(...P1, ...P7),
-    chord(...P2, ...P7),
-    chord(...P3, ...P7),
-    chord(...P3, ...P8),
-    chord(...P4, ...P8),
-    chord(...P5, ...P8),
-    chord(...P6, ...P7),
-    chord(...P7, ...P8),
-    chord(...P8, ...P9),
-    chord(...P6, ...P10),
-    chord(...P7, ...P10),
-    chord(...P7, ...P11),
-    chord(...P8, ...P11),
-    chord(...P10, ...P11),
-    chord(...P9, ...P11),
+    // --- antenna ----------------------------------------------------------
+    stroke(FINE, (p) => p.move(242, 206).curve(252, 190, 260, 174, 266, 160)),
+    stroke(FINE, (p) => p.circle(268, 151, 7)),
 
-    // --- panel seams ------------------------------------------------------
-    chord(142, 280, 178, 276),
-    chord(132, 296, 202, 294),
-    chord(98, 334, 124, 322),
-    chord(238, 334, 212, 322),
-
-    // --- the sensor, last -------------------------------------------------
-    stroke(LIGHT, (p) => p.move(110, 200).line(128, 190).line(146, 200).line(128, 210).line(110, 200), true),
-    stroke(LIGHT, (p) => p.circle(128, 200, 6), true),
-    stroke(LIGHT, (p) => p.move(146, 200).line(158, 198), true),
+    // --- eyes, then the mouth last ----------------------------------------
+    stroke(FINE, (p) => p.circle(126, 212, 12), true),
+    stroke(FINE, (p) => p.circle(174, 212, 12), true),
+    stroke(FINE, (p) => p.move(126, 256).quad(150, 272, 174, 256)),
   ];
 }
 
