@@ -1,6 +1,6 @@
 // Shell.tsx — the parts of every page that are not that page.
 //
-// Nav, page header and colophon. A route says which page it is and gets the
+// Nav, page header and footer. A route says which page it is and gets the
 // rest; it never writes a nav link of its own. Ported from js/shell.js, with
 // PAGES still the single source of truth.
 //
@@ -102,32 +102,80 @@ function Nav({ currentId, over }: { currentId: string; over: boolean }) {
 }
 
 /**
- * The same statement on every page. If it differed per page, one of them would
- * be the lie.
+ * The footer, on every page.
+ *
+ * It replaces the colophon and carries what the colophon carried, because that
+ * copy was never decoration: no key, nothing posted, and the referee DID this
+ * whole product pins rather than infers. A footer that dropped it to make room
+ * for a call to action would be trading the one claim Foolscap has to make for
+ * the one it has to sell.
+ *
+ * The links are PAGES again — the same six rows as the nav, the page headers and
+ * the landing's tool cards — so an unbuilt tool is grey and unlinked here for
+ * exactly the reason it is there, and shipping one still changes a single line.
+ *
+ * No accent. Nothing in here is state.
  */
-export function Colophon() {
+export function Footer() {
   return (
-    <footer className="colophon">
-      <p>
-        Foolscap reads. These pages hold no key, ask for none, and post nothing on your behalf.
-        Apart from the Notary archive, everything runs in your browser against technocore.chat —
-        the signature checking that decides what you are shown happens on your machine, not on a
-        server you have to trust.
-      </p>
+    <footer className="footer">
+      {/* Behind everything, clipped by the footer's own edge. Decorative: the
+          name is already in the nav and in the page's own heading. */}
+      <div className="footer__wordmark" aria-hidden="true">
+        Foolscap
+      </div>
 
-      <p>
-        Every receipt shown as authoritative was checked against the referee DID pinned in
-        LAUNCH.md, and nothing else is trusted — never a room’s name, its owner, or who posts in
-        it:
-      </p>
+      <div className="footer__inner">
+        <div className="footer__call">
+          <p className="footer__headline">Keep what the network drops.</p>
+          <p className="footer__sub">
+            Paste a <span className="footer__mono">request_id</span> or a{' '}
+            <span className="footer__mono">did:key</span> and see where it actually stands —
+            read live from technocore.chat, verified in your browser.
+          </p>
+          <Link className="footer__cta" to="/track">
+            Track a request
+          </Link>
+        </div>
 
-      <p className="mono colophon__did">{REFEREE_DID}</p>
+        <ul className="footer__nav">
+          <NavItems currentId="" className="footer__link" />
+        </ul>
 
-      <p>
-        Source, and the reasoning behind every number:{' '}
-        <a href="https://github.com/ace-coderr/foolscap">github.com/ace-coderr/foolscap</a>.
-        Apache-2.0.
-      </p>
+        <div className="footer__meta">
+          <div className="footer__who">
+            <p className="footer__by">
+              Built by{' '}
+              <a href="https://x.com/_ace_won" rel="noreferrer">
+                Ace
+              </a>
+            </p>
+            <p className="footer__trust">
+              Foolscap reads and nothing else: it holds no key, asks for none, and posts nothing
+              on your behalf. Every signature that decides what you are shown is checked in your
+              browser.
+            </p>
+          </div>
+
+          <div className="footer__refs">
+            <p className="footer__links">
+              <a href="https://github.com/ace-coderr/foolscap" rel="noreferrer">
+                GitHub
+              </a>
+              <span className="footer__sep" aria-hidden="true">
+                ·
+              </span>
+              <a href="https://github.com/ace-coderr/foolscap/blob/main/LICENSE" rel="noreferrer">
+                Apache-2.0
+              </a>
+            </p>
+            <p className="footer__did">
+              <span className="footer__did-label">Referee, pinned</span>
+              <span className="footer__did-value">{REFEREE_DID}</span>
+            </p>
+          </div>
+        </div>
+      </div>
     </footer>
   );
 }
@@ -138,8 +186,8 @@ export function Colophon() {
  * `column` is every page: a measure-wide column under the header. `bleed` is the
  * City and, so far, only the City — a canvas under everything with the header
  * floating over it and the content in a panel. The variant changes the frame the
- * page sits in and nothing else; the nav, the header and the colophon are the
- * same parts from the same source either way.
+ * page sits in and nothing else; the nav, the header and the footer are the same
+ * parts from the same source either way.
  */
 export type ShellVariant = 'column' | 'bleed';
 
@@ -185,7 +233,7 @@ export function Shell({
         </header>
         {children}
       </main>
-      <Colophon />
+      <Footer />
     </>
   );
 }

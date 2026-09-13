@@ -16,7 +16,7 @@
 
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Colophon, HeroNav } from '../components/Shell';
+import { Footer, HeroNav } from '../components/Shell';
 import { PAGES } from '../pages';
 import { useLivePulse, type LiveFeed } from '../hero/useLivePulse';
 import { num } from '../format';
@@ -114,9 +114,7 @@ export default function Landing() {
 
       <Tools />
 
-      <div className="hero__below">
-        <Colophon />
-      </div>
+      <Footer />
     </div>
   );
 }

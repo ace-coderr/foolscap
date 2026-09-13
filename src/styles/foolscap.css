@@ -15,7 +15,7 @@
  *   --t-h1       the page title
  *   --t-h2       the wordmark, and section-leading text: state word, figures, lede
  *   --t-body     prose, and the controls you type into
- *   --t-small    secondary prose: notes, reasons, facts, rows, nav, colophon
+ *   --t-small    secondary prose: notes, reasons, facts, rows, nav
  *   --t-micro    labels only, always uppercase and letterspaced
  *
  * SPACE — one unit and its multiples: 0.5, 1, 2, 4. Anything that is not one of
@@ -23,6 +23,7 @@
 
 :root {
   /* surfaces */
+  --void: #000000; /* the footer band, and the landing page's ground */
   --paper: #0e1420;
   --paper-sunk: #161d2b;
   --paper-raised: #1c2434;
@@ -751,27 +752,275 @@ a:focus-visible {
   margin: 0 0 var(--space);
 }
 
-/* ---------------------------------------------------------------- colophon */
+/* ------------------------------------------------------------------ footer */
 
-/* The same statement on every page, rendered by the shell. If it differed per
- * page, one of them would be the lie. */
-.colophon {
-  max-width: var(--shell);
-  margin: var(--space-4) auto 0;
-  padding: var(--space) var(--space) var(--space-4);
-  border-top: 1px solid var(--rule);
-  font-size: var(--t-small);
-  color: var(--ink-faint);
-  line-height: 1.55;
+/* One footer on every page, so it lives here rather than in the landing's
+ * stylesheet: /city and /track never load hero.css, and a footer that only
+ * appeared on the front page would be the same failure the shared nav exists to
+ * prevent. It brings its own two faces — both already loaded document-wide — so
+ * it reads identically wherever it lands rather than half-dissolving into
+ * whichever page is sitting above it.
+ *
+ * It replaces the colophon and carries the colophon's copy. No accent: nothing
+ * in a footer is state. */
+
+.footer {
+  --footer-display: Saira, "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
+  --footer-body: "Chakra Petch", ui-monospace, "SF Mono", Menlo, system-ui, sans-serif;
+  --footer-gutter: clamp(1.15rem, 2.4vw, 2.25rem);
+  --footer-edge: rgba(255, 255, 255, 0.1);
+  --footer-text: rgba(255, 255, 255, 0.62);
+  --footer-faint: rgba(255, 255, 255, 0.38);
+  --footer-quiet: #6e6e6e;
+  /* The wordmark's size, kept as a variable so the rules that reach past its
+   * edge can be written in the same unit. Tuned so eight capitals of Saira at
+   * this width span the viewport. */
+  --footer-mark: 20.6vw;
+
+  position: relative;
+  /* The wordmark runs past the bottom edge on purpose. This is what cuts it,
+   * and what stops it giving the page a horizontal scrollbar. */
+  overflow: hidden;
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--footer-edge);
+  background: var(--void);
+  color: #fff;
+  font-family: var(--footer-body);
+  font-weight: 300;
 }
 
-.colophon > * {
-  max-width: var(--measure);
+/* Full width, against a body that carries a gutter everywhere except the
+ * landing — where the route sets .on-black and takes the padding off, so
+ * cancelling it again here would push the band off both edges. */
+body:not(.on-black) .footer {
+  margin-inline: calc(var(--space) * -1);
+  margin-bottom: calc(var(--space-4) * -1);
 }
 
-.colophon__did {
-  color: var(--ink-mid);
+.footer__inner {
+  position: relative;
+  z-index: 1;
+  max-width: 74rem;
+  margin-inline: auto;
+  padding: clamp(3rem, 8vh, 5rem) var(--footer-gutter) 0;
 }
+
+/* ---------------------------------------------------------------- the call */
+
+.footer__call {
+  text-align: center;
+}
+
+.footer__headline {
+  margin: 0 0 0.75rem;
+  font-family: var(--footer-display);
+  font-stretch: 112%;
+  font-weight: 600;
+  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.footer__sub {
+  max-width: 30rem;
+  margin: 0 auto 1.4rem;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--footer-text);
+}
+
+.footer__mono {
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+}
+
+.footer__cta {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.62rem 1.25rem;
+  background: #fff;
+  border: 1px solid #fff;
+  color: #000;
+  font-family: var(--footer-body);
+  font-weight: 500;
+  font-size: 12.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.footer__cta:hover {
+  text-decoration: none;
+  color: #000;
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(255, 255, 255, 0.82);
+}
+
+.footer__cta:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+/* ----------------------------------------------------------------- the six */
+
+.footer__nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem clamp(1.1rem, 2.4vw, 2rem);
+  margin: clamp(2rem, 5vh, 3rem) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.footer__link {
+  display: block;
+  font-family: var(--footer-body);
+  font-weight: 400;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--footer-text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.footer__link:hover {
+  color: #fff;
+  text-decoration: none;
+}
+
+/* Grey and unlinked, the same rule the landing's tool cards follow: nothing
+ * should look clickable that cannot answer a click. */
+.footer__link--soon {
+  color: rgba(255, 255, 255, 0.26);
+  cursor: default;
+}
+
+/* ---------------------------------------------------------------- the base */
+
+/* Absolute, so the giant name never contributes height and the row below can
+ * sit on top of it. Its lower edge is pushed past the footer's, where the
+ * overflow rule above cuts it. */
+.footer__wordmark {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--footer-mark) * -0.28);
+  z-index: 0;
+  text-align: center;
+  font-family: var(--footer-display);
+  font-stretch: 118%;
+  font-weight: 600;
+  font-size: var(--footer-mark);
+  line-height: 1;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.07);
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+}
+
+.footer__meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 1.5rem clamp(1.5rem, 4vw, 3rem);
+  margin-top: clamp(5rem, 15vw, 11rem);
+  padding-bottom: clamp(1.25rem, 2.5vw, 2rem);
+}
+
+.footer__by {
+  margin: 0 0 0.4rem;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.footer__trust {
+  max-width: 30rem;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--footer-quiet);
+}
+
+.footer__refs {
+  text-align: right;
+}
+
+.footer__links {
+  margin: 0 0 0.45rem;
+  font-size: 13px;
+  color: var(--footer-faint);
+}
+
+.footer__sep {
+  padding: 0 0.45em;
+  color: rgba(255, 255, 255, 0.22);
+}
+
+.footer__did {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.footer__did-label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.28);
+}
+
+/* The one key this product pins rather than infers, written out in full so it
+ * can be checked against LAUNCH.md by eye. Mono, and it wraps rather than
+ * truncating: a DID with its middle missing proves nothing. */
+.footer__did-value {
+  font-family: var(--mono);
+  color: var(--footer-faint);
+  overflow-wrap: anywhere;
+}
+
+/* Only the prose links. A blanket `.footer a` outranks .footer__cta and
+ * .footer__link on specificity, which paints the pill white on white and
+ * underlines six nav items that are not prose. */
+.footer__by a,
+.footer__links a {
+  color: rgba(255, 255, 255, 0.82);
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
+.footer__by a:hover,
+.footer__links a:hover {
+  color: #fff;
+}
+
+.footer a:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ narrow */
+
+@media (max-width: 46rem) {
+  .footer__meta {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    margin-top: clamp(4rem, 22vw, 8rem);
+  }
+
+  .footer__refs {
+    text-align: left;
+  }
+}
+
 
 /* -------------------------------------------------------------- the city */
 
