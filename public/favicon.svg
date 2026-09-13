@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round">
+  <!-- The Foolscap mark: a ring rotating its history away, and the one record
+       kept. Same construction as src/components/Mark.tsx, drawn on a radius of
+       13 in a 32 box rather than 9 in 24 — with no wordmark beside it, it fills
+       more of the frame so it still reads at 16px. White rather than
+       currentColor, since a favicon inherits nothing. -->
+  <path d="M27.258 9.5A13 13 0 1 1 4.799 9.402"/>
+  <path d="M6.649 6.969A13 13 0 0 1 8.176 5.618" opacity=".6"/>
+  <path d="M10.816 4.078A13 13 0 0 1 11.983 3.636" opacity=".4"/>
+  <path d="M14.98 3.04A13 13 0 0 1 15.546 3.008" opacity=".25"/>
+  <circle cx="22.5" cy="4.742" r="2.9" fill="#ffffff" stroke="none"/>
+</svg>

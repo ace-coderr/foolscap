@@ -50,6 +50,7 @@
   --warn: #d9a441; /* degrading, expiring, uncertain */
   --alarm: #e0674f; /* forged, failed, lost */
 
+  --display: Saira, "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
   --serif: Spectral, Georgia, "Iowan Old Style", "Palatino Linotype", Palatino,
     "Times New Roman", serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
@@ -176,8 +177,6 @@ a:focus-visible {
 }
 
 .nav__mark {
-  font-size: var(--t-h2);
-  letter-spacing: 0.01em;
   color: var(--ink);
   text-decoration: none;
   flex: 0 0 auto;
@@ -270,6 +269,36 @@ a:focus-visible {
   .nav__toggle {
     display: block;
   }
+}
+
+/* ------------------------------------------------------------------ lockup */
+
+/* Mark plus wordmark, one piece, rendered by Mark.tsx and styled once here so
+ * the nav and the footer cannot drift apart. In foolscap.css rather than the
+ * landing's stylesheet because /city and /track carry it too. */
+
+.lockup {
+  display: inline-flex;
+  align-items: center;
+  /* The gap is part of the lockup, not of whatever it is dropped into. */
+  gap: 0.5em;
+  color: inherit;
+  line-height: 1;
+}
+
+.lockup__mark {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.lockup__word {
+  font-family: var(--display);
+  font-stretch: 112%;
+  font-weight: 600;
+  font-size: 1.0625rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1;
 }
 
 /* ------------------------------------------------------------- page layout */
@@ -765,7 +794,7 @@ a:focus-visible {
  * in a footer is state. */
 
 .footer {
-  --footer-display: Saira, "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
+  --footer-display: var(--display);
   --footer-body: "Chakra Petch", ui-monospace, "SF Mono", Menlo, system-ui, sans-serif;
   --footer-gutter: clamp(1.15rem, 2.4vw, 2.25rem);
   --footer-edge: rgba(255, 255, 255, 0.1);
@@ -933,6 +962,11 @@ body:not(.on-black) .footer {
   gap: 1.5rem clamp(1.5rem, 4vw, 3rem);
   margin-top: clamp(5rem, 15vw, 11rem);
   padding-bottom: clamp(1.25rem, 2.5vw, 2rem);
+}
+
+.footer__lockup {
+  margin-bottom: 0.85rem;
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .footer__by {

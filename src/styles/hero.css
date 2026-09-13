@@ -213,14 +213,10 @@ body.on-black {
   /* No background: the grid runs straight through it. */
 }
 
+/* Position and colour only: the type is the lockup's, set once in foolscap.css
+ * so this nav and the shell's cannot disagree about what the name looks like. */
 .hero__mark {
   justify-self: start;
-  font-family: var(--hero-display);
-  font-stretch: 112%;
-  font-weight: 600;
-  font-size: 1.0625rem;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
   color: #fff;
   text-decoration: none;
 }

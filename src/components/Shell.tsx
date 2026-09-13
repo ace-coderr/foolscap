@@ -12,6 +12,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { PAGES, pageById } from '../pages';
+import { Lockup } from './Mark';
 import { REFEREE_DID } from '../lib/contest.ts';
 
 /** Links, from PAGES, in whatever chrome the page wraps them in. */
@@ -59,7 +60,7 @@ export function HeroNav({ action }: { action: { label: string; to: string } }) {
   return (
     <nav className="hero__nav" aria-label="Foolscap">
       <Link className="hero__mark" to="/">
-        Foolscap
+        <Lockup />
       </Link>
 
       <ul className="hero__nav-links">
@@ -80,7 +81,7 @@ function Nav({ currentId, over }: { currentId: string; over: boolean }) {
     <nav className={over ? 'nav nav--over' : 'nav'} aria-label="Foolscap">
       <div className="nav__inner">
         <Link className="nav__mark" to="/">
-          Foolscap
+          <Lockup />
         </Link>
 
         <button
@@ -144,6 +145,7 @@ export function Footer() {
 
         <div className="footer__meta">
           <div className="footer__who">
+            <Lockup className="footer__lockup" />
             <p className="footer__by">
               Built by{' '}
               <a href="https://x.com/_ace_won" rel="noreferrer">
