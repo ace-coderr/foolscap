@@ -677,7 +677,7 @@ function Ratio({ held, missing }: { held: number; missing: number }) {
 // ---------------------------------------------------------------------------
 
 /** Shown before the list folds. The rest are a click away, not a scroll. */
-const HOLES_SHOWN = 6;
+const HOLES_SHOWN = 8;
 
 /**
  * A table, because it is one.
@@ -711,12 +711,17 @@ function Holes({ gaps }: { gaps: Coverage['gaps'] }) {
           proves nothing at all.
         </p>
 
-        {/* The one thing on this page allowed to be wider than the page. Four
-            columns of room names, seven-digit figures and timestamps do not fit
-            343px however they are sized, and reflowing them into stacked cards
-            would throw away the only reason this is a table: that 6,290,114 and
-            4,210 line up on their last digit and can be compared at a glance. */}
-        <div className="nholes__scroll">
+        {/* Wider than the page, and taller than the fold only inside itself.
+            Four columns of room names, seven-digit figures and timestamps do
+            not fit 343px however they are sized, and reflowing them into
+            stacked cards would throw away the only reason this is a table:
+            that 6,290,114 and 4,210 line up on their last digit.
+
+            The height cap is the more important half. This list is a thousand
+            rows and grows every time the mirror restarts, so expanding it used
+            to add its whole length to the page. Capped, the section is the same
+            height whether the archive has recorded ten holes or ten thousand. */}
+        <div className="nholes__scroll" data-expanded={all ? 'true' : 'false'}>
           <table className="nholes">
             <thead>
               <tr>
@@ -755,7 +760,12 @@ function Holes({ gaps }: { gaps: Coverage['gaps'] }) {
 
         {sorted.length > HOLES_SHOWN && (
           <button className="nholes__more" type="button" onClick={() => setAll((was) => !was)}>
-            {all ? 'Show the largest six' : `Show all ${num.format(sorted.length)} holes`}
+            {/* Both labels read off HOLES_SHOWN, so changing it cannot leave the
+                button describing a number the table is not showing — which it
+                just did, saying "six" while eight were on screen. */}
+            {all
+              ? `Show the largest ${HOLES_SHOWN}`
+              : `Show all ${num.format(sorted.length)} holes`}
           </button>
         )}
       </div>

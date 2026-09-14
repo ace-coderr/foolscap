@@ -577,6 +577,29 @@
   overflow-x: auto;
 }
 
+/* Expanded, the list scrolls inside itself instead of lengthening the page.
+ * The gaps table is a thousand rows and gains more every time the mirror
+ * restarts, so "show all" used to mean "add twenty thousand pixels": the page's
+ * height became a function of how badly capture had been going. Capped, the
+ * section is the same height whether there are ten holes or ten thousand. */
+.nholes__scroll[data-expanded='true'] {
+  max-height: 24rem;
+  overflow-y: auto;
+  /* Its own edge, so the cut reads as a window on a longer list rather than as
+   * the list simply stopping. */
+  border-bottom: 1px solid var(--rule);
+}
+
+/* The header stays put while the rows move under it — four columns of numbers
+ * are unreadable once their labels have scrolled away. */
+.nholes__scroll[data-expanded='true'] thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  /* Opaque: the striped rows would otherwise read straight through it. */
+  background: var(--void);
+}
+
 .nholes {
   /* min-width rather than width: it fills the band at every width it fits, and
    * is allowed to exceed the scroller below that rather than crushing. */
