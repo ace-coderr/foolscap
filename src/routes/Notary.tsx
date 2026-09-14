@@ -16,11 +16,42 @@
 // Two sources, never blended:
 //   LIVE     the rings, read in this browser, signatures checked here. Minutes.
 //   ARCHIVE  the Notary API. Back to capture start, with holes, on Notary's clock.
+//
+// ---------------------------------------------------------------------------
+// THE COMPOSITION is the landing's, not a column of sections.
+//
+// It had the right tokens and none of the layout: everything sat in one 46rem
+// strip with half the page empty beside it, and the form — the thing the page
+// is for — was a paragraph down from the title. So:
+//
+//   HERO      the question left, the lookup form right, a Merkle tree drawing
+//             itself behind both. The form is the hero.
+//   ANSWER    the verdict word alone at --t-answer, which is the one step this
+//             page is allowed to spend once. It lands before anything is read.
+//   COVERAGE  a full-width band of counted figures between hairlines, then the
+//             limits in two columns.
+//   SOURCES   archive and live as two panes of glass side by side, because they
+//             are two sources and should look like two sources.
+//   ANCHORS   a full-width band. It is the proof section and it feels like one.
+//
+// Every band runs to --shell. Prose inside them is capped by its column, not by
+// a measure the whole page is squeezed into.
 
-import { useState, type FormEvent } from 'react';
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { Shell } from '../components/Shell';
+import { pageById } from '../pages.ts';
 import { num, plural, formatAge } from '../format.ts';
 import { IDENTITY_CUTOFF } from '../lib/contest.ts';
+import { useCountUp, useInView, usePrefersReducedMotion } from '../motion.ts';
 import {
   useAnchors,
   useArchive,
@@ -38,25 +69,48 @@ import {
   type AnchorLog,
 } from '../useNotary.ts';
 
+/** SVG and small, but it still need not block the first paint. */
+const DrawingMerkle = lazy(() => import('../components/DrawingMerkle'));
+
 /** The contest's own cutoff, offered as the default because it is the question. */
 const DEFAULT_CUTOFF = IDENTITY_CUTOFF.slice(0, 10);
+
+/** How long a band's hairlines take to draw, in ms. Mirrors the stylesheet. */
+const BAND_DRAW = 500;
+
+/** Stagger index for the reveal, as a custom property the stylesheet reads. */
+const rise = (index: number) => ({ '--rise-i': index }) as CSSProperties;
 
 export default function Notary() {
   const coverage = useCoverage();
   const archive = useArchive();
   const live = useLive();
   const anchorLog = useAnchors();
+  const reducedMotion = usePrefersReducedMotion();
 
   const [field, setField] = useState('');
   const [cutoffDay, setCutoffDay] = useState(DEFAULT_CUTOFF);
   const [asked, setAsked] = useState<{ did: string; before: string } | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
+  // The answer is below a hero, so on a laptop it opens off the bottom of the
+  // screen. A verdict the reader has to go looking for is not a verdict.
+  const verdictRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!asked) return;
+    verdictRef.current?.scrollIntoView({
+      behavior: reducedMotion ? 'auto' : 'smooth',
+      block: 'start',
+    });
+  }, [asked, reducedMotion]);
+
   function onSubmit(event: FormEvent) {
     event.preventDefault();
     const did = field.trim();
     if (!looksLikeDid(did)) {
-      setProblem('That is not a did:key Ed25519 identifier. They begin did:key:z6Mk and run about 56 characters.');
+      setProblem(
+        'That is not a did:key Ed25519 identifier. They begin did:key:z6Mk and run about 56 characters.'
+      );
       return;
     }
     // Midnight UTC on the chosen day: "before the 11th" means before it began,
@@ -69,19 +123,102 @@ export default function Notary() {
   }
 
   return (
-    <Shell page="notary">
-      <CoverageBand state={coverage} />
+    <Shell page="notary" variant="bands">
+      <Hero
+        field={field}
+        setField={setField}
+        cutoffDay={cutoffDay}
+        setCutoffDay={setCutoffDay}
+        onSubmit={onSubmit}
+        problem={problem}
+        reducedMotion={reducedMotion}
+      />
 
-      <section className="section measure" id="ask">
-        <h2 className="section__title">Was this key active before a date?</h2>
+      {asked && (
+        <Verdict
+          archive={archive.state}
+          live={live.state}
+          asked={asked}
+          bandRef={verdictRef}
+        />
+      )}
 
-        <form className="lookup" onSubmit={onSubmit} autoComplete="off">
-          <label className="lookup__label" htmlFor="did">
-            A did:key
-          </label>
-          <div className="lookup__row">
+      <CoverageBands state={coverage} />
+
+      {asked && <Sources archive={archive.state} live={live.state} />}
+
+      <AnchorBand state={anchorLog} />
+    </Shell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Hero
+// ---------------------------------------------------------------------------
+
+/**
+ * The question on the left, the lookup on the right, and the page's own
+ * mechanism drawing itself behind both.
+ *
+ * The heading is --t-h1 and not --t-answer on purpose: --t-answer is spent once
+ * per page and this page spends it on the verdict. A hero that took the biggest
+ * step would leave the answer quieter than the question, which is backwards.
+ *
+ * The eyebrow, the heading and the line under it are the same three strings the
+ * shell's page header renders on every other page, read from PAGES. Set at a
+ * different scale, not written a second time.
+ */
+function Hero({
+  field,
+  setField,
+  cutoffDay,
+  setCutoffDay,
+  onSubmit,
+  problem,
+  reducedMotion,
+}: {
+  field: string;
+  setField: (value: string) => void;
+  cutoffDay: string;
+  setCutoffDay: (value: string) => void;
+  onSubmit: (event: FormEvent) => void;
+  problem: string | null;
+  reducedMotion: boolean;
+}) {
+  const page = pageById('notary')!;
+
+  return (
+    <section className="section nhero" aria-labelledby="notary-title">
+      {/* Behind both columns and the full width of the band. The glass card
+          over it carries a backdrop blur, so the tree goes soft under the form
+          and stays sharp beside it — which is the depth the landing's hero gets
+          from its glow and this page has no glow to borrow. */}
+      <Suspense fallback={null}>
+        <DrawingMerkle className="nhero__figure" reducedMotion={reducedMotion} />
+      </Suspense>
+
+      <div className="nband__inner nhero__inner">
+        <div className="nhero__lede">
+          <p className="nhero__eyebrow rise">{page.eyebrow}</p>
+          <h1 className="nhero__title" id="notary-title">
+            {page.title.split(' ').map((word, i) => (
+              <span className="word" key={i} style={{ '--word-i': i } as CSSProperties}>
+                {word}{' '}
+              </span>
+            ))}
+          </h1>
+          <p className="nhero__line rise" style={rise(2)}>
+            {page.line}
+          </p>
+        </div>
+
+        <div className="nhero__ask rise" style={rise(3)}>
+          <form className="nlookup glass" onSubmit={onSubmit} autoComplete="off">
+            <label className="lookup__label" htmlFor="did">
+              A did:key
+            </label>
             <input
-              className="lookup__input mono"
+              className="lookup__input mono nlookup__did"
               id="did"
               name="did"
               type="text"
@@ -93,146 +230,102 @@ export default function Notary() {
               value={field}
               onChange={(event) => setField(event.target.value)}
             />
-            <button className="lookup__submit" type="submit">
-              Look up
-            </button>
-          </div>
 
-          <div className="notary__cutoff">
-            <label className="lookup__label" htmlFor="before">
-              Active before
-            </label>
-            <input
-              className="lookup__input notary__date"
-              id="before"
-              name="before"
-              type="date"
-              value={cutoffDay}
-              onChange={(event) => setCutoffDay(event.target.value)}
-            />
+            <div className="nlookup__row">
+              <div className="nlookup__cutoff">
+                <label className="lookup__label" htmlFor="before">
+                  Active before
+                </label>
+                <input
+                  className="lookup__input notary__date"
+                  id="before"
+                  name="before"
+                  type="date"
+                  value={cutoffDay}
+                  onChange={(event) => setCutoffDay(event.target.value)}
+                />
+              </div>
+              <button className="lookup__submit" type="submit">
+                Look up
+              </button>
+            </div>
+
             <p className="notary__cutoff-note">
               Midnight UTC on that day. The default is sonnet-2’s own identity cutoff.
             </p>
-          </div>
-        </form>
 
-        {problem && <p className="notary__problem">{problem}</p>}
+            {problem && <p className="notary__problem">{problem}</p>}
+          </form>
 
-        {/* NO KEY INPUT ANYWHERE ON THIS PAGE. It reads only — a DID is a public
-            identifier, and nothing here ever asks for, accepts or transmits a
-            private key. */}
-        <p className="notary__nokey">
-          A DID is public. Nothing on this page asks for a key, and nothing is posted on your
-          behalf.
-        </p>
-      </section>
-
-      {asked && (
-        <>
-          <section className="section measure" id="answer" aria-live="polite">
-            <h2 className="section__title">The answer</h2>
-            <CutoffAnswer archive={archive.state} live={live.state} asked={asked} />
-          </section>
-
-          {/* Each source in its own pane of glass, so the two are visibly two
-              things. The labelling was always in the copy; this puts it in the
-              layout as well. */}
-          <section className="section measure" id="archive">
-            <h2 className="section__title">
-              Archive <span className="notary__source-tag">Notary’s capture</span>
-            </h2>
-            <div className="glass">
-              <ArchivePanel state={archive.state} />
-            </div>
-          </section>
-
-          <section className="section measure" id="live">
-            <h2 className="section__title">
-              Live <span className="notary__source-tag">the rings, read here</span>
-            </h2>
-            <div className="glass">
-              <LivePanel state={live.state} />
-            </div>
-          </section>
-        </>
-      )}
-
-      <AnchorPanel state={anchorLog} />
-    </Shell>
+          {/* NO KEY INPUT ANYWHERE ON THIS PAGE. It reads only — a DID is a
+              public identifier, and nothing here ever asks for, accepts or
+              transmits a private key. */}
+          <p className="nlookup__nokey">
+            A DID is public. Nothing on this page asks for a key, and nothing is posted on your
+            behalf.
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }
 
 // ---------------------------------------------------------------------------
-// The anchors, and the key they are signed by
+// The answer
 // ---------------------------------------------------------------------------
 
+interface Reading {
+  /** One or two words at --t-answer. Everything qualifying it goes below. */
+  word: string;
+  /** What kind of yes, or what kind of nothing. The grade of the evidence. */
+  qualifier: string;
+  /**
+   * True where a signature verified and puts this key before the cutoff. It is
+   * the only thing on this page that takes the accent, and the qualifier is
+   * what says whether the TIME came from Notary's clock or the room's claim —
+   * that distinction lives in words, where it can be explained, and never in a
+   * hue the reader would have to decode.
+   */
+  yes: boolean;
+  body: ReactNode;
+}
+
 /**
- * Why this section exists at all.
+ * The verdict, alone, in the one type step this page is allowed to spend once.
  *
- * Everything else on this page asks you to believe Notary's clock. The daily
- * root is the reason you do not have to: it was published into a public room,
- * signed by a key pinned in this page's own source, before anyone asked about
- * any particular record. Notary cannot now backdate, remove or move a record
- * without the published root failing to reproduce.
- *
- * THE DID IS PINNED HERE, not read from the API. The API is asked what key it
- * thinks it has only so the two can be compared — a service that reported its
- * own identity and was believed would let a wrong key look correct.
+ * It used to be a card heading the same size as the sentence under it, which
+ * meant the page had no answer — it had a paragraph that happened to begin with
+ * one. The word lands first now and everything qualifying it follows, in that
+ * order, because that is the order it is read in.
  */
-function AnchorPanel({ state }: { state: Async<AnchorLog & { matchesPinned: boolean; pinned: string }> }) {
-  if (state.phase === 'idle') return null;
+function Verdict({
+  archive,
+  live,
+  asked,
+  bandRef,
+}: {
+  archive: Async<DidReport>;
+  live: Async<LiveResult>;
+  asked: { did: string; before: string };
+  bandRef: React.RefObject<HTMLElement>;
+}) {
+  const reading = read(archive, live, asked);
 
   return (
-    <section className="section measure" id="anchors">
-      <h2 className="section__title">
-        Anchors <span className="notary__source-tag">why you need not trust the clock</span>
-      </h2>
+    <section className="section nband nband--verdict" id="answer" aria-live="polite" ref={bandRef}>
+      <div className="nband__inner">
+        <p className="nband__eyebrow">The answer</p>
 
-      <div className="glass">
-        {state.phase === 'loading' && <p className="empty">Reading the anchor log…</p>}
-        {state.phase === 'failed' && <p className="coverage__problem">{state.error}</p>}
-
-        {state.phase === 'ready' && (
+        {reading === null ? (
+          <p className="nverdict__waiting">Asking the archive, and reading the rings here…</p>
+        ) : (
           <>
-            <p className="notary__note">
-              Once a day Notary builds a Merkle tree over everything it captured that day and
-              publishes the root into <span className="mono">{state.value.anchor_room}</span>,
-              signed by its own key. Fetch any record from the API and it comes with a proof:
-              fold it into the leaf and you reach the root below, or Notary has moved something.
+            <p className={`nverdict__word${reading.yes ? ' nverdict__word--yes' : ''}`}>
+              {reading.word}
             </p>
-
-            <p className="pinned__label">Notary’s key, pinned</p>
-            <p className="pinned__did mono">{state.value.pinned}</p>
-            <p className="notary__note">
-              This is the service’s own key, not its author’s, and it signs nothing but anchors.
-              Foolscap never infers it from who posts in a room.
-            </p>
-
-            {!state.value.matchesPinned && (
-              <p className="coverage__problem">
-                The archive reports a different key —{' '}
-                <span className="mono">{state.value.notary_did}</span>. Roots signed by it verify
-                against nothing this page pins, so treat the log below as unwitnessed.
-              </p>
-            )}
-
-            {state.value.can_sign === false && (
-              <p className="coverage__problem">
-                The archive cannot sign right now
-                {state.value.signing_problem ? `: ${state.value.signing_problem}` : ''}. Roots are
-                still computed; until one is published it constrains nothing.
-              </p>
-            )}
-
-            {state.value.anchors.length === 0 ? (
-              <p className="empty">No day has been anchored yet.</p>
-            ) : (
-              <ul className="notary__rooms">
-                {state.value.anchors.map((anchor) => (
-                  <AnchorRow anchor={anchor} room={state.value.anchor_room} key={anchor.day} />
-                ))}
-              </ul>
-            )}
+            <p className="nverdict__qualifier">{reading.qualifier}</p>
+            <p className="nverdict__subject mono">{asked.did}</p>
+            <div className="nverdict__body">{reading.body}</div>
           </>
         )}
       </div>
@@ -240,50 +333,184 @@ function AnchorPanel({ state }: { state: Async<AnchorLog & { matchesPinned: bool
   );
 }
 
-function AnchorRow({ anchor, room }: { anchor: Anchor; room: string }) {
+/** Null while there is nothing to say yet. */
+function read(
+  archive: Async<DidReport>,
+  live: Async<LiveResult>,
+  asked: { did: string; before: string }
+): Reading | null {
+  if (archive.phase === 'loading') return null;
+
+  const liveHits = live.phase === 'ready' ? live.value.hits : [];
+  const liveBefore = liveHits.filter((hit) => hit.tsMs < Date.parse(asked.before));
+
+  // The live rings can answer the question outright when the DID posted before
+  // the cutoff and the message is still in the ring. Rare — rings are minutes
+  // deep — but when it happens it is the strongest evidence on the page, because
+  // this browser checked the signature itself.
+  if (liveBefore.length > 0) {
+    return {
+      word: 'Yes',
+      qualifier: 'verified in this browser, just now',
+      yes: true,
+      body: (
+        <p className="nverdict__copy">
+          A message from this key, dated{' '}
+          <span className="mono">{stamp(liveBefore[0].ts ?? '')}</span> in{' '}
+          <span className="mono">{liveBefore[0].room}</span>, is still in the ring and its
+          signature verified here.
+        </p>
+      ),
+    };
+  }
+
+  if (archive.phase === 'failed') {
+    return {
+      word: 'No answer',
+      qualifier: 'the archive could not be reached',
+      yes: false,
+      body: (
+        <p className="nverdict__copy">
+          {archive.error} That is a fault here, not a finding about this key.
+        </p>
+      ),
+    };
+  }
+
+  if (archive.phase !== 'ready') return null;
+  const cutoff: Cutoff | null = archive.value.cutoff;
+  if (!cutoff) return null;
+
+  if (cutoff.answer === 'witnessed') {
+    return {
+      word: 'Yes',
+      qualifier: 'Notary witnessed it',
+      yes: true,
+      body: (
+        <>
+          <p className="nverdict__copy">
+            Notary held a signed message from this key at{' '}
+            <span className="mono">{stamp(cutoff.witnessedBefore!)}</span>, before{' '}
+            <span className="mono">{stamp(cutoff.before)}</span>. That timestamp is Notary’s own
+            clock, which is the one thing in this record only Notary can provide.
+          </p>
+          <Evidence id={cutoff.evidenceRecordId} />
+        </>
+      ),
+    };
+  }
+
+  if (cutoff.answer === 'claimed') {
+    return {
+      word: 'Yes',
+      qualifier: 'on the room’s timestamp, not Notary’s',
+      yes: true,
+      body: (
+        <>
+          <p className="nverdict__copy">
+            The archive holds a signed message from this key that{' '}
+            <span className="mono">{roomOf(archive.value, cutoff.evidenceRecordId)}</span> dates{' '}
+            <span className="mono">{stamp(cutoff.claimedBefore!)}</span>, before{' '}
+            <span className="mono">{stamp(cutoff.before)}</span>.
+          </p>
+          <p className="nverdict__note">
+            The signature is real and you can re-verify it yourself. The <em>time</em> is the
+            room’s claim: Notary read this message out of ring history after the fact rather than
+            watching it arrive, so it vouches for the key, not the clock.
+          </p>
+          <Evidence id={cutoff.evidenceRecordId} />
+        </>
+      ),
+    };
+  }
+
+  // The important one, and the one every version of this product gets wrong.
+  return {
+    word: 'Nothing on record',
+    qualifier: 'which is a fact about the archive, not about this key',
+    yes: false,
+    body: (
+      <>
+        <p className="nverdict__copy">
+          Notary holds no message from this key from before{' '}
+          <span className="mono">{stamp(cutoff.before)}</span>.
+        </p>
+        <p className="nverdict__note">
+          <strong>This is not evidence the key was inactive.</strong> Notary captured nothing
+          before its coverage start, it has recorded holes where messages rotated past it, and
+          busy rooms are sampled rather than kept whole. A key can have been posting continuously
+          and still appear in neither source below.
+        </p>
+        {archive.value.totalRecords > 0 && (
+          <p className="nverdict__note">
+            The archive does hold {plural(archive.value.totalRecords, 'record')} from this key, the
+            earliest dated <span className="mono">{stamp(archive.value.firstSourceTs ?? '')}</span>{' '}
+            — after the cutoff asked about.
+          </p>
+        )}
+      </>
+    ),
+  };
+}
+
+function Evidence({ id }: { id: string | null }) {
+  if (!id) return null;
   return (
-    <li className="notary__anchor">
-      <p className="notary__record-head">
-        <span className="mono">{anchor.day}</span>
-        <span className="notary__record-when">
-          {anchor.recordCount == null ? '—' : `${num.format(anchor.recordCount)} records`}
-        </span>
-      </p>
-      <p className="notary__anchor-root mono">{anchor.root ?? 'not built'}</p>
-      <p className="notary__record-meta mono">
-        {anchor.publishedAt
-          ? `published to ${room}${anchor.publishedSeq ? ` at seq ${anchor.publishedSeq}` : ''} · ${stamp(anchor.publishedAt)}`
-          : 'computed, not yet published — constrains nothing until it is'}
-      </p>
-    </li>
+    <p className="nverdict__note">
+      Evidence: record <span className="mono">{id}</span>. Fetch it from the API to get the
+      original signature, the canonical string it covers, and its Merkle proof, and check all
+      three without trusting Notary.
+    </p>
   );
+}
+
+function roomOf(report: DidReport, id: string | null): string {
+  return report.earliest.find((record) => record.id === id)?.room ?? 'the room';
 }
 
 // ---------------------------------------------------------------------------
 // Coverage — stated before anything is asked
 // ---------------------------------------------------------------------------
 
-type Async<T> = { phase: 'idle' } | { phase: 'loading' } | { phase: 'ready'; value: T } | { phase: 'failed'; error: string };
+type Async<T> =
+  | { phase: 'idle' }
+  | { phase: 'loading' }
+  | { phase: 'ready'; value: T }
+  | { phase: 'failed'; error: string };
 
-function CoverageBand({ state }: { state: Async<Coverage> }) {
+/**
+ * A band of counted figures between hairlines, then the limits in two columns.
+ *
+ * The figures are the same treatment the landing's About band gives its three:
+ * the rules draw in from the left, and the numbers start counting as they land.
+ * They are the archive's size, and its size is the first thing that decides what
+ * an absence in it is worth.
+ */
+function CoverageBands({ state }: { state: Async<Coverage> }) {
+  const [bandRef, seen] = useInView<HTMLElement>();
+
   if (state.phase === 'loading') {
     return (
-      <section className="section measure">
-        <p className="empty">Reading what the archive covers…</p>
+      <section className="section nband">
+        <div className="nband__inner">
+          <p className="empty">Reading what the archive covers…</p>
+        </div>
       </section>
     );
   }
 
   if (state.phase === 'failed') {
     return (
-      <section className="section measure">
-        <p className="coverage__problem">
-          {archiveConfigured()
-            ? `The archive did not answer: ${state.error}`
-            : 'This build has no archive behind it.'}{' '}
-          Nothing below can be read as archive evidence, and an empty archive result here would
-          mean the archive is unreachable — not that a key was inactive.
-        </p>
+      <section className="section nband">
+        <div className="nband__inner nband__prose">
+          <p className="coverage__problem">
+            {archiveConfigured()
+              ? `The archive did not answer: ${state.error}`
+              : 'This build has no archive behind it.'}{' '}
+            Nothing below can be read as archive evidence, and an empty archive result here would
+            mean the archive is unreachable — not that a key was inactive.
+          </p>
+        </div>
       </section>
     );
   }
@@ -297,211 +524,176 @@ function CoverageBand({ state }: { state: Async<Coverage> }) {
   const end = cov.lastCapturedAt ? stamp(cov.lastCapturedAt) : null;
   const stale = cov.staleSeconds != null && cov.staleSeconds > 3600;
   const unrecovered = cov.gaps.filter((gap) => gap.lost > 0);
+  const days = windowDays(cov);
 
   return (
-    <section className="section measure" id="coverage">
-      <h2 className="section__title">What this archive covers</h2>
-
-      <p className="notary__coverage-lede">
-        Nothing before <span className="mono">{start ?? 'capture has not started'}</span> exists
-        here, for any key. Notary began capturing then; the network’s own history from before that
-        moment had already rotated away and cannot be recovered by anyone.
-      </p>
-
-      <dl className="facts">
-          <dt>Swept</dt>
-          <dd className="mono">
-            {start ?? '—'} → {end ?? '—'}
-          </dd>
-          <dt>Held</dt>
-          <dd>
-            {num.format(cov.records)} records across {num.format(cov.dids)} DIDs and{' '}
-            {plural(cov.rooms, 'room')}
-          </dd>
-          <dt>Known missing</dt>
-          <dd>
-            {cov.lostMessages > 0
-              ? `${num.format(cov.lostMessages)} messages rotated past Notary and are gone`
-              : 'no unrecovered gaps recorded'}
-          </dd>
-          <dt>Oldest message held</dt>
-          <dd className="mono">{cov.earliestSourceTs ? stamp(cov.earliestSourceTs) : '—'}</dd>
-          {cov.submitted > 0 && (
-            <>
-              <dt>Submitted</dt>
-              <dd>
-                {plural(cov.submitted, 'record')} handed to Notary directly rather than swept
-              </dd>
-            </>
-          )}
-      </dl>
-
-      <p className="notary__note">
-        The oldest message held is older than the capture window because the first sweep read
-        whatever the rings still contained. Its timestamp is the room’s claim, not something
-        Notary watched happen — the distinction is kept everywhere below.
-      </p>
-
-      {stale && (
-        <p className="coverage__problem">
-          Sweeping is not running. The mirror last captured a message{' '}
-          {formatAge(cov.staleSeconds! * 1000)} ago, so everything since then is uncovered and is
-          being lost as the rings turn. Anything submitted directly in the meantime is still held —
-          it just does not mean the rooms are being watched.
-        </p>
-      )}
-
-      {unrecovered.length > 0 && (
-        <div className="notary__gaps">
-          <p className="notary__gaps-title">Recorded holes</p>
-          {unrecovered.map((gap) => (
-            <p className="coverage__problem" key={gap.id}>
-              <span className="mono">{gap.room}</span>: {num.format(gap.lost)} messages rotated out
-              before Notary could recover them
-              {gap.recovered > 0 && ` (${num.format(gap.recovered)} of ${num.format(gap.missing ?? 0)} were recovered)`}
-              , noticed {stamp(gap.noticedAt)}.
-            </p>
-          ))}
-          <p className="notary__note">
-            These are holes Notary noticed and wrote down. A hole means an absence inside it proves
-            nothing at all.
-          </p>
+    <>
+      <section className="nband nband--rules" id="coverage" ref={bandRef} data-in={seen}>
+        <div className="nband__inner">
+          <p className="nband__eyebrow">What this archive covers</p>
+          <ul className="nstats">
+            <Stat value={cov.records} label="signed records held, every original kept" active={seen} />
+            <Stat value={cov.dids} label="distinct DIDs seen at least once" active={seen} />
+            <Stat
+              value={days ?? 0}
+              unit={days === 1 ? 'day' : 'days'}
+              label="of capture. Nothing before it exists here, for any key"
+              active={seen}
+            />
+          </ul>
         </div>
-      )}
+      </section>
+
+      <section className="section nband">
+        <div className="nband__inner nband__split">
+          <div className="nband__left">
+            <p className="notary__coverage-lede">
+              Nothing before <span className="mono">{start ?? 'capture has not started'}</span>{' '}
+              exists here, for any key. Notary began capturing then; the network’s own history
+              from before that moment had already rotated away and cannot be recovered by anyone.
+            </p>
+            <p className="notary__note">
+              The oldest message held is older than the capture window because the first sweep
+              read whatever the rings still contained. Its timestamp is the room’s claim, not
+              something Notary watched happen — the distinction is kept everywhere below.
+            </p>
+          </div>
+
+          <div className="nband__right">
+            <dl className="facts">
+              <dt>Swept</dt>
+              <dd className="mono">
+                {start ?? '—'} → {end ?? '—'}
+              </dd>
+              <dt>Held</dt>
+              <dd>
+                {num.format(cov.records)} records across {num.format(cov.dids)} DIDs and{' '}
+                {plural(cov.rooms, 'room')}
+              </dd>
+              <dt>Known missing</dt>
+              <dd>
+                {cov.lostMessages > 0
+                  ? `${num.format(cov.lostMessages)} messages rotated past Notary and are gone`
+                  : 'no unrecovered gaps recorded'}
+              </dd>
+              <dt>Oldest message held</dt>
+              <dd className="mono">{cov.earliestSourceTs ? stamp(cov.earliestSourceTs) : '—'}</dd>
+              {cov.submitted > 0 && (
+                <>
+                  <dt>Submitted</dt>
+                  <dd>
+                    {plural(cov.submitted, 'record')} handed to Notary directly rather than swept
+                  </dd>
+                </>
+              )}
+            </dl>
+
+            {stale && (
+              <p className="coverage__problem">
+                Sweeping is not running. The mirror last captured a message{' '}
+                {formatAge(cov.staleSeconds! * 1000)} ago, so everything since then is uncovered
+                and is being lost as the rings turn. Anything submitted directly in the meantime
+                is still held — it just does not mean the rooms are being watched.
+              </p>
+            )}
+
+            {unrecovered.length > 0 && (
+              <div className="notary__gaps">
+                <p className="notary__gaps-title">Recorded holes</p>
+                {unrecovered.map((gap) => (
+                  <p className="coverage__problem" key={gap.id}>
+                    <span className="mono">{gap.room}</span>: {num.format(gap.lost)} messages
+                    rotated out before Notary could recover them
+                    {gap.recovered > 0 &&
+                      ` (${num.format(gap.recovered)} of ${num.format(gap.missing ?? 0)} were recovered)`}
+                    , noticed {stamp(gap.noticedAt)}.
+                  </p>
+                ))}
+                <p className="notary__note">
+                  These are holes Notary noticed and wrote down. A hole means an absence inside it
+                  proves nothing at all.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+/** Whole days between the first and last capture, on Notary's clock. */
+function windowDays(cov: Coverage): number | null {
+  if (!cov.firstCapturedAt || !cov.lastCapturedAt) return null;
+  const span = Date.parse(cov.lastCapturedAt) - Date.parse(cov.firstCapturedAt);
+  if (!Number.isFinite(span)) return null;
+  return Math.max(1, Math.round(span / 86_400_000));
+}
+
+function Stat({
+  value,
+  unit,
+  label,
+  active,
+}: {
+  value: number;
+  unit?: string;
+  label: string;
+  active: boolean;
+}) {
+  // BAND_DRAW later than the band's own reveal: the hairlines finish, then the
+  // numbers start.
+  const shown = useCountUp(value, active, 900, BAND_DRAW);
+  return (
+    <li className="nstat">
+      <span className="nstat__figure">
+        {num.format(shown)}
+        {/* A real space, not just the margin: the margin is optical and a
+            screen reader would otherwise read "6days". */}
+        {unit ? <span className="nstat__unit">{` ${unit}`}</span> : null}
+      </span>
+      <span className="nstat__label">{label}</span>
+    </li>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The two sources, side by side
+// ---------------------------------------------------------------------------
+
+/**
+ * Each source in its own pane of glass, and the two panes beside each other.
+ *
+ * The labelling was always in the copy and then in the headings; this puts it in
+ * the layout as well. Stacked in one column they read as one answer given twice,
+ * which is the single worst thing this page could imply — they make different
+ * claims, and only one of them was checked in your browser.
+ */
+function Sources({ archive, live }: { archive: Async<DidReport>; live: Async<LiveResult> }) {
+  return (
+    <section className="section nband" id="sources">
+      <div className="nband__inner">
+        <div className="nsources">
+          <div className="nsource glass" id="archive">
+            <h2 className="nsource__title">
+              Archive
+              <span className="nsource__tag">Notary’s capture</span>
+            </h2>
+            <ArchivePanel state={archive} />
+          </div>
+
+          <div className="nsource glass" id="live">
+            <h2 className="nsource__title">
+              Live
+              <span className="nsource__tag">the rings, read here</span>
+            </h2>
+            <LivePanel state={live} />
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
-
-// ---------------------------------------------------------------------------
-// The answer
-// ---------------------------------------------------------------------------
-
-function CutoffAnswer({
-  archive,
-  live,
-  asked,
-}: {
-  archive: Async<DidReport>;
-  live: Async<LiveResult>;
-  asked: { did: string; before: string };
-}) {
-  if (archive.phase === 'loading') return <p className="empty">Asking the archive…</p>;
-
-  const cutoff: Cutoff | null = archive.phase === 'ready' ? archive.value.cutoff : null;
-  const liveHits = live.phase === 'ready' ? live.value.hits : [];
-  const liveBefore = liveHits.filter((hit) => hit.tsMs < Date.parse(asked.before));
-
-  // The live rings can answer the question outright when the DID posted before
-  // the cutoff and the message is still in the ring. Rare — rings are minutes
-  // deep — but when it happens it is the strongest evidence on the page, because
-  // this browser checked the signature itself.
-  if (liveBefore.length > 0) {
-    return (
-      <div className="card card--attention">
-        <h3 className="card__status">Yes — verified here</h3>
-        <p className="card__copy">
-          A message from this key, dated <span className="mono">{stamp(liveBefore[0].ts ?? '')}</span> in{' '}
-          <span className="mono">{liveBefore[0].room}</span>, is still in the ring and its signature
-          verified in this browser just now.
-        </p>
-      </div>
-    );
-  }
-
-  if (archive.phase === 'failed') {
-    return (
-      <div className="card">
-        <h3 className="card__status">No answer</h3>
-        <p className="card__copy">
-          The archive could not be reached: {archive.error}. That is a fault here, not a finding
-          about this key.
-        </p>
-      </div>
-    );
-  }
-
-  // Narrowing for the branches below, which read the report itself.
-  if (archive.phase !== 'ready') return null;
-  if (!cutoff) return <p className="empty">No cutoff was asked for.</p>;
-
-  if (cutoff.answer === 'witnessed') {
-    return (
-      <div className="card card--attention">
-        <h3 className="card__status">Yes — Notary witnessed it</h3>
-        <p className="card__copy">
-          Notary held a signed message from this key at{' '}
-          <span className="mono">{stamp(cutoff.witnessedBefore!)}</span>, before{' '}
-          <span className="mono">{stamp(cutoff.before)}</span>. That timestamp is Notary’s own
-          clock, which is the one thing in this record only Notary can provide.
-        </p>
-        <Evidence id={cutoff.evidenceRecordId} />
-      </div>
-    );
-  }
-
-  if (cutoff.answer === 'claimed') {
-    return (
-      <div className="card card--attention">
-        <h3 className="card__status">Yes — on the room’s timestamp</h3>
-        <p className="card__copy">
-          The archive holds a signed message from this key that{' '}
-          <span className="mono">{roomOf(archive.value, cutoff.evidenceRecordId)}</span> dates{' '}
-          <span className="mono">{stamp(cutoff.claimedBefore!)}</span>, before{' '}
-          <span className="mono">{stamp(cutoff.before)}</span>.
-        </p>
-        <p className="card__note">
-          The signature is real and you can re-verify it yourself. The <em>time</em> is the room’s
-          claim: Notary read this message out of ring history after the fact rather than watching it
-          arrive, so it vouches for the key, not the clock.
-        </p>
-        <Evidence id={cutoff.evidenceRecordId} />
-      </div>
-    );
-  }
-
-  // The important one, and the one every version of this product gets wrong.
-  return (
-    <div className="card">
-      <h3 className="card__status">Nothing on record</h3>
-      <p className="card__copy">
-        Notary holds no message from this key from before{' '}
-        <span className="mono">{stamp(cutoff.before)}</span>.
-      </p>
-      <p className="card__note">
-        <strong>This is not evidence the key was inactive.</strong> It is a fact about the archive:
-        Notary captured nothing before its coverage start, it has recorded holes where messages
-        rotated past it, and busy rooms are sampled rather than kept whole. A key can have been
-        posting continuously and still appear nowhere above.
-      </p>
-      {archive.value.totalRecords > 0 && (
-        <p className="card__note">
-          The archive does hold {plural(archive.value.totalRecords, 'record')} from this key, the
-          earliest dated <span className="mono">{stamp(archive.value.firstSourceTs ?? '')}</span> —
-          after the cutoff asked about.
-        </p>
-      )}
-    </div>
-  );
-}
-
-function Evidence({ id }: { id: string | null }) {
-  if (!id) return null;
-  return (
-    <p className="card__note">
-      Evidence: record <span className="mono">{id}</span>. Fetch it from the API to get the original
-      signature, the canonical string it covers, and its Merkle proof, and check all three without
-      trusting Notary.
-    </p>
-  );
-}
-
-function roomOf(report: DidReport, id: string | null): string {
-  return report.earliest.find((record) => record.id === id)?.room ?? 'the room';
-}
-
-// ---------------------------------------------------------------------------
-// Archive detail
-// ---------------------------------------------------------------------------
 
 function ArchivePanel({ state }: { state: Async<DidReport> }) {
   if (state.phase === 'loading') return <p className="empty">Reading the archive…</p>;
@@ -527,14 +719,14 @@ function ArchivePanel({ state }: { state: Async<DidReport> }) {
   return (
     <>
       <dl className="facts">
-          <dt>Records held</dt>
-          <dd>{num.format(report.totalRecords)}</dd>
-          <dt>Earliest, by the room’s clock</dt>
-          <dd className="mono">{report.firstSourceTs ? stamp(report.firstSourceTs) : '—'}</dd>
-          <dt>Earliest, on Notary’s clock</dt>
-          <dd className="mono">{report.firstCapturedAt ? stamp(report.firstCapturedAt) : '—'}</dd>
-          <dt>Days with activity</dt>
-          <dd>{report.days.map((day) => day.day).join(', ') || '—'}</dd>
+        <dt>Records held</dt>
+        <dd>{num.format(report.totalRecords)}</dd>
+        <dt>Earliest, by the room’s clock</dt>
+        <dd className="mono">{report.firstSourceTs ? stamp(report.firstSourceTs) : '—'}</dd>
+        <dt>Earliest, on Notary’s clock</dt>
+        <dd className="mono">{report.firstCapturedAt ? stamp(report.firstCapturedAt) : '—'}</dd>
+        <dt>Days with activity</dt>
+        <dd>{report.days.map((day) => day.day).join(', ') || '—'}</dd>
       </dl>
 
       <p className="notary__rooms-title">Where</p>
@@ -590,10 +782,6 @@ function RecordRow({ record }: { record: ArchiveRecord }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Live detail
-// ---------------------------------------------------------------------------
-
 function LivePanel({ state }: { state: Async<LiveResult> }) {
   if (state.phase === 'loading') {
     return <p className="empty">Reading {plural(LIVE_ROOMS.length, 'room')} in this browser…</p>;
@@ -635,8 +823,8 @@ function LivePanel({ state }: { state: Async<LiveResult> }) {
       <p className="notary__note">
         Read just now from {result.roomsRead.map((room) => room).join(', ') || 'no rooms'}. Rings
         are shallow: the oldest message in what was read is from{' '}
-        <span className="mono">{oldest ? stamp(oldest) : '—'}</span>, so this source cannot see past
-        that and an absence here means only that.
+        <span className="mono">{oldest ? stamp(oldest) : '—'}</span>, so this source cannot see
+        past that and an absence here means only that.
       </p>
 
       {result.roomsFailed.length > 0 && (
@@ -654,6 +842,131 @@ function LivePanel({ state }: { state: Async<LiveResult> }) {
         </p>
       )}
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The anchors, and the key they are signed by
+// ---------------------------------------------------------------------------
+
+/**
+ * Why this section exists at all.
+ *
+ * Everything else on this page asks you to believe Notary's clock. The daily
+ * root is the reason you do not have to: it was published into a public room,
+ * signed by a key pinned in this page's own source, before anyone asked about
+ * any particular record. Notary cannot now backdate, remove or move a record
+ * without the published root failing to reproduce.
+ *
+ * THE DID IS PINNED HERE, not read from the API. The API is asked what key it
+ * thinks it has only so the two can be compared — a service that reported its
+ * own identity and was believed would let a wrong key look correct.
+ *
+ * A full-width band between hairlines, and the roots set large in mono. This is
+ * the part a sceptic came for and the only part they can check against
+ * something outside this page, so it is given the weight of evidence rather
+ * than the weight of a footnote.
+ */
+function AnchorBand({
+  state,
+}: {
+  state: Async<AnchorLog & { matchesPinned: boolean; pinned: string }>;
+}) {
+  const [bandRef, seen] = useInView<HTMLElement>();
+  if (state.phase === 'idle') return null;
+
+  return (
+    <section className="nband nband--rules nband--anchors" id="anchors" ref={bandRef} data-in={seen}>
+      <div className="nband__inner nband__split">
+        <div className="nband__left">
+          <p className="nband__eyebrow">Anchors</p>
+          <h2 className="nband__title">Why you need not trust the clock.</h2>
+
+          {state.phase === 'loading' && <p className="empty">Reading the anchor log…</p>}
+          {state.phase === 'failed' && <p className="coverage__problem">{state.error}</p>}
+
+          {state.phase === 'ready' && (
+            <>
+              <p className="nband__copy">
+                Once a day Notary builds a Merkle tree over everything it captured that day and
+                publishes the root into <span className="mono">{state.value.anchor_room}</span>,
+                signed by its own key. Fetch any record from the API and it comes with a proof:
+                fold it into the leaf and you reach one of the roots below, or Notary has moved
+                something.
+              </p>
+            </>
+          )}
+        </div>
+
+        <div className="nband__right">
+          {state.phase === 'ready' && (
+            <>
+              <p className="pinned__label">Notary’s key, pinned</p>
+              <p className="pinned__did mono">{state.value.pinned}</p>
+              <p className="notary__note">
+                This is the service’s own key, not its author’s, and it signs nothing but anchors.
+                Foolscap never infers it from who posts in a room.
+              </p>
+
+              {!state.value.matchesPinned && (
+                <p className="coverage__problem">
+                  The archive reports a different key —{' '}
+                  <span className="mono">{state.value.notary_did}</span>. Roots signed by it verify
+                  against nothing this page pins, so treat the log below as unwitnessed.
+                </p>
+              )}
+
+              {state.value.can_sign === false && (
+                <p className="coverage__problem">
+                  The archive cannot sign right now
+                  {state.value.signing_problem ? `: ${state.value.signing_problem}` : ''}. Roots
+                  are still computed; until one is published it constrains nothing.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* The roots run the whole width of the band rather than sitting in a
+          column beside the explanation. A 64-character hash in 45% of the page
+          wraps to two lines, and a hash you have to reassemble across a line
+          break is a hash nobody will check against the room. */}
+      {state.phase === 'ready' && (
+        <div className="nband__inner">
+          {state.value.anchors.length === 0 ? (
+            <p className="empty">No day has been anchored yet.</p>
+          ) : (
+            <ul className="nanchors">
+              {state.value.anchors.map((anchor) => (
+                <AnchorRow anchor={anchor} room={state.value.anchor_room} key={anchor.day} />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AnchorRow({ anchor, room }: { anchor: Anchor; room: string }) {
+  return (
+    <li className="nanchor">
+      <div className="nanchor__day">
+        <span className="mono">{anchor.day}</span>
+        <span className="nanchor__count">
+          {anchor.recordCount == null ? '—' : `${num.format(anchor.recordCount)} records`}
+        </span>
+      </div>
+      <div className="nanchor__proof">
+        <p className="nanchor__root mono">{anchor.root ?? 'not built'}</p>
+        <p className="nanchor__meta mono">
+          {anchor.publishedAt
+            ? `published to ${room}${anchor.publishedSeq ? ` at seq ${anchor.publishedSeq}` : ''} · ${stamp(anchor.publishedAt)}`
+            : 'computed, not yet published — constrains nothing until it is'}
+        </p>
+      </div>
+    </li>
   );
 }
 

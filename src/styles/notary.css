@@ -1,0 +1,761 @@
+/* notary.css — the Notary page's own furniture.
+ *
+ * The same split hero.css has from foolscap.css: the design system is shared
+ * and lives there, and what is here is one page's composition. It moved out of
+ * foolscap.css when /notary stopped being a column of sections — the detail
+ * rules below are the ones that survived, unchanged, and everything above them
+ * is new.
+ *
+ * THE PROBLEM THIS FILE FIXES. The page had the right tokens and none of the
+ * landing's thinking: a 46rem strip down the left of a 72rem shell, the form
+ * three paragraphs below the title, the verdict set at the same size as the
+ * sentence explaining it, and the two sources — which make different claims and
+ * are the whole point — stacked one above the other like two paragraphs of the
+ * same answer.
+ *
+ * So: full-width bands, each running to --shell, each with its own inner. Two
+ * columns wherever there are two things. --t-answer spent once, on the verdict,
+ * with room around it. Nothing in a 45% column with 55% empty beside it.
+ *
+ * No accent in here except one: .nverdict__word--yes, allowlisted in
+ * test/accent.test.ts. Everything else is white at an opacity. */
+
+/* ------------------------------------------------------------------- bands */
+
+/* A banded page hands the gutter and the vertical rhythm to the bands, so the
+ * shell stops being a column and becomes the page. The nav is fixed in both its
+ * states, so the hero owns the clearance under it rather than the shell. */
+.shell--bands {
+  max-width: none;
+  padding: 0;
+}
+
+.nband {
+  position: relative;
+  /* .section's own margin is the column layout's rhythm. A band's spacing is
+   * its padding, or two adjacent bands would be separated twice. */
+  margin-top: 0;
+  padding-block: clamp(2.5rem, 7vh, 4.5rem);
+}
+
+.nband__inner {
+  position: relative;
+  z-index: 1;
+  max-width: var(--shell);
+  margin-inline: auto;
+  padding-inline: var(--space);
+}
+
+/* Heading one side, the detail the other, using the width instead of running a
+ * strip down the left of an empty page. The landing's About head, exactly: two
+ * 45% columns pushed apart, top-aligned. */
+.nband__split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 45%));
+  justify-content: space-between;
+  align-items: start;
+  gap: clamp(1.5rem, 4vw, 3rem);
+}
+
+.nband__left,
+.nband__right {
+  min-width: 0;
+}
+
+.nband__eyebrow {
+  margin: 0 0 var(--space);
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: var(--t-micro);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.nband__title {
+  margin: 0 0 var(--space);
+  font-family: var(--display);
+  font-stretch: 112%;
+  font-weight: 600;
+  font-size: var(--t-h1);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.nband__copy {
+  margin: 0 0 var(--space);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-mid);
+}
+
+.nband__prose {
+  max-width: var(--measure);
+}
+
+/* ----------------------------------------------------------- ruled bands */
+
+/* Hairlines the full width of the page, which says "this is the evidence" more
+ * plainly than a heading would — the same band the landing's stats sit in.
+ *
+ * Drawn rather than bordered, so they arrive from one end. 500ms, and the
+ * figures inside start counting as they land; BAND_DRAW in Notary.tsx is the
+ * same number. */
+.nband--rules::before,
+.nband--rules::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--rule);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 500ms ease-out;
+}
+
+.nband--rules::before {
+  top: 0;
+}
+
+.nband--rules::after {
+  bottom: 0;
+}
+
+.nband--rules[data-in='true']::before,
+.nband--rules[data-in='true']::after {
+  transform: scaleX(1);
+}
+
+/* -------------------------------------------------------------------- hero */
+
+/* The question left, the lookup right, and the page's own mechanism drawing
+ * itself behind both. The form is the hero: it was previously a control three
+ * paragraphs down from the title, which is where a search box goes on a page
+ * that is about something else. */
+.nhero {
+  position: relative;
+  overflow: hidden;
+  /* The nav is fixed in both its states, so it takes no space in the flow. */
+  padding-top: calc(var(--nav-height) + var(--space-2));
+  padding-bottom: clamp(2.5rem, 7vh, 4.5rem);
+  /* Enough to be an opening, and short enough that the band under it shows —
+   * an answer the reader has to go looking for is not an answer. */
+  min-height: min(86dvh, 46rem);
+  display: flex;
+  align-items: center;
+}
+
+.nhero__inner {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 45%));
+  justify-content: space-between;
+  align-items: center;
+  gap: clamp(1.5rem, 4vw, 3rem);
+}
+
+/* Behind both columns, centred on the band. The columns sit at its left and
+ * right, so the tree's root shows above the type and its leaves below, and the
+ * middle of it reads through the glass of the form. */
+.nhero__figure {
+  position: absolute;
+  left: 50%;
+  top: 54%;
+  transform: translate(-50%, -50%);
+  width: min(88vw, 60rem);
+  aspect-ratio: 572 / 400;
+  z-index: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.nhero__lede {
+  min-width: 0;
+}
+
+.nhero__eyebrow {
+  margin: 0 0 var(--space);
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: var(--t-micro);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* --t-h1 and not --t-answer, deliberately. --t-answer is spent once per page
+ * and this page spends it on the verdict; a hero that took the larger step
+ * would leave the answer quieter than the question. */
+.nhero__title {
+  margin: 0 0 var(--space);
+  font-family: var(--display);
+  font-stretch: 112%;
+  font-weight: 600;
+  font-size: var(--t-h1);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.nhero__line {
+  margin: 0;
+  max-width: 28rem;
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-mid);
+}
+
+.nhero__ask {
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------ lookup */
+
+/* Three controls and two notes, spaced by the form rather than by each part's
+ * own margin: the label, the inputs and the notes are shared with the Tracker's
+ * lookup and carry margins sized for a page rather than for a card. */
+.nlookup {
+  display: grid;
+  gap: var(--space-half);
+}
+
+.nlookup > * {
+  margin: 0;
+}
+
+/* The DID gets its own row because it is 56 characters long. */
+.nlookup__did {
+  display: block;
+  width: 100%;
+}
+
+/* The one gap that is not the form's rhythm: the DID is one question and the
+ * cutoff is the next, and the date and the button are a single decision. */
+.nlookup__row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-half);
+  margin-top: var(--space-half);
+}
+
+.nlookup__cutoff {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.nlookup__cutoff .notary__date {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.nlookup__row .lookup__submit {
+  flex: 0 0 auto;
+}
+
+/* Outside the card, not in it. It is a statement about the whole page rather
+ * than an instruction for the field above. */
+.nlookup__nokey {
+  margin: var(--space) 0 0;
+  font-size: var(--t-small);
+  line-height: 1.55;
+  color: var(--ink-faint);
+}
+
+/* ----------------------------------------------------------------- verdict */
+
+/* The one answer, in the one type step this page is allowed to spend once, with
+ * nothing beside it.
+ *
+ * It used to be a card heading at the same size as the sentence under it, which
+ * meant the page had no answer — it had a paragraph that happened to begin with
+ * one. The word lands first now and everything qualifying it follows. */
+.nband--verdict {
+  padding-block: clamp(3.5rem, 12vh, 7rem);
+}
+
+.nverdict__word {
+  margin: var(--space) 0 0;
+  font-family: var(--display);
+  font-stretch: 108%;
+  font-size: var(--t-answer);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+/* The accent, spent once on this page. A yes here rests on a signature that
+ * verified; what the TIMESTAMP rests on is the qualifier's job, below, because
+ * that distinction can be explained in words and cannot be read off a hue. */
+.nverdict__word--yes {
+  color: var(--accent);
+}
+
+.nverdict__qualifier {
+  margin: var(--space) 0 0;
+  max-width: 34rem;
+  font-family: var(--display);
+  font-size: var(--t-h2);
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--ink-mid);
+}
+
+/* Which key was asked about. Small, because the reader typed it and the answer
+ * is the thing they came back for. */
+.nverdict__subject {
+  margin: var(--space-2) 0 0;
+  /* .mono's optical correction, restated: it is an em against the parent, and
+   * this element sets its own size. */
+  font-size: calc(var(--t-micro) * 0.94);
+  color: var(--ink-faint);
+}
+
+.nverdict__body {
+  max-width: var(--measure);
+  margin-top: var(--space-2);
+  padding-top: var(--space);
+  border-top: 1px solid var(--rule);
+}
+
+.nverdict__copy {
+  margin: 0 0 var(--space);
+  color: var(--ink-mid);
+}
+
+/* The qualifying sentence under an answer — the half of this page that stops it
+ * claiming more than it knows, so it is sized to be read rather than skimmed. */
+.nverdict__note {
+  margin: 0 0 var(--space);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.nverdict__copy:last-child,
+.nverdict__note:last-child {
+  margin-bottom: 0;
+}
+
+.nverdict__waiting {
+  margin: var(--space) 0 0;
+  font-size: var(--t-small);
+  color: var(--ink-faint);
+}
+
+/* ------------------------------------------------------------------- stats */
+
+/* The archive's size, counted up as the band's rules land. Its size is the
+ * first thing that decides what an absence in it is worth, so it is the first
+ * thing under the hero.
+ *
+ * --t-h1, not the landing's clamp. About's figures may be the largest thing on
+ * that page because it has no single answer; this page does, and a stat set
+ * above --t-answer would outrank the verdict. */
+.nstats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: var(--space) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nstat {
+  padding-inline: clamp(1rem, 2.4vw, 2rem);
+}
+
+.nstat:first-child {
+  padding-left: 0;
+}
+
+/* Between the blocks, never around them: three figures with a box drawn round
+ * each would be a table pretending not to be one. */
+.nstat + .nstat {
+  border-left: 1px solid var(--rule);
+}
+
+.nstat__figure {
+  display: block;
+  margin-bottom: var(--space-half);
+  font-family: var(--display);
+  font-stretch: 112%;
+  font-weight: 600;
+  font-size: var(--t-h1);
+  line-height: 1;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* "6" and "days" are one figure. The space between them is a real space, in the
+ * markup, so it survives into the accessible name; this only tunes it. */
+.nstat__unit {
+  margin-left: 0.04em;
+}
+
+.nstat__label {
+  display: block;
+  max-width: 18rem;
+  font-size: var(--t-small);
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
+
+/* ----------------------------------------------------------------- sources */
+
+/* Two panes of glass, beside each other. Stacked in one column they read as one
+ * answer given twice, which is the single worst thing this page could imply:
+ * they reach back different distances, they are timed by different clocks, and
+ * only one of them was checked in your browser. */
+.nsources {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: clamp(0.9rem, 1.8vw, 1.35rem);
+}
+
+.nsource {
+  min-width: 0;
+}
+
+.nsource__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6em;
+  margin: 0 0 var(--space);
+  padding-bottom: var(--space-half);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--display);
+  font-size: var(--t-h2);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+/* Which source an answer came from, on the heading itself rather than in a
+ * legend somewhere else. The two make different claims and the reader has to
+ * know which one they are looking at without going to find out. */
+.nsource__tag {
+  font-family: var(--body);
+  font-size: var(--t-micro);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--ink-faint);
+}
+
+/* ----------------------------------------------------------------- anchors */
+
+/* The last band on the page and the one a sceptic came for, so it is given more
+ * room than the bands that merely report. */
+.nband--anchors {
+  padding-block: clamp(3rem, 9vh, 5.5rem);
+}
+
+/* A ledger the width of the band: the day in a left gutter, the root itself
+ * across the rest. It is the one thing on this page a reader can carry to the
+ * room and compare, so it is not asked to share a column with the prose that
+ * explains it. */
+.nanchors {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--rule);
+}
+
+.nanchor {
+  display: grid;
+  grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+  gap: var(--space);
+  padding: var(--space) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.nanchor__day {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+  font-size: var(--t-small);
+  color: var(--ink-mid);
+}
+
+.nanchor__count {
+  font-size: var(--t-micro);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.nanchor__proof {
+  min-width: 0;
+}
+
+/* The root, large. It is the one thing on this page a sceptic can carry to the
+ * room and compare, so it is set to be read off the screen rather than squinted
+ * at, and it breaks anywhere rather than pushing the page sideways.
+ *
+ * The 0.94 is .mono's optical correction restated: it is an em against the
+ * parent, and this element sets its own size. */
+.nanchor__root {
+  margin: 0;
+  font-size: calc(var(--t-h2) * 0.94);
+  line-height: 1.35;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.nanchor__meta {
+  margin: var(--space-half) 0 0;
+  font-size: var(--t-micro);
+  color: var(--ink-faint);
+}
+
+/* ------------------------------------------------------------------ narrow */
+
+@media (max-width: 62rem) {
+  /* One column, in reading order: question, then the form. The hero stops
+   * being a fixed height and grows with its contents. */
+  .nhero {
+    min-height: 0;
+    padding-bottom: clamp(2rem, 5vh, 3rem);
+  }
+
+  .nhero__inner,
+  .nband__split,
+  .nsources {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Behind the heading, and clear of the copy under it. Stacked, the figure has
+   * no column of its own to sit in, so it takes the landing's arrangement
+   * instead: over the one block of type large enough to survive a hairline
+   * behind it, and nowhere near the paragraph. */
+  .nhero__figure {
+    top: 26%;
+    width: min(74vw, 22rem);
+  }
+
+  .nhero__line {
+    max-width: none;
+  }
+
+  .nband__eyebrow {
+    margin-bottom: var(--space-half);
+  }
+}
+
+@media (max-width: 44rem) {
+  .nstats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nstat {
+    padding-inline: 0;
+  }
+
+  /* The verticals lie down. Same hairline, same job. */
+  .nstat + .nstat {
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+    margin-top: var(--space);
+    padding-top: var(--space);
+  }
+
+  .nstat__label {
+    max-width: 30rem;
+  }
+
+  /* The day stops being a gutter and becomes a heading over its own root. */
+  .nanchor {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-half);
+  }
+
+  .nanchor__day {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space);
+  }
+}
+
+/* ---------------------------------------------------------- reduced motion */
+
+@media (prefers-reduced-motion: reduce) {
+  /* The band's rules are simply there. The figures inside them resolve to their
+   * values on the first render — see useCountUp. */
+  .nband--rules::before,
+  .nband--rules::after {
+    transform: scaleX(1);
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+ * Below here is what moved out of foolscap.css unchanged: the row, record and
+ * note styles the panels above are built from. They were always this page's
+ * alone; they were only ever in the shared file because this page had no file.
+ * ========================================================================== */
+
+/* The page argues with itself on purpose: every answer is followed by what that
+ * answer cannot support. So the quiet type here carries as much weight as the
+ * headline does, and it is sized to be read rather than skimmed past. */
+
+.notary__date {
+  width: auto;
+  min-width: 12rem;
+  font-family: var(--mono);
+  font-size: var(--t-small);
+  /* Chromium paints the native picker indicator dark-on-dark otherwise. */
+  color-scheme: dark;
+}
+
+.notary__cutoff-note {
+  margin: var(--space-half) 0 0;
+  color: var(--ink-faint);
+  font-size: var(--t-small);
+}
+
+.notary__problem {
+  margin: var(--space) 0 0;
+  color: var(--warn);
+  font-size: var(--t-small);
+}
+
+.notary__coverage-lede {
+  margin: 0 0 var(--space);
+  font-size: var(--t-body);
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.notary__gaps {
+  margin-top: var(--space);
+  padding-top: var(--space-half);
+  border-top: 1px solid var(--rule);
+}
+
+.notary__gaps-title,
+.notary__rooms-title {
+  margin: 0 0 var(--space-half);
+  color: var(--ink-faint);
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.notary__rooms-title {
+  margin-top: var(--space);
+}
+
+.notary__rooms {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notary__room {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 0.6em;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-mid);
+  font-size: var(--t-small);
+}
+
+.notary__room-detail {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A sampled room is not a weaker record, it is a narrower claim: the rows are
+ * the same originals, there are simply fewer of them. The tag is here so a
+ * count is never read as "all of it". */
+.notary__sampled {
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--ink-faint);
+  font-size: var(--t-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.notary__record {
+  padding: var(--space-half) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.notary__record-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space);
+  margin: 0;
+  font-size: var(--t-small);
+}
+
+.notary__record-when {
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.notary__record-text {
+  margin: 0.35rem 0 0;
+  color: var(--ink-mid);
+  font-size: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+.notary__record-meta {
+  margin: 0.35rem 0 0;
+  color: var(--ink-faint);
+  font-size: var(--t-micro);
+}
+
+/* The qualifying sentence under a panel.
+ *
+ * Not .facts__note, which belongs to the City's detail panel and inherits a
+ * size from it; here it would land at full body size with no space above. This
+ * page has more of these than any other and they are its real content, so they
+ * get a size that reads as a note without becoming unreadable. */
+.notary__note {
+  display: block;
+  margin: var(--space-half) 0 0;
+  color: var(--ink-faint);
+  font-size: var(--t-small);
+  line-height: 1.55;
+}
+
+.notary__live-lede {
+  margin: 0 0 var(--space-half);
+  font-size: var(--t-small);
+}
+
+/* The label above a pinned key. /track has one for the referee and /notary one
+ * for Notary itself; both are keys something is checked against, which is the
+ * only reason either is on screen. */
+.pinned__label {
+  margin: var(--space) 0 var(--space-half);
+  font-family: var(--display);
+  font-size: var(--t-micro);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+}
+
+@media (max-width: 30rem) {
+  .notary__room {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .notary__record-head {
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+}

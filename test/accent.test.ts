@@ -66,6 +66,18 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
   { selector: '.card--attention .card__status', why: 'the word of that status' },
   { selector: '.row__status--attention', why: 'the same, in a list' },
 
+  // --- verified ------------------------------------------------------------
+  // The one answer /notary gives in the affirmative, and it is only reached
+  // when a signature verified — here in the browser, or in Notary's capture.
+  // The qualifier line under it carries whether the TIMESTAMP is Notary's clock
+  // or the room's claim, because that is a distinction words can make and a hue
+  // cannot. "Nothing on record" and "No answer" stay white: an absence is not a
+  // state, and colouring one would claim exactly what this page refuses to.
+  {
+    selector: '.nverdict__word--yes',
+    why: 'a key whose signature verified before the cutoff asked about',
+  },
+
   // --- current ------------------------------------------------------------
   // "Current" is in the token's own definition, and where you are is state.
   { selector: ".hero__nav-link[aria-current='page']", why: 'the page you are on' },

@@ -299,13 +299,16 @@ export function Footer() {
 /**
  * How the page holds its content.
  *
- * `column` is every page: a measure-wide column under the header. `bleed` is the
- * City and, so far, only the City — a canvas under everything with the header
- * floating over it and the content in a panel. The variant changes the frame the
- * page sits in and nothing else; the nav, the header and the footer are the same
- * parts from the same source either way.
+ * `column` is the default: a measure-wide column under the header. `bleed` is
+ * the City and, so far, only the City — a canvas under everything with the
+ * header floating over it and the content in a panel. `bands` is the landing's
+ * composition applied to a tool: full-width sections, each with its own inner
+ * measure, and the page opening with a hero rather than a header.
+ *
+ * The variant changes the frame the page sits in and nothing else; the nav and
+ * the footer are the same parts from the same source in all three.
  */
-export type ShellVariant = 'column' | 'bleed';
+export type ShellVariant = 'column' | 'bleed' | 'bands';
 
 /**
  * Wrap a route in the shell.
@@ -337,6 +340,7 @@ export function Shell({
   }
 
   const bleed = variant === 'bleed';
+  const bands = variant === 'bands';
 
   // The same pointer field the landing runs: one listener, one rAF loop, the
   // glow following the cursor and the grid brightening under it. Queried rather
@@ -364,12 +368,20 @@ export function Shell({
 
       <HeroNav action={navAction(current.id)} currentId={current.id} />
 
-      <main className={bleed ? 'shell shell--bleed' : 'shell'}>
-        <header className={bleed ? 'page-header page-header--float' : 'page-header'}>
-          <p className="page-header__eyebrow">{current.eyebrow}</p>
-          <h1 className="page-header__title">{current.title}</h1>
-          <p className="page-header__line">{current.line}</p>
-        </header>
+      <main className={`shell${bleed ? ' shell--bleed' : ''}${bands ? ' shell--bands' : ''}`}>
+        {/* A banded page opens with a hero that carries this header's three
+            parts at its own scale, so rendering the header here as well would
+            put the eyebrow and the title on the page twice. It reads the same
+            row of PAGES to do it — the rule that one link cannot exist on four
+            of six pages holds because nothing is written twice, not because
+            this component is the only thing allowed to render it. */}
+        {!bands && (
+          <header className={bleed ? 'page-header page-header--float' : 'page-header'}>
+            <p className="page-header__eyebrow">{current.eyebrow}</p>
+            <h1 className="page-header__title">{current.title}</h1>
+            <p className="page-header__line">{current.line}</p>
+          </header>
+        )}
         {children}
       </main>
       <Footer />
