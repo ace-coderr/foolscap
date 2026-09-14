@@ -1090,6 +1090,21 @@
   color: var(--ink-faint);
 }
 
+/* A hole in Notary's own record, marked the way every other limit on this page
+ * is marked: a --warn rule on the left, no fill. The same treatment as the
+ * ceiling notice on purpose — both are "here is something this archive cannot
+ * do", and a reader who has learnt the idiom once should not have to learn it
+ * again. Not in mono: it is prose, unlike the root above it. */
+.nanchor__lost {
+  max-width: var(--measure);
+  margin: var(--space-half) 0 0;
+  padding-left: var(--space);
+  border-left: 2px solid var(--warn);
+  font-size: var(--t-micro);
+  line-height: 1.7;
+  color: var(--ink-mid);
+}
+
 /* ------------------------------------------------------------------ narrow */
 
 @media (max-width: 62rem) {

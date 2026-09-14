@@ -75,6 +75,34 @@ create table if not exists anchors (
   last_capture   timestamptz
 );
 
+-- A day whose capture window is gone and is not coming back.
+--
+-- Notary keeps a record of its own holes — the gaps table is full of them — and
+-- this is one of those holes, in the anchor log rather than in the mirror. On
+-- 2026-09-13 a verification run rebuilt 2026-09-12's anchor row over the
+-- records that survived pruning and wrote the result over a row that had
+-- already been published. root and record_count were restored from the
+-- published message; first_capture and last_capture could not be, because the
+-- message carrying them had rotated out of the room it was posted to by the
+-- time the overwrite was noticed.
+--
+-- The columns still hold the rebuild's own window. Those values are not wrong
+-- about nothing — they are the window of the rebuild — but they are not the
+-- day's, and serving them would be Notary making up a fact about itself. The
+-- flag is what stops that: the reader suppresses both columns where it is set
+-- and the page says the window is lost, in the same register as any other hole.
+--
+-- upsertAnchor can no longer overwrite a published row, so no day can join this
+-- one. That is why this is a flag on a row and not a general mechanism.
+alter table anchors add column if not exists window_lost boolean not null default false;
+
+-- Keyed on the published root, so it can only ever match THIS archive's row.
+-- A fresh Notary elsewhere has no 2026-09-12 and no such root, and gets nothing.
+update anchors set window_lost = true
+ where day = date '2026-09-12'
+   and root = '9dc8901398141aa175ae311db9d4d8c314ea8a5c6c030877aff483c629fffc47'
+   and window_lost = false;
+
 -- The permanent tier: one row per (did, room), for ever.
 --
 -- WHY IT HAS NO DAY COLUMN. The obvious shape is (did, room, activity_day),

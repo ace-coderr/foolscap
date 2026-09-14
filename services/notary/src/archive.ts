@@ -215,6 +215,13 @@ export interface AnchorRow {
   publishedAt: string | null;
   firstCapture: string | null;
   lastCapture: string | null;
+  /**
+   * The day's capture window is gone — see the anchors table in schema.sql.
+   * When this is set, firstCapture and lastCapture are served as null, because
+   * what is stored in them belongs to the run that destroyed them. The root
+   * still verifies; the window is simply a thing Notary no longer knows.
+   */
+  windowLost: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -692,7 +699,7 @@ export async function recordsForDay(day: string): Promise<RecordRow[]> {
 export async function anchors(): Promise<AnchorRow[]> {
   const { rows } = await getPool().query(
     `select to_char(day, 'YYYY-MM-DD') as day, root, record_count, published_seq::text as published_seq,
-            published_at, first_capture, last_capture
+            published_at, first_capture, last_capture, window_lost
        from anchors order by day desc`
   );
   return rows.map((row) => ({
@@ -701,8 +708,13 @@ export async function anchors(): Promise<AnchorRow[]> {
     recordCount: row.record_count == null ? null : Number(row.record_count),
     publishedSeq: row.published_seq ?? null,
     publishedAt: iso(row.published_at),
-    firstCapture: iso(row.first_capture),
-    lastCapture: iso(row.last_capture),
+    // SUPPRESSED RATHER THAN READ. A flagged day still has timestamps in those
+    // columns; they are the window of the run that overwrote the real ones.
+    // Serving them would be Notary inventing a fact about its own history,
+    // which is the one kind of lie this whole service is built to make hard.
+    firstCapture: row.window_lost ? null : iso(row.first_capture),
+    lastCapture: row.window_lost ? null : iso(row.last_capture),
+    windowLost: row.window_lost === true,
   }));
 }
 

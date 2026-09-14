@@ -555,3 +555,82 @@ describe('the schema describes itself', () => {
     assert.ok(tables.includes('cursors'), 'the resume point has nowhere to live without it');
   });
 });
+
+// ---------------------------------------------------------------------------
+
+const SRC = join(dirname(fileURLToPath(import.meta.url)), '..', 'services', 'notary');
+const readSrc = (...parts) => readFileSync(join(SRC, ...parts), 'utf8');
+
+/**
+ * A day is anchored once, when it is over.
+ *
+ * Three code paths choose days to anchor: the default (yesterday), the hourly
+ * sweep, and `--all`. Two of them waited for UTC to leave the day and `--all`
+ * did not, so running it at 23:12 UTC built a root over 614,510 records of a
+ * day that reached 885,187 by midnight. Published, that root would have been
+ * frozen by upsertAnchor's own protection — a permanent commitment to a partial
+ * day, defended by the mechanism meant to defend the day.
+ *
+ * Asserted against the source rather than a database because there is nothing
+ * to query: the bug is a missing WHERE clause, and a fixture that reproduced it
+ * would need the real table and a clock held at the wrong hour.
+ */
+describe('only a closed day is anchored', () => {
+  const CLOSED = "r.day < (now() at time zone 'utc')::date";
+
+  test('every day-selecting query waits for UTC to leave the day', () => {
+    const src = readSrc('src', 'anchor.ts');
+    for (const fn of ['unanchoredDays', 'daysNeedingPublication']) {
+      const start = src.indexOf(`export async function ${fn}(`);
+      assert.ok(start > -1, `${fn} should exist`);
+      const body = src.slice(start, src.indexOf('\n}', start));
+      assert.ok(body.includes(CLOSED), `${fn} would anchor the day still being captured`);
+    }
+  });
+});
+
+/**
+ * Notary keeps a record of its own holes, including the one in its anchor log.
+ *
+ * 2026-09-12's anchor row was overwritten by a rebuild after publication. root
+ * and record_count were restored from the published message; first_capture and
+ * last_capture could not be, because that message had rotated out of the room
+ * before the overwrite was noticed. The columns still hold the REBUILD's
+ * window, so the reader has to be told not to believe them.
+ *
+ * If this flag ever stops being set, the page quietly starts reporting a
+ * fifteen-minute capture window for a day that ran for hours, and reports it
+ * with the same confidence as a real one. That is the failure worth a test.
+ */
+describe('a lost capture window is declared, not guessed', () => {
+  const ROOT_0912 = '9dc8901398141aa175ae311db9d4d8c314ea8a5c6c030877aff483c629fffc47';
+
+  test('the schema declares the flag and keys the fact to the published root', () => {
+    const sql = readSrc('db', 'schema.sql');
+    assert.ok(
+      /alter table anchors add column if not exists window_lost/.test(sql),
+      'anchors needs somewhere to record a lost window'
+    );
+    assert.ok(sql.includes(ROOT_0912), 'the fact should be keyed to the root it belongs to');
+    // Keyed on the root, so a fresh Notary elsewhere — which has a 2026-09-12
+    // and no such root — is never told it lost something it never had.
+    const stmt = sql.slice(sql.indexOf('update anchors set window_lost'));
+    assert.ok(
+      stmt.indexOf(ROOT_0912) < stmt.indexOf(';'),
+      'the update must match on root, not on the date alone'
+    );
+  });
+
+  test('the reader suppresses the window it still holds', () => {
+    const src = readSrc('src', 'archive.ts');
+    const start = src.indexOf('export async function anchors(');
+    const body = src.slice(start, src.indexOf('\n}', start));
+    assert.ok(body.includes('window_lost'), 'anchors() should read the flag');
+    for (const field of ['first_capture', 'last_capture']) {
+      assert.ok(
+        body.includes(`row.window_lost ? null : iso(row.${field})`),
+        `${field} must be suppressed for a flagged day, not served`
+      );
+    }
+  });
+});

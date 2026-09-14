@@ -110,6 +110,13 @@ export interface Anchor {
   publishedAt: string | null;
   firstCapture: string | null;
   lastCapture: string | null;
+  /**
+   * The day's capture window is lost. The archive suppresses both timestamps
+   * when this is set rather than serving the values it still holds, which
+   * belong to the run that destroyed the real ones. Optional because an older
+   * archive will not send the field; absent means nothing is known to be wrong.
+   */
+  windowLost?: boolean;
 }
 
 /**

@@ -1540,13 +1540,22 @@ function SummaryAnchors({ rows, room }: { rows: SummaryAnchor[]; room: string })
 }
 
 
+/**
+ * One day's root, and where to go and check it.
+ *
+ * A row can carry a hole of its own. The archive keeps a record of what it
+ * failed to capture; this is the same admission one level up — what it failed
+ * to keep about its own anchoring. It sits under the root rather than beside
+ * it, because the root above it is unaffected: the day is still verifiable
+ * against the message in the room. Only the window is gone.
+ */
 function AnchorRow({ anchor, room }: { anchor: Anchor; room: string }) {
   return (
     <li className="nanchor">
       <div className="nanchor__day">
         <span className="mono">{anchor.day}</span>
         <span className="nanchor__count">
-          {anchor.recordCount == null ? '—' : `${num.format(anchor.recordCount)} records`}
+          {anchor.recordCount == null ? '—' : plural(anchor.recordCount, 'record')}
         </span>
       </div>
       <div className="nanchor__proof">
@@ -1556,6 +1565,15 @@ function AnchorRow({ anchor, room }: { anchor: Anchor; room: string }) {
             ? `published to ${room}${anchor.publishedSeq ? ` at seq ${anchor.publishedSeq}` : ''} · ${stamp(anchor.publishedAt)}`
             : 'computed, not yet published — constrains nothing until it is'}
         </p>
+        {anchor.windowLost && (
+          <p className="nanchor__lost">
+            Capture window lost. This row was overwritten by a rebuild after it had been published;
+            the root and the record count were restored from the published message, and the first
+            and last capture times could not be, because that message had rotated out of{' '}
+            <span className="mono">{room}</span> by the time it was noticed. The root still
+            verifies. Notary no longer knows when this day started or stopped.
+          </p>
+        )}
       </div>
     </li>
   );
