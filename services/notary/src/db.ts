@@ -33,7 +33,8 @@ export interface ArchiveRecord {
 
 export interface GapRow {
   room: string;
-  kind: 'missed' | 'regenerated' | 'rotated';
+  /** 'missed' and 'downtime' are loss; 'rotated' marks where coverage begins. */
+  kind: 'missed' | 'downtime' | 'regenerated' | 'rotated';
   missing?: number | null;
   expectedSeq?: number | null;
   firstSeq?: number | null;

@@ -72,11 +72,26 @@ create table if not exists anchors (
 
 -- Holes in the archive, recorded rather than hidden.
 --
--- 'missed'      lines rotated past while Notary was following the room. The
---               archive is missing them and always will be.
+-- TWO OF THESE ARE LOSS AND ONE IS NOT, and conflating them is the mistake this
+-- comment exists to prevent. It was made: the coverage endpoint summed `missing`
+-- across every kind, so history that predated Notary was reported as messages
+-- Notary had lost, and the headline overstated the loss by a factor of forty.
+--
+-- 'missed'      lines rotated past while Notary was following the room — it was
+--               reading, and the ring outran it. LOSS.
+-- 'downtime'    lines that went past between the last message Notary stored for
+--               a room and where the ring began when it next looked. Notary was
+--               responsible for the room and was not running. LOSS.
 -- 'regenerated' the room was deleted and recreated; sequence numbers restarted.
--- 'rotated'     what the ring had already dropped when Notary first looked, so
---               it marks the start of coverage for that room.
+-- 'rotated'     what the ring had already dropped when Notary FIRST looked at a
+--               room. It marks the start of coverage and is NOT loss: nobody
+--               could have captured it, and no one can say how much there was.
+--
+--               These rows must never be summed. Each one re-asserts a whole
+--               room from seq 1, and one is written every time the mirror
+--               restarts — three kibble rows inside six hours each claimed the
+--               room's entire 6.4M-message history. The row is a marker that a
+--               room began mid-ring, and that is all it can support.
 --
 -- An archive that quietly has holes is worse than no archive, because people
 -- would draw conclusions from absence. Every answer this database gives about a
@@ -84,7 +99,7 @@ create table if not exists anchors (
 create table if not exists gaps (
   id           bigserial primary key,
   room         text not null,
-  kind         text not null check (kind in ('missed', 'regenerated', 'rotated')),
+  kind         text not null,
   missing      integer,
   expected_seq bigint,
   first_seq    bigint,
@@ -100,4 +115,16 @@ create table if not exists gaps (
 
 alter table gaps add column if not exists recovered integer not null default 0;
 
+-- Stated as an alter rather than inline on the create, because 'downtime' is
+-- newer than the table and an existing database has the three-value constraint
+-- on it. Dropping and re-adding is idempotent; leaving it would make every
+-- downtime gap fail to insert on a deployment that had not migrated.
+alter table gaps drop constraint if exists gaps_kind_check;
+alter table gaps add constraint gaps_kind_check
+  check (kind in ('missed', 'downtime', 'regenerated', 'rotated'));
+
 create index if not exists gaps_room_noticed_idx on gaps (room, noticed_at);
+
+-- The coverage endpoint asks for the largest holes rather than all of them, and
+-- there are already a thousand rows.
+create index if not exists gaps_kind_missing_idx on gaps (kind, missing desc);

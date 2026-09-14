@@ -93,6 +93,7 @@ const stats = {
   badSignature: 0,
   badNonce: 0,
   gapsMissed: 0,
+  gapsDowntime: 0,
   recovered: 0,
   lost: 0,
   sampledAway: 0,
@@ -223,11 +224,41 @@ async function absorb(messages: Message[], room: string): Promise<void> {
 // Holes
 // ---------------------------------------------------------------------------
 
-async function recordGap(room: string, gap: Gap): Promise<void> {
+/**
+ * A hole, written down.
+ *
+ * `kind` is wider than technocore's Gap because one kind has no equivalent in
+ * the reader: 'downtime' is what a restart discovers, and only this process
+ * knows it was ever away. See recordDowntime below.
+ */
+// Omit-and-replace, not an intersection: `Gap & { kind: ... }` intersects the
+// two unions rather than widening, so the extra member is narrowed straight
+// back out and 'downtime' stays unassignable.
+export type RecordedGap = Omit<Gap, 'kind'> & { kind: Gap['kind'] | 'downtime' };
+
+/**
+ * What goes in the `missing` column. A 'rotated' row NEVER carries a count,
+ * wherever it came from.
+ *
+ * detectGap computes missing = firstSeq - 1 for one of these, which is a fair
+ * description of a single observation — that many sequence numbers precede our
+ * window — and a trap as a stored quantity. Any poll starting from since = 0
+ * writes another one, so the column collected three rows inside six hours each
+ * claiming kibble's whole 6.4M history, and the coverage endpoint added them
+ * up. first_seq carries the real information: where coverage begins. How much
+ * came before it is not knowable, and it was never Notary's to lose.
+ */
+export function storedMissing(gap: RecordedGap): number | null {
+  return gap.kind === 'rotated' ? null : (gap.missing ?? null);
+}
+
+async function recordGap(room: string, gap: RecordedGap): Promise<void> {
+  const missing = storedMissing(gap);
+
   const detail = {
     room,
     kind: gap.kind,
-    missing: gap.missing ?? null,
+    missing,
     expectedSeq: gap.expected ?? null,
     firstSeq: gap.firstSeq ?? null,
     generation: gap.generation ?? null,
@@ -251,6 +282,16 @@ async function recordGap(room: string, gap: Gap): Promise<void> {
       `[${room}] GAP — ${gap.missing} message(s) rotated past before Notary read them ` +
         `(expected seq ${gap.expected}, reply starts at ${gap.firstSeq}). Recorded; queued for re-export.`
     );
+  } else if (gap.kind === 'downtime') {
+    stats.gapsDowntime++;
+    if (gap.expected != null && gap.firstSeq != null) {
+      addHole(room, { id, from: gap.expected, to: gap.firstSeq - 1 });
+    }
+    log(
+      `[${room}] DOWNTIME GAP — ${gap.missing} message(s) went past while Notary was not ` +
+        `running (last stored seq ${(gap.expected ?? 1) - 1}, ring now starts at ${gap.firstSeq}). ` +
+        `Recorded; queued for re-export.`
+    );
   } else if (gap.kind === 'regenerated') {
     log(`[${room}] room was recreated (generation ${gap.generation}); restarting from the new ring.`);
   } else {
@@ -261,6 +302,53 @@ async function recordGap(room: string, gap: Gap): Promise<void> {
 // ---------------------------------------------------------------------------
 // Backfill, then follow
 // ---------------------------------------------------------------------------
+
+/**
+ * A ring starts above seq 1. Which of two different facts is that?
+ *
+ * NOTHING STORED FOR THIS ROOM YET — this is the first look, and everything
+ * before the ring's start had rotated out before Notary existed. Not loss:
+ * nobody could have captured it, and there is no way to say how much there was.
+ * `missing` stays null and must never be summed. The row is still written,
+ * because "coverage for this room begins mid-ring" is a fact every answer about
+ * a DID has to be read against.
+ *
+ * SOMETHING IS STORED BELOW WHERE THE RING NOW STARTS — Notary was following
+ * this room, went away, and the ring moved on without it. That span is known
+ * exactly: the distance between the last message stored and the ring's new
+ * first. It is loss of the same weight as a missed poll.
+ *
+ * Both used to come out as 'rotated' with missing: null. So the downtime was
+ * counted as zero, while the same restart separately re-asserted the room's
+ * entire history as freshly lost — two errors pointing opposite ways, and the
+ * larger one won by a factor of forty.
+ *
+ * Returns null when the ring still reaches what is stored: nothing was lost and
+ * there is nothing to write down. The old code wrote a 'rotated' row here too,
+ * which is why the table had one per restart per room.
+ */
+export function classifyRingStart({
+  resumeFrom,
+  firstSeq,
+}: {
+  resumeFrom: number;
+  firstSeq: number | null;
+}): RecordedGap | null {
+  if (firstSeq == null || firstSeq <= 1) return null;
+
+  if (resumeFrom === 0) {
+    return { kind: 'rotated', firstSeq, missing: null };
+  }
+  if (firstSeq > resumeFrom + 1) {
+    return {
+      kind: 'downtime',
+      expected: resumeFrom + 1,
+      firstSeq,
+      missing: firstSeq - resumeFrom - 1,
+    };
+  }
+  return null;
+}
 
 /**
  * Take everything the ring still holds, one room at a time.
@@ -277,9 +365,8 @@ async function backfill(room: string): Promise<{ lastSeq: number; generation: nu
     return { lastSeq: resumeFrom, generation: dump.generation };
   }
 
-  if (dump.firstSeq != null && dump.firstSeq > 1) {
-    await recordGap(room, { kind: 'rotated', firstSeq: dump.firstSeq, missing: null });
-  }
+  const ringStart = classifyRingStart({ resumeFrom, firstSeq: dump.firstSeq });
+  if (ringStart) await recordGap(room, ringStart);
 
   const fresh = dump.messages.filter((m) => m.seq > resumeFrom);
   log(

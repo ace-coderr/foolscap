@@ -96,7 +96,7 @@ export interface DidReport {
 export interface GapRow {
   id: string;
   room: string;
-  kind: 'missed' | 'regenerated' | 'rotated';
+  kind: 'missed' | 'downtime' | 'regenerated' | 'rotated';
   missing: number | null;
   recovered: number;
   /** missing - recovered, floored at zero. What is actually gone. */
@@ -123,9 +123,34 @@ export interface Coverage {
    * and the rings are turning over uncovered.
    */
   staleSeconds: number | null;
+  /**
+   * The largest accountable holes, not all of them. There are already a
+   * thousand rows and the number only grows; every client so far shows the top
+   * handful. `gapsTotal` is how many exist.
+   */
   gaps: GapRow[];
-  /** Messages known to be missing and known not to have been recovered. */
+  gapsTotal: number;
+
+  // --- the three categories, and they are never added together --------------
+  //
+  // LOSS is what Notary was responsible for and did not capture: it was
+  // following the room, or should have been. It is knowable to the message and
+  // it is the number the product should be judged on.
+  /** Lines that rotated past while the mirror was reading the room. */
+  lostMissed: number;
+  /** Lines that went past while the mirror was not running at all. */
+  lostDowntime: number;
+  /** lostMissed + lostDowntime. The honest loss figure. */
   lostMessages: number;
+
+  // BEFORE COVERAGE is not loss. Each room Notary started following mid-ring
+  // had history behind it that had already rotated out — nobody captured it and
+  // nobody can say how much there was. It is reported as a count of ROOMS that
+  // began mid-ring, never as a count of messages: the 'rotated' rows carry a
+  // number, and summing it was what overstated this archive's loss forty-fold.
+  /** How many rooms Notary first looked at after their ring had already turned. */
+  roomsBegunMidRing: number;
+
   roomsCovered: Array<{ room: string; policy: Policy; records: number; firstCapturedAt: string | null; lastCapturedAt: string | null }>;
 }
 
@@ -163,6 +188,33 @@ const iso = (value: Date | string | null): string | null =>
 
 const int = (value: unknown): number => (value == null ? 0 : Number(value));
 
+/**
+ * How many gap rows /coverage ships, largest first.
+ *
+ * The endpoint used to send all of them: a thousand rows today, more after
+ * every restart, on every page load, for a client that renders eight and keeps
+ * the rest behind a scroll window. Two hundred leaves room for any client that
+ * wants to rank or group them without the response growing without bound. The
+ * totals beside them are computed over every row regardless, so nothing the
+ * page states as a figure depends on this number.
+ */
+const GAP_LIMIT = 200;
+
+/**
+ * The gap kinds Notary is accountable for, and the only ones that may be summed.
+ *
+ * WRITTEN ONCE AND PASSED TO THE QUERY, rather than spelled out in the SQL, so
+ * that "which holes are loss" is a single fact with a name. It was previously
+ * not a fact anywhere: the coverage query summed every row, which quietly
+ * enrolled 'rotated' — the marker for where a room's coverage BEGINS — as
+ * messages the archive had lost, and overstated the loss by a factor of forty.
+ *
+ * 'rotated' is not loss: nobody captured that history and nobody can say how
+ * much of it there was. 'regenerated' is not loss either; it is a room being
+ * recreated, and its rows carry no count.
+ */
+export const LOSS_KINDS = ['missed', 'downtime'] as const;
+
 // ---------------------------------------------------------------------------
 // Coverage — what the archive can speak to at all
 // ---------------------------------------------------------------------------
@@ -180,7 +232,7 @@ export async function coverage(): Promise<Coverage> {
   // have, which is the exact failure this page exists to prevent. Found by a
   // single test capture, and it would have been found in production by the
   // first real one.
-  const [totals, gaps, rooms] = await Promise.all([
+  const [totals, gaps, gapTotals, rooms] = await Promise.all([
     pool.query(
       `select
          count(*)::text                  as records,
@@ -193,11 +245,34 @@ export async function coverage(): Promise<Coverage> {
          max(source_ts)                  as latest_source_ts
        from records`
     ),
+    // The largest accountable holes, and the counts, in one round trip.
+    //
+    // It used to be `order by noticed_at` with no limit, which shipped every
+    // row on the table to every visitor — a thousand today and climbing, for a
+    // page that shows eight. Ordered by size now, because a client that keeps
+    // the top N wants the biggest N and not the newest.
+    //
+    // 'rotated' is excluded from the rows AND from every total here. It is not
+    // a hole in the record; it is where the record starts.
     pool.query(
       `select id::text, room, kind, missing, recovered,
               expected_seq::text as expected_seq, first_seq::text as first_seq, noticed_at
          from gaps
-        order by noticed_at`
+        where kind = any($1::text[])
+        order by greatest(0, coalesce(missing, 0) - recovered) desc, noticed_at desc
+        limit $2`,
+      [LOSS_KINDS, GAP_LIMIT]
+    ),
+    pool.query(
+      `select
+         count(*) filter (where kind = any($1::text[]))::text         as accountable,
+         coalesce(sum(greatest(0, coalesce(missing,0) - recovered))
+                  filter (where kind = 'missed'), 0)::text            as lost_missed,
+         coalesce(sum(greatest(0, coalesce(missing,0) - recovered))
+                  filter (where kind = 'downtime'), 0)::text          as lost_downtime,
+         count(distinct room) filter (where kind = 'rotated')::text   as rooms_begun_mid_ring
+       from gaps`,
+      [LOSS_KINDS]
     ),
     pool.query(
       `select room, count(*)::text as records,
@@ -207,6 +282,7 @@ export async function coverage(): Promise<Coverage> {
   ]);
 
   const t = totals.rows[0] ?? {};
+  const g = gapTotals.rows[0] ?? {};
   const gapRows: GapRow[] = gaps.rows.map((row) => ({
     id: row.id,
     room: row.room,
@@ -233,7 +309,18 @@ export async function coverage(): Promise<Coverage> {
     staleSeconds:
       lastCapturedAt == null ? null : Math.round((Date.now() - Date.parse(lastCapturedAt)) / 1000),
     gaps: gapRows,
-    lostMessages: gapRows.reduce((sum, gap) => sum + gap.lost, 0),
+    gapsTotal: int(g.accountable),
+
+    // Summed in the database over EVERY accountable row, not over the page of
+    // rows above it. `gaps` is the largest few hundred; a total derived from
+    // them would shrink as the cap tightened, which is a headline figure that
+    // depends on a display setting.
+    lostMissed: int(g.lost_missed),
+    lostDowntime: int(g.lost_downtime),
+    lostMessages: int(g.lost_missed) + int(g.lost_downtime),
+
+    roomsBegunMidRing: int(g.rooms_begun_mid_ring),
+
     roomsCovered: rooms.rows.map((row) => ({
       room: row.room,
       policy: policyFor(row.room),

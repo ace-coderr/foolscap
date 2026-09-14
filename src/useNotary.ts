@@ -44,7 +44,8 @@ export type CutoffAnswer = 'witnessed' | 'claimed' | 'no-evidence';
 export interface ArchiveGap {
   id: string;
   room: string;
-  kind: 'missed' | 'regenerated' | 'rotated';
+  /** 'missed' and 'downtime' are loss; 'rotated' marks where coverage begins. */
+  kind: 'missed' | 'downtime' | 'regenerated' | 'rotated';
   missing: number | null;
   recovered: number;
   lost: number;
@@ -61,8 +62,24 @@ export interface Coverage {
   rooms: number;
   submitted: number;
   staleSeconds: number | null;
+  /** The largest accountable holes, not all of them. `gapsTotal` is how many exist. */
   gaps: ArchiveGap[];
+  gapsTotal: number;
+
+  // The three categories, never added together. See services/notary/src/archive.ts.
+  /** Lines that rotated past while the mirror was reading the room. */
+  lostMissed: number;
+  /** Lines that went past while the mirror was not running at all. */
+  lostDowntime: number;
+  /** lostMissed + lostDowntime. What Notary was responsible for and did not capture. */
   lostMessages: number;
+  /**
+   * Rooms Notary first looked at after their ring had already turned. A COUNT
+   * OF ROOMS, never of messages: how much history each had behind it is not
+   * knowable, and summing the 'rotated' rows' own numbers is what overstated
+   * this archive's loss forty-fold.
+   */
+  roomsBegunMidRing: number;
   roomsCovered: Array<{ room: string; policy: 'full' | 'sightings'; records: number }>;
   caveat: string;
 }

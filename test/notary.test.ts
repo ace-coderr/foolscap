@@ -11,7 +11,13 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { parseRecord, normalizeMessage } from '../src/lib/technocore';
-import { verifyBatch, MIRROR_ROOMS } from '../services/notary/src/mirror';
+import {
+  verifyBatch,
+  MIRROR_ROOMS,
+  classifyRingStart,
+  storedMissing,
+} from '../services/notary/src/mirror';
+import { LOSS_KINDS } from '../services/notary/src/archive';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const ROOM = 'mb-sonnet-2-registration';
@@ -257,5 +263,105 @@ describe('reducing a sampled room to sightings', () => {
     const out = reduceToSightings(many);
     assert.ok(out.length <= 40, `expected at most 40 rows, got ${out.length}`);
     assert.equal(new Set(out.map((r) => r.did)).size, 20, 'every DID is still represented');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Loss accounting, which this archive got wrong in production.
+ *
+ * The coverage endpoint summed `missing` across every gap kind. 'rotated' marks
+ * where a room's coverage BEGINS — history that had already gone before Notary
+ * looked, which nobody captured and nobody can measure — and detectGap gives one
+ * of those rows a `missing` of firstSeq - 1. So every restart that polled a room
+ * from zero wrote another row claiming the room's whole history as freshly lost,
+ * and the totals added them up: three kibble rows inside six hours, each
+ * asserting the same 6.4M messages, against a room that does not produce 6.4M
+ * messages in six hours. The headline read 8% held where the honest figure was
+ * 18%.
+ *
+ * Two rules came out of it and both are tested here, because both are the kind
+ * that live in a comment and get contradicted a month later:
+ *
+ *   a 'rotated' row never carries a count, and
+ *   only 'missed' and 'downtime' are ever summed.
+ *
+ * The third fix was recording the downtime span at all. It used to be written as
+ * another 'rotated' row with a null count, so the one number that WAS knowable —
+ * the distance between the last message stored and where the ring had moved to —
+ * was recorded as zero while the unknowable one was recorded as millions.
+ */
+describe('loss accounting', () => {
+  test('a rotated row never carries a count, whatever it was handed', () => {
+    // detectGap's own shape for a first read: a real number, and a trap.
+    assert.equal(
+      storedMissing({ kind: 'rotated', expected: 1, firstSeq: 6_442_524, missing: 6_442_523 }),
+      null
+    );
+    assert.equal(storedMissing({ kind: 'rotated', firstSeq: 5_346_707, missing: null }), null);
+  });
+
+  test('the kinds that are loss keep their counts', () => {
+    assert.equal(storedMissing({ kind: 'missed', expected: 100, firstSeq: 350, missing: 250 }), 250);
+    assert.equal(storedMissing({ kind: 'downtime', expected: 100, firstSeq: 350, missing: 250 }), 250);
+  });
+
+  test('only missed and downtime are summable', () => {
+    assert.deepEqual([...LOSS_KINDS], ['missed', 'downtime']);
+    assert.ok(!LOSS_KINDS.includes('rotated' as never), 'rotated is where coverage starts, not loss');
+    assert.ok(
+      !LOSS_KINDS.includes('regenerated' as never),
+      'a recreated room is not messages Notary lost'
+    );
+  });
+
+  test('a first look at a room that has already turned is not loss', () => {
+    const gap = classifyRingStart({ resumeFrom: 0, firstSeq: 6_442_524 });
+    assert.equal(gap?.kind, 'rotated');
+    assert.equal(gap?.missing, null, 'how much came before coverage is not knowable');
+  });
+
+  test('a restart that the ring has outrun is loss, and the span is exact', () => {
+    // Real numbers: kibble stored up to 5,365,726 and came back to a ring
+    // starting at 6,182,191.
+    const gap = classifyRingStart({ resumeFrom: 5_365_726, firstSeq: 6_182_191 });
+    assert.equal(gap?.kind, 'downtime');
+    assert.equal(gap?.missing, 816_464);
+    assert.equal(gap?.expected, 5_365_727, 'the hole starts at the next message it should have had');
+  });
+
+  test('a restart the ring still reaches writes nothing at all', () => {
+    // This is what used to write a 'rotated' row per restart per room, which is
+    // why the table grew a thousand rows and the total grew with it.
+    assert.equal(classifyRingStart({ resumeFrom: 900, firstSeq: 901 }), null);
+    assert.equal(classifyRingStart({ resumeFrom: 900, firstSeq: 400 }), null);
+    assert.equal(classifyRingStart({ resumeFrom: 0, firstSeq: 1 }), null, 'a whole ring is no hole');
+  });
+
+  test('the three categories cannot be added into one number', () => {
+    // The real table on 2026-09-14, reduced to one row per kind.
+    const HELD = 1_271_363;
+    const rows = [
+      { kind: 'missed', missing: 536_452, recovered: 0 },
+      { kind: 'downtime', missing: 5_176_431, recovered: 0 },
+      { kind: 'rotated', missing: 24_116_673, recovered: 0 },
+    ];
+    const sum = (rs: typeof rows) => rs.reduce((n, r) => n + Math.max(0, r.missing - r.recovered), 0);
+    const pct = (lost: number) => ((HELD / (HELD + lost)) * 100).toFixed(1);
+
+    const lost = sum(rows.filter((r) => LOSS_KINDS.includes(r.kind as never)));
+    assert.equal(lost, 5_712_883, 'missed plus downtime, and nothing else');
+    assert.equal(pct(lost), '18.2');
+
+    // What the endpoint actually reported before the fix. The downtime row is
+    // NOT in this sum: those spans were being written as 'rotated' with a null
+    // count, so they contributed nothing. The archive was simultaneously
+    // counting 24M it had never been responsible for and 0 of the 5.1M it had.
+    assert.equal(pct(sum(rows.filter((r) => r.kind !== 'downtime'))), '4.9', 'the bug, for the record');
+
+    // And the other half of it: had downtime been recorded correctly while
+    // rotated was still being summed, the answer would have been wronger still.
+    assert.equal(pct(sum(rows)), '4.1');
   });
 });

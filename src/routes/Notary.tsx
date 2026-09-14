@@ -531,7 +531,7 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
       <section className="nband nband--rules" id="coverage" ref={bandRef} data-in={seen}>
         <div className="nband__inner">
           <p className="nband__eyebrow">What this archive covers</p>
-          <Ratio held={cov.records} missing={cov.lostMessages} />
+          <Ratio held={cov.records} lost={cov.lostMessages} rooms={cov.roomsBegunMidRing} />
           <ul className="nstats">
             <Stat value={cov.dids} label="distinct DIDs seen at least once" active={seen} />
             <Stat value={cov.rooms} label="rooms swept, of the network’s many" active={seen} />
@@ -573,17 +573,21 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
             <dt>Oldest message held</dt>
             <dd className="mono">{cov.earliestSourceTs ? stamp(cov.earliestSourceTs) : '—'}</dd>
             {/* Not "known missing" — the bar above is that number, at the size it
-                deserves, and restating it here is the repetition this section was
-                rebuilt to lose. What the bar does not say is how many separate
-                stretches those messages came from. */}
+                deserves. What the bar does not say is how the loss splits, and
+                the two halves are different failures: one is the mirror reading
+                too slowly, the other is the mirror not running. */}
+            <dt>Lost while reading</dt>
+            <dd>{`${num.format(cov.lostMissed)} messages the rings dropped faster than Notary read them`}</dd>
+            <dt>Lost while down</dt>
+            <dd>{`${num.format(cov.lostDowntime)} messages that went past between one run and the next`}</dd>
             <dt>Recorded holes</dt>
             <dd>
               {/* Spelled out rather than run through plural(), which appends an
                   "s" and would have written "40 stretchs". */}
-              {unrecovered.length > 0
-                ? `${num.format(unrecovered.length)} separate ${
-                    unrecovered.length === 1 ? 'stretch' : 'stretches'
-                  } of a room, listed below`
+              {cov.gapsTotal > 0
+                ? `${num.format(cov.gapsTotal)} separate ${
+                    cov.gapsTotal === 1 ? 'stretch' : 'stretches'
+                  } of a room, the largest listed below`
                 : 'none recorded'}
             </dd>
             {cov.submitted > 0 && (
@@ -604,7 +608,7 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
         </div>
       </section>
 
-      <Holes gaps={unrecovered} />
+      <Holes gaps={unrecovered} total={cov.gapsTotal} />
     </>
   );
 }
@@ -616,29 +620,38 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
 /**
  * Held against lost, to scale, and the first thing this section says.
  *
- * It is the most honest fact on the site and it used to be a clause in the
- * middle of a definition list: 565,311 records held, 6,409,232 messages gone
- * past — about eight percent of what Notary watched. Written out, a reader has
- * to divide two seven-digit numbers to learn what the page is admitting. Drawn,
- * they cannot miss it.
+ * TWO CATEGORIES IN THE BAR, AND A THIRD THAT MUST NOT BE IN IT.
  *
- * --warn fills the missing segment, which is the one place on this site a state
+ * Held and lost are commensurable: both are messages that passed through a room
+ * while Notary was responsible for it, and the only difference is whether it
+ * got them. A proportion of those two is a real measurement of how well this
+ * archive works.
+ *
+ * What was in the rings BEFORE Notary first looked at a room is not the same
+ * kind of thing, and for a while it was in this bar. The coverage endpoint
+ * summed every gap row regardless of kind, so history that predated the archive
+ * was reported as messages the archive had lost, and the headline read 8% when
+ * the honest figure was eighteen. It came apart on arithmetic: three kibble
+ * rows inside six hours, each claiming the room's entire six-million-message
+ * history, when the room does not produce six million messages in six hours.
+ * They were one restart each, re-asserting the same boundary.
+ *
+ * So it sits underneath, in prose, as a count of ROOMS and a sentence about
+ * what cannot be known. It has no number of messages because there is none to
+ * have: nobody read that history, and nobody can say how much of it there was.
+ * A bar segment would have to be given a width, and any width would be a
+ * fabrication.
+ *
+ * --warn fills the lost segment, which is the one place on this site a state
  * colour is an AREA rather than a mark. It earns it: the area is the datum, and
- * what it marks is precisely the part of the record that is missing. Mixed down
- * to a fifth so the bar reads as a measurement and not as a warning stripe.
- *
- * BOTH NUMBERS COUNT ONLY WHAT NOTARY WATCHED. Messages in rooms it never
- * followed are in neither, so this is a ratio for the rooms it swept and not a
- * coverage figure for the network. The line underneath says so, because a
- * proportion with an unstated denominator is the exact failure this page exists
- * to avoid.
+ * what it marks is the part of the record Notary is accountable for not having.
  */
-function Ratio({ held, missing }: { held: number; missing: number }) {
-  const passed = held + missing;
+function Ratio({ held, lost, rooms }: { held: number; lost: number; rooms: number }) {
+  const passed = held + lost;
   if (passed === 0) return null;
 
   const heldPct = (held / passed) * 100;
-  // Never below a tenth: "0.0%" of half a million records would read as none.
+  // Never below a tenth: "0.0%" of a million records would read as none.
   const shown = heldPct >= 0.1 ? heldPct.toFixed(1) : '<0.1';
 
   return (
@@ -650,9 +663,9 @@ function Ratio({ held, missing }: { held: number; missing: number }) {
           <span className="nratio__unit">signed records, every original kept</span>
         </div>
         <div className="nratio__key nratio__key--missing">
-          <span className="nratio__label">Rotated past</span>
-          <span className="nratio__figure">{num.format(missing)}</span>
-          <span className="nratio__unit">messages gone before capture</span>
+          <span className="nratio__label">Lost</span>
+          <span className="nratio__figure">{num.format(lost)}</span>
+          <span className="nratio__unit">passed while Notary was responsible</span>
         </div>
       </div>
 
@@ -664,10 +677,25 @@ function Ratio({ held, missing }: { held: number; missing: number }) {
       </div>
 
       <p className="nratio__reading">
-        Notary holds <strong>{shown}%</strong> of everything it watched pass. The rest rotated out
-        of the rings before it could be captured, and this counts only the holes Notary noticed and
-        wrote down — rooms it never followed are in neither figure.
+        Notary holds <strong>{shown}%</strong> of the messages that went through the rooms it was
+        watching. The rest went past while it was reading too slowly or was not running at all —
+        both are its own failures, and both are counted here.
       </p>
+
+      {rooms > 0 && (
+        <p className="nratio__before">
+          Separately, and not in that figure:{' '}
+          <strong>
+            {rooms === 1 ? 'one room' : `${num.format(rooms)} rooms`} already had history behind{' '}
+            {rooms === 1 ? 'it' : 'them'}
+          </strong>{' '}
+          when Notary first looked. Those rings had turned before the archive existed. Nothing
+          captured that history, and nobody can now say how much of it there was — not Notary, and
+          not the network, which is the reason this page exists at all. It is left out of the bar
+          rather than estimated, because giving a width to a quantity no one can measure would be
+          a fabrication.
+        </p>
+      )}
     </div>
   );
 }
@@ -693,22 +721,28 @@ const HOLES_SHOWN = 8;
  * ratio above spends --warn once on this whole subject, and a column of amber
  * numbers would be the wall again in a narrower shape.
  */
-function Holes({ gaps }: { gaps: Coverage['gaps'] }) {
+function Holes({ gaps, total }: { gaps: Coverage['gaps']; total: number }) {
   const [all, setAll] = useState(false);
   if (gaps.length === 0) return null;
 
   const sorted = [...gaps].sort((a, b) => b.lost - a.lost);
   const shown = all ? sorted : sorted.slice(0, HOLES_SHOWN);
   const anyRecovered = sorted.some((gap) => gap.recovered > 0);
+  // The archive sends the largest few hundred rather than every row, so the
+  // count on the button is the archive's, not this array's length.
+  const capped = total > sorted.length;
 
   return (
     <section className="section nband" id="holes">
       <div className="nband__inner">
         <p className="nband__eyebrow">Recorded holes</p>
         <p className="nband__prose nholes__lede">
-          Each of these is a stretch of a room that rotated out before Notary could recover it.
-          They are the holes Notary noticed and wrote down, and a hole means an absence inside it
-          proves nothing at all.
+          Each of these is a stretch of a room that went past before Notary could capture it —
+          either because the ring outran the mirror or because the mirror was not running. They
+          are the holes Notary noticed and wrote down, and a hole means an absence inside it proves
+          nothing at all.
+          {capped &&
+            ` The archive holds ${num.format(total)}; the largest ${num.format(sorted.length)} are here.`}
         </p>
 
         {/* Wider than the page, and taller than the fold only inside itself.
@@ -765,7 +799,9 @@ function Holes({ gaps }: { gaps: Coverage['gaps'] }) {
                 just did, saying "six" while eight were on screen. */}
             {all
               ? `Show the largest ${HOLES_SHOWN}`
-              : `Show all ${num.format(sorted.length)} holes`}
+              : capped
+                ? `Show the largest ${num.format(sorted.length)}`
+                : `Show all ${num.format(sorted.length)} holes`}
           </button>
         )}
       </div>

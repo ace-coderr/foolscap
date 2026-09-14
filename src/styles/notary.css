@@ -519,6 +519,26 @@
   color: var(--ink);
 }
 
+/* The third category, and the reason it is prose rather than a third segment:
+ * it has no number of messages, so there is no width it could honestly be
+ * given. Set apart by a rule rather than sitting as another paragraph, so a
+ * reader cannot take it for a footnote on the ratio above — it is a different
+ * fact about a different thing. */
+.nratio__before {
+  max-width: var(--measure);
+  margin: var(--space) 0 0;
+  padding-top: var(--space);
+  border-top: 1px solid var(--rule);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-faint);
+}
+
+.nratio__before strong {
+  color: var(--ink-mid);
+  font-weight: 600;
+}
+
 /* -------------------------------------------------------------------- facts */
 
 /* The anchor ledger's rows, for the archive's own numbers. They were a 45%
