@@ -36,6 +36,10 @@
    * its padding, or two adjacent bands would be separated twice. */
   margin-top: 0;
   padding-block: clamp(2.5rem, 7vh, 4.5rem);
+  /* Every in-page scroll on this page targets a band — the verdict on submit,
+   * the holes section on collapse — and the nav is fixed over the top of it.
+   * Without this they land under the nav by exactly its height. */
+  scroll-margin-top: var(--nav-height);
 }
 
 .nband__inner {
@@ -738,6 +742,15 @@
   outline-offset: 2px;
 }
 
+/* The floating way out. Phones only — see the media query at the foot of this
+ * file, which is also where it is turned on.
+ *
+ * Nothing here on a desktop: the open list lives in an 18rem window there and
+ * the panel's own Collapse is always on screen. */
+.ntable__float {
+  display: none;
+}
+
 /* ------------------------------------------------------------------- holes */
 
 /* Forty amber sentences became a table, because what varies between them is a
@@ -1061,6 +1074,41 @@
 
   .ntable__foot {
     padding: var(--space-half);
+  }
+
+  /* Fixed near the bottom of the window for as long as the list is open.
+   *
+   * The nav's floating pill, and for the same reason: a control sitting over
+   * moving content needs a ground of its own, or the rows read straight
+   * through it. Safe-area inset so it clears an iPhone's home indicator rather
+   * than sitting under it. */
+  .ntable__float {
+    display: block;
+    position: fixed;
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + var(--space));
+    transform: translateX(-50%);
+    /* Over the page, under the nav at 45. */
+    z-index: 30;
+    padding: 0.8rem 1.35rem;
+    background: rgba(10, 10, 10, 0.85);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: var(--t-micro);
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .ntable__float:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 3px;
   }
 
   /* The fixed columns are what the desktop table needs to keep its figures

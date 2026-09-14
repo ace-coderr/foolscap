@@ -780,6 +780,39 @@ const HOLE_CAUSE: Record<ArchiveGap['kind'], string> = {
  */
 function Holes({ gaps, total }: { gaps: Coverage['gaps']; total: number }) {
   const [all, setAll] = useState(false);
+  const sectionRef = useRef<HTMLElement>(null);
+
+  /**
+   * Collapsing has to put the reader back where the table is.
+   *
+   * On a phone the open list is fourteen thousand pixels, so closing it removes
+   * most of the document from underneath the viewport and the browser clamps
+   * the scroll to whatever is left — which is the footer. The reader taps a
+   * control on a table and arrives at the bottom of the page having lost it.
+   *
+   * AFTER THE RE-RENDER, NOT WITH IT. Scrolling in the same tick as setAll
+   * measures the section against the layout that is about to be thrown away,
+   * and the clamp then lands a hundred pixels past it. The effect runs once the
+   * page is short again. The ref is what separates a collapse the reader asked
+   * for from the initial `all === false` on mount, which must not scroll
+   * anything.
+   */
+  const askedToCollapse = useRef(false);
+  useEffect(() => {
+    if (all || !askedToCollapse.current) return;
+    askedToCollapse.current = false;
+    // Instant, not smooth. The collapse is a two-thousand-pixel move and an
+    // animated one is both slow to watch and easy to lose — any touch during
+    // it cancels the scroll and strands the reader wherever it had got to.
+    // Smooth suits the verdict, which travels a screen and is worth following.
+    sectionRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' });
+  }, [all]);
+
+  const collapse = () => {
+    askedToCollapse.current = true;
+    setAll(false);
+  };
+
   if (gaps.length === 0) return null;
 
   const sorted = [...gaps].sort((a, b) => b.lost - a.lost);
@@ -790,7 +823,7 @@ function Holes({ gaps, total }: { gaps: Coverage['gaps']; total: number }) {
   const capped = total > sorted.length;
 
   return (
-    <section className="section nband" id="holes">
+    <section className="section nband" id="holes" ref={sectionRef}>
       <div className="nband__inner">
         <p className="nband__eyebrow">Recorded holes</p>
         <p className="nband__prose nholes__lede">
@@ -867,7 +900,11 @@ function Holes({ gaps, total }: { gaps: Coverage['gaps']; total: number }) {
                   {capped ? ` of ${num.format(total)}` : ''}
                 </span>
               )}
-              <button className="ntable__more" type="button" onClick={() => setAll((was) => !was)}>
+              <button
+                className="ntable__more"
+                type="button"
+                onClick={() => (all ? collapse() : setAll(true))}
+              >
                 {/* "Collapse" rather than "show the largest 8": the label has to
                     say what the button DOES, and a reader who has expanded the
                     list is looking for the way back, not for a row count. */}
@@ -880,6 +917,23 @@ function Holes({ gaps, total }: { gaps: Coverage['gaps']; total: number }) {
             </div>
           )}
         </div>
+
+        {/* THE WAY OUT ON A PHONE, and only there.
+            Desktop keeps the open list in an 18rem window, so the panel's own
+            Collapse never leaves the screen. A phone has no nested scroll — a
+            list inside a scrolling page is worse under a thumb than a wheel —
+            so the open list lengthens the document by some fourteen thousand
+            pixels and the control that closes it ends up two hundred rows below
+            where the reader tapped to open it. This one does not move.
+
+            Outside .ntable deliberately: that panel clips to its radius, and a
+            fixed child of a clipping ancestor is a bet on which browser
+            resolves the containing block the way you hoped. */}
+        {all && (
+          <button className="ntable__float" type="button" onClick={collapse}>
+            Collapse
+          </button>
+        )}
       </div>
     </section>
   );
