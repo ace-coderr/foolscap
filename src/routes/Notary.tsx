@@ -68,6 +68,7 @@ import {
   type LiveResult,
   type Anchor,
   type AnchorLog,
+  type SummaryAnchor,
 } from '../useNotary.ts';
 
 /** SVG and small, but it still need not block the first paint. */
@@ -1476,7 +1477,65 @@ function AnchorBand({
           </div>
         )}
       </div>
+
+      <SummaryAnchors rows={log.summary_anchors ?? []} room={log.anchor_room} />
     </section>
+  );
+}
+
+/**
+ * Roots over the summary tier, beside the record roots and never among them.
+ *
+ * THE PRUNED HALF OF THE ARCHIVE IS THE HALF THAT MOST NEEDS THIS. A day whose
+ * records Notary still holds can be checked by fetching one and folding it into
+ * that day's root. A day whose records were pruned has only the tier — and
+ * until the tier has a published root of its own, that half of the archive is
+ * exactly as trustworthy as the database, which is the thing this whole section
+ * exists to stop being true.
+ *
+ * Its own list because it is its own claim. A record anchor commits to the
+ * messages captured on one day and the days add up to a history. A summary
+ * anchor commits to every key the tier knows about at one moment; the
+ * publications are snapshots and do not add up to anything. Shown in one series
+ * a reader would read the second as the first.
+ */
+function SummaryAnchors({ rows, room }: { rows: SummaryAnchor[]; room: string }) {
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="nband__inner">
+      <p className="notary__rooms-title nsummary-anchors__title">
+        The summary tier <span className="nsource__tag">roots over what outlives the window</span>
+      </p>
+      <div className="ntable">
+        <ul className="nanchors">
+          {rows.map((row) => (
+            <li className="nanchor" key={row.id}>
+              <div className="nanchor__day">
+                <span className="mono">{stamp(row.builtAt)}</span>
+                <span className="nanchor__count">{plural(row.rowCount, 'key')} covered</span>
+              </div>
+              <div className="nanchor__proof">
+                <p className="nanchor__root mono">{row.root}</p>
+                <p className="nanchor__meta mono">
+                  {row.publishedAt
+                    ? `published to ${room}${row.publishedSeq ? ` at seq ${row.publishedSeq}` : ''} · ${stamp(row.publishedAt)}`
+                    : 'computed, not yet published — constrains nothing until it is'}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <p className="notary__note nband__prose">
+        Each of these commits to the whole tier as it stood at that moment — every key, every room,
+        first and last seen, how many times — rather than to one day&rsquo;s messages. They are
+        snapshots and do not add up to a history the way the daily roots do. For any period whose
+        records have been pruned, this is the only thing standing behind what Notary says, so a
+        root here that has not been published is the pruned archive resting on nothing but its own
+        database.
+      </p>
+    </div>
   );
 }
 

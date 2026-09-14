@@ -377,6 +377,51 @@ export async function insertGap({
   return rows[0]?.id ?? null;
 }
 
+/** A summary-tier root waiting to be witnessed. */
+export interface PendingSummaryAnchor {
+  id: string;
+  root: string;
+  rowCount: number;
+  builtAt: string;
+}
+
+/**
+ * Summary roots built but never published.
+ *
+ * Keyed off published_at rather than published_seq, the same way the record
+ * anchors are: the POST reply does not reliably carry a sequence, so a sweep
+ * that treated a null seq as "not published" would post the same root every
+ * hour for ever.
+ */
+export async function unpublishedSummaryAnchors(): Promise<PendingSummaryAnchor[]> {
+  const { rows } = await getPool().query(
+    `select id::text, root, row_count, built_at
+       from summary_anchors where published_at is null order by built_at`
+  );
+  return rows.map((r: { id: string; root: string; row_count: number; built_at: Date }) => ({
+    id: r.id,
+    root: r.root,
+    rowCount: Number(r.row_count),
+    builtAt: new Date(r.built_at).toISOString(),
+  }));
+}
+
+export async function markSummaryAnchorPublished(id: string, seq: number | null): Promise<void> {
+  await getPool().query(
+    `update summary_anchors set published_seq = $2::bigint, published_at = now() where id = $1::bigint`,
+    [id, seq]
+  );
+}
+
+/** Record a new summary root. Returns its id so the sweep can publish it. */
+export async function insertSummaryAnchor(root: string, rowCount: number): Promise<string> {
+  const { rows } = await getPool().query(
+    `insert into summary_anchors (row_count, root) values ($1, $2) returning id::text`,
+    [rowCount, root]
+  );
+  return rows[0].id;
+}
+
 /** Note how much of a hole a re-export got back. */
 export async function markGapRecovered(id: number | null, recovered: number): Promise<void> {
   if (id == null) return;

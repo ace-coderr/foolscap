@@ -45,6 +45,34 @@ export interface AnchorPayload {
   last_capture: string | null;
 }
 
+/**
+ * What a summary-tier root says when it is published.
+ *
+ * A DIFFERENT TYPE FROM A RECORD ANCHOR, deliberately. A record anchor commits
+ * to the messages captured on one day; this commits to the whole summary tier
+ * as it stood at one moment — every key, every room, first and last seen, how
+ * many times. Sharing a type would let a reader fold the two into one series
+ * and read a summary root as though it covered records, which is the one
+ * confusion the tier must not create.
+ *
+ * `rows` and `built_at` are the whole of it: the tier is a snapshot, not a day,
+ * so there is no period to name and nothing to add up across publications.
+ */
+export const SUMMARY_ANCHOR_TYPE = 'foolscap.summary-anchor.v1';
+
+export function summaryAnchorPayload(anchor: {
+  root: string;
+  rowCount: number;
+  builtAt: string;
+}): string {
+  return JSON.stringify({
+    type: SUMMARY_ANCHOR_TYPE,
+    root: anchor.root,
+    rows: anchor.rowCount,
+    built_at: anchor.builtAt,
+  });
+}
+
 export function anchorPayload(anchor: {
   day: string;
   root: string;

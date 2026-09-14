@@ -619,6 +619,41 @@ export async function anchors(): Promise<AnchorRow[]> {
   }));
 }
 
+/**
+ * Roots over the summary tier.
+ *
+ * SERVED APART FROM THE RECORD ANCHORS, and it is the same rule as everywhere
+ * else on this page: a record anchor commits to the messages captured on one
+ * day, a summary anchor commits to the whole tier as it stood at one moment.
+ * One series has days and adds up; the other is a sequence of snapshots and
+ * does not. Folding them together would let a reader take a summary root as
+ * covering records, which is the confusion the tier must not cause.
+ */
+export interface SummaryAnchorRow {
+  id: string;
+  builtAt: string;
+  rowCount: number;
+  root: string;
+  publishedSeq: string | null;
+  publishedAt: string | null;
+}
+
+export async function summaryAnchors(): Promise<SummaryAnchorRow[]> {
+  const { rows } = await getPool().query(
+    `select id::text, built_at, row_count, root,
+            published_seq::text as published_seq, published_at
+       from summary_anchors order by built_at desc limit 50`
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    builtAt: iso(row.built_at)!,
+    rowCount: Number(row.row_count),
+    root: row.root,
+    publishedSeq: row.published_seq ?? null,
+    publishedAt: iso(row.published_at),
+  }));
+}
+
 export async function anchorForDay(day: string): Promise<AnchorRow | null> {
   const all = await anchors();
   return all.find((anchor) => anchor.day === day) ?? null;

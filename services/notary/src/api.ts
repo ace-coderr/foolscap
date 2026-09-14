@@ -28,6 +28,7 @@ import { captureRecord } from './db.ts';
 import {
   anchorForDay,
   anchors,
+  summaryAnchors,
   coverage,
   dayOfRecord,
   didReport,
@@ -317,7 +318,7 @@ export function createApi({ limiter = new RateLimiter(CAPTURE_LIMIT) }: { limite
 
       // --- anchors ---------------------------------------------------------
       if (path === '/api/notary/anchors') {
-        const rows = await anchors();
+        const [rows, summaries] = await Promise.all([anchors(), summaryAnchors()]);
         return send(
           res,
           200,
@@ -333,6 +334,11 @@ export function createApi({ limiter = new RateLimiter(CAPTURE_LIMIT) }: { limite
             anchor_room: ANCHOR_ROOM,
             anchors: rows,
             unpublished: rows.filter((row) => row.publishedSeq == null).length,
+            // Its own set, never folded into `anchors`. A record anchor covers
+            // one day's messages; a summary anchor covers the whole tier at one
+            // moment. Same room, same key, different claims.
+            summary_anchors: summaries,
+            summary_unpublished: summaries.filter((row) => row.publishedSeq == null).length,
             note:
               'A root with no published_seq has been computed but not yet witnessed by anyone. ' +
               'Only a published root constrains what Notary can change. Verify an anchor by ' +

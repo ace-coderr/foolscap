@@ -112,6 +112,22 @@ export interface Anchor {
   lastCapture: string | null;
 }
 
+/**
+ * A root over the summary tier, as it stood at one moment.
+ *
+ * Its own kind, never mixed into the daily record anchors: one covers the
+ * messages captured on a day, the other covers every key the tier knows about
+ * at a point in time. Same room, same key, different claims.
+ */
+export interface SummaryAnchor {
+  id: string;
+  builtAt: string;
+  rowCount: number;
+  root: string;
+  publishedSeq: string | null;
+  publishedAt: string | null;
+}
+
 export interface AnchorLog {
   /** What the API says its key is. Compared against the pinned one, never trusted. */
   notary_did: string;
@@ -120,6 +136,8 @@ export interface AnchorLog {
   anchor_room: string;
   anchors: Anchor[];
   unpublished: number;
+  summary_anchors: SummaryAnchor[];
+  summary_unpublished: number;
 }
 
 /**

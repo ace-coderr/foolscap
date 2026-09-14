@@ -1007,6 +1007,14 @@
 
 /* ----------------------------------------------------------------- anchors */
 
+/* The tier's roots sit under the record roots in the same band, so they need a
+ * gap that reads as "a different series" rather than "more of the same". */
+.nsummary-anchors__title {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--rule);
+}
+
 /* The last band on the page and the one a sceptic came for, so it is given more
  * room than the bands that merely report. */
 .nband--anchors {
