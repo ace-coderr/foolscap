@@ -264,6 +264,61 @@
   color: var(--ink-faint);
 }
 
+/* ----------------------------------------------------------------- loading */
+
+/* "Reading what the archive covers…" is the only thing on screen while the
+ * archive answers, and it used to be .empty: --t-small at 52% white, hard left
+ * in an otherwise black band. At that size against that much space it read as a
+ * caption on an empty page rather than as work happening. */
+
+.nloading {
+  margin: 0;
+  padding-block: var(--space-2);
+  text-align: center;
+  font-size: var(--t-h2);
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* The track: a hairline the sweep runs along, so the motion has an extent and
+ * a beginning rather than floating in the middle of the band. */
+.nloading__rule {
+  display: block;
+  position: relative;
+  width: min(18rem, 60%);
+  height: 1px;
+  margin: var(--space) auto 0;
+  background: var(--rule);
+  overflow: hidden;
+}
+
+/* Left to right on a loop. Not a spinner: a spinner says "something is
+ * happening somewhere", and this says a read is crossing a wire.
+ *
+ * 40% wide travelling from -100% to 250% of itself puts it fully off the left
+ * at the start and fully off the right at the end, so the track is empty at
+ * both ends of the cycle and the sweep reads as one pass rather than a loop
+ * caught mid-stride. */
+.nloading__rule::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40%;
+  height: 1px;
+  background: var(--accent);
+  animation: nloading-sweep 1500ms ease-in-out infinite;
+}
+
+@keyframes nloading-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
 /* ----------------------------------------------------------------- verdict */
 
 /* The one answer, in the one type step this page is allowed to spend once, with
@@ -341,11 +396,8 @@
   margin-bottom: 0;
 }
 
-.nverdict__waiting {
-  margin: var(--space) 0 0;
-  font-size: var(--t-small);
-  color: var(--ink-faint);
-}
+/* .nverdict__waiting went with the other whispered loading states — see
+ * .nloading. */
 
 /* ------------------------------------------------------------------- stats */
 
@@ -588,49 +640,129 @@
   color: var(--ink-mid);
 }
 
-/* The one element on this page allowed to be wider than the page, which the
- * shell's rules permit for exactly three things and a table is one of them.
- * Below about 44rem no sizing makes four columns of room names, seven-digit
- * figures and timestamps fit, and reflowing into stacked cards would throw away
- * the only reason this is a table. */
-.nholes__scroll {
+/* --------------------------------------------------------------- tables */
+
+/* Both tables on this page are panels, in the glass the tool cards and the
+ * source panes are made of. They were bare rows on black, which made the page's
+ * two most data-dense things read as loose text that happened to line up.
+ *
+ * overflow: hidden is what lets the radius clip the header and the striped rows;
+ * without it the corners cut through the fills. */
+.ntable {
+  margin-top: var(--space);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+
+/* Sideways at any width, because four columns of room names, figures and
+ * timestamps do not fit a phone however they are sized — one of the three
+ * things the shell's rules allow to exceed the page. */
+.ntable__scroll {
   overflow-x: auto;
 }
 
-/* Expanded, the list scrolls inside itself instead of lengthening the page.
- * The gaps table is a thousand rows and gains more every time the mirror
- * restarts, so "show all" used to mean "add twenty thousand pixels": the page's
- * height became a function of how badly capture had been going. Capped, the
- * section is the same height whether there are ten holes or ten thousand. */
-.nholes__scroll[data-expanded='true'] {
-  max-height: 24rem;
+/* Expanded, a window on a longer list rather than a longer page. The gaps table
+ * is a thousand rows and gains more on every mirror restart, so without this the
+ * page's height became a function of how badly capture had been going.
+ *
+ * overscroll-behavior: contain is not a nicety. Without it a wheel over the
+ * table scrolls the list and then stops dead at its end, and a reader whose
+ * cursor happens to be here cannot get past the section at all. Contained, the
+ * wheel is handed back to the page the moment the list runs out. */
+.ntable__scroll[data-expanded='true'] {
+  max-height: 18rem;
   overflow-y: auto;
-  /* Its own edge, so the cut reads as a window on a longer list rather than as
-   * the list simply stopping. */
-  border-bottom: 1px solid var(--rule);
+  overscroll-behavior: contain;
 }
 
-/* The header stays put while the rows move under it — four columns of numbers
- * are unreadable once their labels have scrolled away. */
-.nholes__scroll[data-expanded='true'] thead th {
+/* The header stays put while the rows move under it: four columns of figures
+ * are unreadable once their labels have gone. */
+.ntable__scroll[data-expanded='true'] thead th {
   position: sticky;
   top: 0;
   z-index: 1;
-  /* Opaque: the striped rows would otherwise read straight through it. */
-  background: var(--void);
+  /* Opaque while it floats. The tint alone is translucent and the striped rows
+   * read straight through it, so the page's own ground goes underneath — two
+   * layers rather than one hand-mixed literal that would drift from the tint. */
+  background-color: var(--void);
+  background-image: linear-gradient(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05));
+}
+
+/* The way out, inside the panel and outside the scroll window. A control that
+ * moves with the list is one a reader eight hundred rows down has to go looking
+ * for. Full width, its own hairline, centred. */
+.ntable__foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space);
+  padding: var(--space-half) var(--space);
+  border-top: 1px solid var(--rule);
+}
+
+.ntable__count {
+  font-size: var(--t-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.ntable__more {
+  padding: 0.45rem 0.95rem;
+  background: transparent;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  color: var(--ink-mid);
+  font-family: var(--body);
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.ntable__more:hover {
+  color: var(--ink);
+  border-color: var(--rule-strong);
+}
+
+.ntable__more:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------- holes */
+
+/* Forty amber sentences became a table, because what varies between them is a
+ * room, a count and a timestamp. The sentence they all carried is said once,
+ * above this. */
+
+.nholes__lede {
+  margin: 0 0 var(--space-2);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-mid);
 }
 
 .nholes {
-  /* min-width rather than width: it fills the band at every width it fits, and
-   * is allowed to exceed the scroller below that rather than crushing. */
+  /* min-width rather than width: it fills the panel at every width it fits, and
+   * exceeds the scroller below that rather than crushing. */
   min-width: 100%;
   border-collapse: collapse;
   font-size: var(--t-small);
 }
 
 .nholes th {
-  padding: var(--space-half);
-  border-bottom: 1px solid var(--rule-strong);
+  padding: var(--space-half) var(--space);
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--rule);
   color: var(--ink-faint);
   font-family: var(--display);
   font-size: var(--t-micro);
@@ -642,23 +774,33 @@
 }
 
 .nholes td {
-  padding: var(--space-half);
+  padding: 0.8rem var(--space);
   color: var(--ink-mid);
   /* Nothing in this table wraps. A room name is one token and breaking it —
-   * "flop-networ / k" — is worse than the sideways scroll the wrapper already
+   * "flop-networ / k" — is worse than the sideways scroll the panel already
    * provides, and the figures and timestamps must stay on one line to be
    * compared at all. */
   white-space: nowrap;
 }
 
-/* Closes the stripes off. Without it the last row's fill just stops. */
-.nholes tbody tr:last-child td {
-  border-bottom: 1px solid var(--rule);
+/* Striped rather than ruled: a thousand hairlines would be the wall again in
+ * another form, and the stripe is what lets an eye track one room across five
+ * columns. */
+.nholes tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
 }
 
-/* The room takes whatever is left; the three narrow columns are sized so the
- * figures sit together on the right rather than drifting into the middle of a
- * table that has more width than content. */
+.nholes tbody tr:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.nholes td:first-child {
+  color: var(--ink);
+}
+
+/* The room takes whatever is left; the narrow columns are sized so the figures
+ * sit together on the right rather than drifting into the middle of a table
+ * that has more width than content. */
 .nholes__col-room {
   width: auto;
 }
@@ -677,17 +819,6 @@
 
 .nholes__col-when {
   width: 13rem;
-}
-
-/* Striped rather than ruled: forty hairlines would be the wall again in
- * another form, and the stripe is what lets an eye track one room across four
- * columns. */
-.nholes tbody tr:nth-child(even) {
-  background: var(--paper-sunk);
-}
-
-.nholes td:first-child {
-  color: var(--ink);
 }
 
 /* Figures line up on their last digit, which is the whole reason to make this
@@ -711,34 +842,6 @@
 .nholes__when {
   white-space: nowrap;
   color: var(--ink-faint);
-}
-
-.nholes__more {
-  margin-top: var(--space);
-  padding: 0.45rem 0.95rem;
-  background: transparent;
-  border: 1px solid var(--edge);
-  border-radius: 999px;
-  color: var(--ink-mid);
-  font-family: var(--body);
-  font-size: var(--t-micro);
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition:
-    color 160ms ease,
-    border-color 160ms ease;
-}
-
-.nholes__more:hover {
-  color: var(--ink);
-  border-color: var(--rule-strong);
-}
-
-.nholes__more:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
 }
 
 /* ----------------------------------------------------------------- sources */
@@ -793,23 +896,35 @@
   padding-block: clamp(3rem, 9vh, 5.5rem);
 }
 
-/* A ledger the width of the band: the day in a left gutter, the root itself
- * across the rest. It is the one thing on this page a reader can carry to the
- * room and compare, so it is not asked to share a column with the prose that
- * explains it. */
+/* The holes table's panel, so the page's two tables are one object seen twice.
+ * The day sits in a left gutter and the root itself runs across the rest: it is
+ * the one thing here a reader can carry to the room and compare, so it does not
+ * share a column with the prose that explains it. */
 .nanchors {
-  margin: var(--space-2) 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
-  border-top: 1px solid var(--rule);
 }
 
 .nanchor {
   display: grid;
   grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
   gap: var(--space);
-  padding: var(--space) 0;
+  padding: var(--space) var(--space);
   border-bottom: 1px solid var(--rule);
+}
+
+.nanchor:last-child {
+  border-bottom: 0;
+}
+
+/* The holes table's stripe and lift, on the same values. */
+.nanchor:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.nanchor:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .nanchor__day {
@@ -928,8 +1043,28 @@
     border-bottom: 0;
   }
 
+  /* NO NESTED SCROLL ON A PHONE. A scroll area inside a scrolling page is
+   * awkward with a wheel and worse with a thumb: the list swallows the gesture,
+   * and overscroll-behavior only hands it back at the very end. Expanded, the
+   * full list simply lengthens the page, which is the ordinary thing a page
+   * does and the thing a thumb already knows how to get past. */
+  .ntable__scroll[data-expanded='true'] {
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  /* Sticky wants a scroll container to be sticky inside. Without one it pins to
+   * the viewport and the header floats over the rest of the page. */
+  .ntable__scroll[data-expanded='true'] thead th {
+    position: static;
+  }
+
+  .ntable__foot {
+    padding: var(--space-half);
+  }
+
   /* The fixed columns are what the desktop table needs to keep its figures
-   * together on the right; here they are 33rem of demand in a 21rem band, so
+   * together on the right; here they are 44rem of demand in a 21rem band, so
    * they are released and the table falls back to its own content minimum
    * inside the scroller. */
   .nholes__col-cause,
@@ -941,18 +1076,14 @@
 
   .nholes th,
   .nholes td {
-    padding: var(--space-half) 0.5rem;
-  }
-
-  .nholes th:first-child,
-  .nholes td:first-child {
-    padding-left: 0;
+    padding: 0.7rem 0.65rem;
   }
 
   /* The day stops being a gutter and becomes a heading over its own root. */
   .nanchor {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-half);
+    padding: var(--space) 0.75rem;
   }
 
   .nanchor__day {
@@ -978,6 +1109,15 @@
 
   .nholes__more {
     transition: none;
+  }
+
+  /* The sweep stops where it started rather than disappearing. Still the right
+   * colour, still on the track, still says a read is in flight — it simply does
+   * not travel. Removing it would leave the one state on this page that has
+   * nothing else to show for itself with nothing at all. */
+  .nloading__rule::after {
+    animation: none;
+    transform: none;
   }
 }
 

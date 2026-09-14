@@ -82,6 +82,36 @@ const BAND_DRAW = 500;
 /** Stagger index for the reveal, as a custom property the stylesheet reads. */
 const rise = (index: number) => ({ '--rise-i': index }) as CSSProperties;
 
+/**
+ * Every "we are reading something" state on this page.
+ *
+ * It was `.empty` — --t-small at 52% white, hard left in a band that has
+ * nothing else in it yet. On the coverage band that is the only thing on
+ * screen while the archive answers, and at that size against that much black
+ * it reads as a caption on an empty page rather than as work in progress.
+ *
+ * Centred, at --t-h2, over a rule that sweeps. The sweep is the whole point: a
+ * line of static text cannot tell a reader whether the page is loading or has
+ * given up, and this page asks people to wait on a database it does not
+ * control.
+ *
+ * THE SWEEP IS THE ACCENT, and that is state rather than decoration — it means
+ * a read is in flight, and it stops existing the moment one is not. Allowlisted
+ * in test/accent.test.ts under .nloading__rule::after.
+ *
+ * role="status" so a screen reader is told, politely, what the wait is for.
+ * Under reduced motion the segment stops where it is: still an indicator,
+ * still the right colour, no travel.
+ */
+function Loading({ children }: { children: ReactNode }) {
+  return (
+    <p className="nloading" role="status">
+      {children}
+      <span className="nloading__rule" aria-hidden="true" />
+    </p>
+  );
+}
+
 export default function Notary() {
   const coverage = useCoverage();
   const archive = useArchive();
@@ -318,7 +348,7 @@ function Verdict({
         <p className="nband__eyebrow">The answer</p>
 
         {reading === null ? (
-          <p className="nverdict__waiting">Asking the archive, and reading the rings here…</p>
+          <Loading>Asking the archive, and reading the rings here…</Loading>
         ) : (
           <>
             <p className={`nverdict__word${reading.yes ? ' nverdict__word--yes' : ''}`}>
@@ -494,7 +524,7 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
     return (
       <section className="section nband">
         <div className="nband__inner">
-          <p className="empty">Reading what the archive covers…</p>
+          <Loading>Reading what the archive covers…</Loading>
         </div>
       </section>
     );
@@ -772,18 +802,18 @@ function Holes({ gaps, total }: { gaps: Coverage['gaps']; total: number }) {
             ` The archive holds ${num.format(total)}; the largest ${num.format(sorted.length)} are here.`}
         </p>
 
-        {/* Wider than the page, and taller than the fold only inside itself.
-            Four columns of room names, seven-digit figures and timestamps do
-            not fit 343px however they are sized, and reflowing them into
-            stacked cards would throw away the only reason this is a table:
-            that 6,290,114 and 4,210 line up on their last digit.
+        {/* A panel, not rows on black — the same glass the tool cards and the
+            source panes are made of, so the two tables on this page read as
+            objects rather than as loose text that happens to line up.
 
-            The height cap is the more important half. This list is a thousand
-            rows and grows every time the mirror restarts, so expanding it used
-            to add its whole length to the page. Capped, the section is the same
-            height whether the archive has recorded ten holes or ten thousand. */}
-        <div className="nholes__scroll" data-expanded={all ? 'true' : 'false'}>
-          <table className="nholes">
+            Wider than the page inside itself, because four columns of room
+            names, seven-digit figures and timestamps do not fit 343px however
+            they are sized, and reflowing them into stacked cards would throw
+            away the only reason this is a table: that 6,290,114 and 4,210 line
+            up on their last digit. */}
+        <div className="ntable">
+          <div className="ntable__scroll" data-expanded={all ? 'true' : 'false'}>
+            <table className="nholes">
             <thead>
               <tr>
                 <th scope="col" className="nholes__col-room">
@@ -822,21 +852,34 @@ function Holes({ gaps, total }: { gaps: Coverage['gaps']; total: number }) {
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+            </table>
+          </div>
 
-        {sorted.length > HOLES_SHOWN && (
-          <button className="nholes__more" type="button" onClick={() => setAll((was) => !was)}>
-            {/* Both labels read off HOLES_SHOWN, so changing it cannot leave the
-                button describing a number the table is not showing — which it
-                just did, saying "six" while eight were on screen. */}
-            {all
-              ? `Show the largest ${HOLES_SHOWN}`
-              : capped
-                ? `Show the largest ${num.format(sorted.length)}`
-                : `Show all ${num.format(sorted.length)} holes`}
-          </button>
-        )}
+          {/* Inside the panel and outside the scroll window, which is what makes
+              it a way out: expanded, the list scrolls under a control that
+              never moves, so a reader deep in eight hundred rows does not have
+              to find their way back to the top to collapse it. */}
+          {sorted.length > HOLES_SHOWN && (
+            <div className="ntable__foot">
+              {all && (
+                <span className="ntable__count">
+                  Showing {num.format(sorted.length)}
+                  {capped ? ` of ${num.format(total)}` : ''}
+                </span>
+              )}
+              <button className="ntable__more" type="button" onClick={() => setAll((was) => !was)}>
+                {/* "Collapse" rather than "show the largest 8": the label has to
+                    say what the button DOES, and a reader who has expanded the
+                    list is looking for the way back, not for a row count. */}
+                {all
+                  ? 'Collapse'
+                  : capped
+                    ? `Show the largest ${num.format(sorted.length)}`
+                    : `Show all ${num.format(sorted.length)} holes`}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );
@@ -916,7 +959,7 @@ function Sources({ archive, live }: { archive: Async<DidReport>; live: Async<Liv
 }
 
 function ArchivePanel({ state }: { state: Async<DidReport> }) {
-  if (state.phase === 'loading') return <p className="empty">Reading the archive…</p>;
+  if (state.phase === 'loading') return <Loading>Reading the archive…</Loading>;
   if (state.phase === 'failed') return <p className="coverage__problem">{state.error}</p>;
   if (state.phase !== 'ready') return null;
 
@@ -1004,7 +1047,7 @@ function RecordRow({ record }: { record: ArchiveRecord }) {
 
 function LivePanel({ state }: { state: Async<LiveResult> }) {
   if (state.phase === 'loading') {
-    return <p className="empty">Reading {plural(LIVE_ROOMS.length, 'room')} in this browser…</p>;
+    return <Loading>Reading {plural(LIVE_ROOMS.length, 'room')} in this browser…</Loading>;
   }
   if (state.phase === 'failed') return <p className="coverage__problem">{state.error}</p>;
   if (state.phase !== 'ready') return null;
@@ -1095,55 +1138,68 @@ function AnchorBand({
   const [bandRef, seen] = useInView<HTMLElement>();
   if (state.phase === 'idle') return null;
 
+  // While there is nothing to put in it, the band does not lay out two columns.
+  // Splitting first and filling one side leaves the loading line centred in the
+  // left column with an empty column beside it, which is the arrangement the
+  // loading treatment exists to stop.
+  if (state.phase !== 'ready') {
+    return (
+      <section
+        className="nband nband--rules nband--anchors"
+        id="anchors"
+        ref={bandRef}
+        data-in={seen}
+      >
+        <div className="nband__inner">
+          <p className="nband__eyebrow">Anchors</p>
+          {state.phase === 'loading' ? (
+            <Loading>Reading the anchor log…</Loading>
+          ) : (
+            <p className="coverage__problem nband__prose">{state.error}</p>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  const log = state.value;
+
   return (
     <section className="nband nband--rules nband--anchors" id="anchors" ref={bandRef} data-in={seen}>
       <div className="nband__inner nband__split">
         <div className="nband__left">
           <p className="nband__eyebrow">Anchors</p>
           <h2 className="nband__title">Why you need not trust the clock.</h2>
-
-          {state.phase === 'loading' && <p className="empty">Reading the anchor log…</p>}
-          {state.phase === 'failed' && <p className="coverage__problem">{state.error}</p>}
-
-          {state.phase === 'ready' && (
-            <>
-              <p className="nband__copy">
-                Once a day Notary builds a Merkle tree over everything it captured that day and
-                publishes the root into <span className="mono">{state.value.anchor_room}</span>,
-                signed by its own key. Fetch any record from the API and it comes with a proof:
-                fold it into the leaf and you reach one of the roots below, or Notary has moved
-                something.
-              </p>
-            </>
-          )}
+          <p className="nband__copy">
+            Once a day Notary builds a Merkle tree over everything it captured that day and
+            publishes the root into <span className="mono">{log.anchor_room}</span>, signed by its
+            own key. Fetch any record from the API and it comes with a proof: fold it into the leaf
+            and you reach one of the roots below, or Notary has moved something.
+          </p>
         </div>
 
         <div className="nband__right">
-          {state.phase === 'ready' && (
-            <>
-              <p className="pinned__label">Notary’s key, pinned</p>
-              <p className="pinned__did mono">{state.value.pinned}</p>
-              <p className="notary__note">
-                This is the service’s own key, not its author’s, and it signs nothing but anchors.
-                Foolscap never infers it from who posts in a room.
-              </p>
+          <p className="pinned__label">Notary’s key, pinned</p>
+          <p className="pinned__did mono">{log.pinned}</p>
+          <p className="notary__note">
+            This is the service’s own key, not its author’s, and it signs nothing but anchors.
+            Foolscap never infers it from who posts in a room.
+          </p>
 
-              {!state.value.matchesPinned && (
-                <p className="coverage__problem">
-                  The archive reports a different key —{' '}
-                  <span className="mono">{state.value.notary_did}</span>. Roots signed by it verify
-                  against nothing this page pins, so treat the log below as unwitnessed.
-                </p>
-              )}
+          {!log.matchesPinned && (
+            <p className="coverage__problem">
+              The archive reports a different key — <span className="mono">{log.notary_did}</span>.
+              Roots signed by it verify against nothing this page pins, so treat the log below as
+              unwitnessed.
+            </p>
+          )}
 
-              {state.value.can_sign === false && (
-                <p className="coverage__problem">
-                  The archive cannot sign right now
-                  {state.value.signing_problem ? `: ${state.value.signing_problem}` : ''}. Roots
-                  are still computed; until one is published it constrains nothing.
-                </p>
-              )}
-            </>
+          {log.can_sign === false && (
+            <p className="coverage__problem">
+              The archive cannot sign right now
+              {log.signing_problem ? `: ${log.signing_problem}` : ''}. Roots are still computed;
+              until one is published it constrains nothing.
+            </p>
           )}
         </div>
       </div>
@@ -1152,22 +1208,26 @@ function AnchorBand({
           column beside the explanation. A 64-character hash in 45% of the page
           wraps to two lines, and a hash you have to reassemble across a line
           break is a hash nobody will check against the room. */}
-      {state.phase === 'ready' && (
-        <div className="nband__inner">
-          {state.value.anchors.length === 0 ? (
-            <p className="empty">No day has been anchored yet.</p>
-          ) : (
+      <div className="nband__inner">
+        {log.anchors.length === 0 ? (
+          <p className="empty">No day has been anchored yet.</p>
+        ) : (
+          // The holes table's panel, so the page's two tables are one object
+          // seen twice. No scroll window and no footer: the anchor log is one
+          // row per day and bounded by how long Notary has been running.
+          <div className="ntable">
             <ul className="nanchors">
-              {state.value.anchors.map((anchor) => (
-                <AnchorRow anchor={anchor} room={state.value.anchor_room} key={anchor.day} />
+              {log.anchors.map((anchor) => (
+                <AnchorRow anchor={anchor} room={log.anchor_room} key={anchor.day} />
               ))}
             </ul>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
+
 
 function AnchorRow({ anchor, room }: { anchor: Anchor; room: string }) {
   return (

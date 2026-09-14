@@ -78,6 +78,17 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
     why: 'a key whose signature verified before the cutoff asked about',
   },
 
+  // --- in flight -----------------------------------------------------------
+  // A read is happening right now. It is the narrowest kind of state there is —
+  // it exists only while the request is open and is gone the instant it
+  // resolves, either way — and it is the only thing on screen while /notary
+  // waits on an archive it does not control. The sweep is what separates
+  // "loading" from "gave up", which no amount of grey text can say.
+  {
+    selector: '.nloading__rule::after',
+    why: 'a read is in flight, for as long as it is and no longer',
+  },
+
   // --- current ------------------------------------------------------------
   // "Current" is in the token's own definition, and where you are is state.
   { selector: ".hero__nav-link[aria-current='page']", why: 'the page you are on' },
