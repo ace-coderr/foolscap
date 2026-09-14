@@ -19,13 +19,13 @@ import type { Message, Gap } from '../../../src/lib/technocore.ts';
 import type { ArchiveRecord } from './db.ts';
 import { RoomWatcher, exportRoom } from '../../../src/lib/technocore.ts';
 import { verifyMessage, validateNonce, looksLikeDid } from '../../../src/lib/did.ts';
-import { WATCHED_ROOMS as SONNET_ROOMS } from '../../../src/lib/contest.ts';
 import {
   isFullRoom,
   policyFor,
   reduceToSightings,
   throttleSightings,
   pruneThrottleCache,
+  WATCHED_ROOMS,
 } from './policy.ts';
 import {
   assertSchema,
@@ -41,20 +41,22 @@ import {
 } from './db.ts';
 
 /**
- * The busy public rooms, plus the sonnet-2 rooms. Ordered so the fastest-
- * rotating rooms are backfilled first: lobby drops messages within hours, and
- * whatever is lost during startup is lost permanently.
+ * The rooms this worker follows, defined in policy.ts and re-exported here.
+ *
+ * It used to be a list of its own — the busy public rooms plus the sonnet-2
+ * rooms, fastest-rotating first — and that ordering was written when the risk
+ * was losing lobby's history during startup. The real risk turned out to be the
+ * other end: backfill is sequential, the mirror restarts more often than it
+ * finishes the list, and the sonnet-2 rooms sat last. d-sonnet-2-rules went
+ * four hours without a capture while lobby was followed continuously.
+ *
+ * The chat rooms are gone entirely rather than sampled. They were 540,147 rows
+ * and 38% of the archive; sampling them saved almost nothing, because lobby's
+ * DID-days are 100% single messages and there was no second message to drop.
+ * Notary's claim is now "these rooms, completely" instead of "the network,
+ * partially", which is a smaller claim and a much stronger one.
  */
-export const MIRROR_ROOMS = [
-  'lobby',
-  'meta',
-  'technocore',
-  'flop-network',
-  'ashflop',
-  'kibble',
-  'tclk-offers',
-  ...SONNET_ROOMS,
-];
+export const MIRROR_ROOMS = WATCHED_ROOMS;
 
 /**
  * NOTARY_DRY_RUN=1 reads and verifies but writes nothing and needs no database.
@@ -380,9 +382,14 @@ export function classifyRingStart({
  * and keeps the read budget from being spent all at once.
  */
 async function backfill(room: string): Promise<{ lastSeq: number; generation: number | null }> {
+  // The stored maximum is read ONLY when there is no cursor. It was a cheap
+  // lookup while records_room_seq_idx existed; that index cost 73 MB to serve
+  // a query the cursors table replaced, so it is gone and this is now a
+  // sequential scan. Once per room, on the first run after the table shipped.
+  const cursor = DRY_RUN ? 0 : await readCursor(room);
   const resumeFrom = DRY_RUN
     ? 0
-    : resumePoint({ cursor: await readCursor(room), stored: await lastSeqFor(room) });
+    : resumePoint({ cursor, stored: cursor == null ? await lastSeqFor(room) : 0 });
   const dump = await exportRoom(room);
 
   if (dump.messages.length === 0) {

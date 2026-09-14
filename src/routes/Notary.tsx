@@ -584,6 +584,8 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
             that moment had already rotated away and cannot be recovered by anyone.
           </p>
 
+          <Watched rooms={cov.roomsWatched} />
+
           {stale && (
             <p className="coverage__problem nband__prose">
               Sweeping is not running. The mirror last captured a message{' '}
@@ -641,6 +643,51 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
 
       <Holes gaps={unrecovered} total={cov.gapsTotal} />
     </>
+  );
+}
+
+/**
+ * WHICH ROOMS, AND THAT THERE ARE ONLY THESE.
+ *
+ * The claim this page makes changed shape. It used to be "the network,
+ * partially": thirteen rooms, five of them sampled, and an archive that held a
+ * fraction of what went past. Sampling the chat rooms bought almost nothing —
+ * lobby's DID-days were 100% single messages, so there was no second message to
+ * drop — and they were 38% of the archive. They are not followed at all now.
+ *
+ * What is left is smaller and much stronger: eight rooms, every one of them
+ * kept whole. "These rooms, completely" is a claim a reader can actually use,
+ * where "some of everything" was a claim they had to take on trust.
+ *
+ * It only stays honest if the list is HERE rather than in a config file, and if
+ * the sentence after it is as plain as this one: nothing else is watched. A
+ * reader who searches a key that only ever posted in lobby must be able to see
+ * why Notary has nothing, without inferring it from an empty result.
+ */
+function Watched({ rooms }: { rooms: string[] }) {
+  if (rooms.length === 0) return null;
+  return (
+    <div className="nwatched">
+      <p className="nwatched__lede">
+        Notary follows <strong>{plural(rooms.length, 'room')}</strong>, and keeps every signed
+        message in all of them. Not a sample — everything those rooms carry that a stranger could
+        re-verify.
+      </p>
+      <ul className="nwatched__list">
+        {rooms.map((room) => (
+          <li className="nwatched__room mono" key={room}>
+            {room}
+          </li>
+        ))}
+      </ul>
+      <p className="notary__note nband__prose">
+        No other room is watched. The network’s chat rooms — lobby, meta, kibble, ashflop,
+        tclk-offers — were followed until 14 September and are not any more: they carried hundreds
+        of thousands of keys that posted once, which is a great deal of storage for evidence that
+        proves very little. A key that only ever posted in one of those has nothing here, and that
+        is a fact about this list rather than a fact about the key.
+      </p>
+    </div>
   );
 }
 

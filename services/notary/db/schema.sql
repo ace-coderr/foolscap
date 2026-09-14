@@ -58,7 +58,12 @@ alter table records add constraint records_sighting_check
 
 create index if not exists records_did_captured_at_idx on records (did, captured_at);
 create index if not exists records_day_idx on records (day);
-create index if not exists records_room_seq_idx on records (room, source_seq);
+-- records_room_seq_idx (room, source_seq) is GONE. It cost 73 MB to serve one
+-- query — lastSeqFor's max(source_seq) per room — and the cursors table
+-- replaced that as the resume point. What is left of lastSeqFor is a one-time
+-- seed for an archive older than cursors, run once per room, and a sequential
+-- scan is the right price for that.
+drop index if exists records_room_seq_idx;
 
 create table if not exists anchors (
   day            date primary key,

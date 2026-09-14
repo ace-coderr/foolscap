@@ -80,6 +80,8 @@ export interface Coverage {
    * this archive's loss forty-fold.
    */
   roomsBegunMidRing: number;
+  /** The rooms the mirror follows — all of them completely. Named on the page. */
+  roomsWatched: string[];
   roomsCovered: Array<{ room: string; policy: 'full' | 'sightings'; records: number }>;
   caveat: string;
 }

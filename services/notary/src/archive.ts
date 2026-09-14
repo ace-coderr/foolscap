@@ -19,7 +19,7 @@
 // fact about the archive rather than a fact about the DID.
 
 import { getPool } from './db.ts';
-import { policyFor, POLICY, type Policy } from './policy.ts';
+import { policyFor, POLICY, WATCHED_ROOMS, type Policy } from './policy.ts';
 
 // ---------------------------------------------------------------------------
 // Shapes
@@ -150,6 +150,16 @@ export interface Coverage {
   // number, and summing it was what overstated this archive's loss forty-fold.
   /** How many rooms Notary first looked at after their ring had already turned. */
   roomsBegunMidRing: number;
+
+  /**
+   * The rooms the mirror follows, and it follows all of them completely.
+   *
+   * Served so the page can name them. Notary's claim changed shape when the
+   * chat rooms were dropped: it was "the network, partially" and is now "these
+   * rooms, entirely", which is smaller, stronger, and only honest if the list
+   * is on the page rather than in a config file nobody reads.
+   */
+  roomsWatched: string[];
 
   roomsCovered: Array<{ room: string; policy: Policy; records: number; firstCapturedAt: string | null; lastCapturedAt: string | null }>;
 }
@@ -320,6 +330,7 @@ export async function coverage(): Promise<Coverage> {
     lostMessages: int(g.lost_missed) + int(g.lost_downtime),
 
     roomsBegunMidRing: int(g.rooms_begun_mid_ring),
+    roomsWatched: [...WATCHED_ROOMS],
 
     roomsCovered: rooms.rows.map((row) => ({
       room: row.room,

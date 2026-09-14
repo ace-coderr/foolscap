@@ -19,6 +19,7 @@ import {
   resumePoint,
 } from '../services/notary/src/mirror';
 import { LOSS_KINDS } from '../services/notary/src/archive';
+import { policyFor, POLICY } from '../services/notary/src/policy';
 import { parseTableNames } from '../services/notary/src/db';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
@@ -120,17 +121,64 @@ describe('what the mirror lets into the archive', () => {
   });
 });
 
+/**
+ * What is mirrored, and the two things that used to be wrong about it.
+ *
+ * THE ORDER. Backfill is sequential, so a mirror that restarts before it
+ * reaches the end of the list never reaches the end of the list. lobby was
+ * first because it rotates fastest and whatever is lost at startup is lost for
+ * good — a fair reason that optimised the wrong end. The sonnet-2 rooms sat
+ * last and d-sonnet-2-rules went four hours without a capture while lobby was
+ * followed continuously. The evidence goes first now.
+ *
+ * THE CHAT ROOMS ARE GONE, not sampled. They were 540,147 rows and 38% of the
+ * archive, and sampling saved almost nothing: lobby held 412,520 distinct DIDs
+ * and 100% of its DID-days were a single message, so "first and last per DID
+ * per day" had no second message to drop. Notary claims "these rooms,
+ * completely" now rather than "the network, partially".
+ */
 describe('rooms to mirror', () => {
-  test('the busy public rooms and the sonnet-2 rooms are all covered', () => {
-    for (const room of ['lobby', 'technocore', 'kibble', 'flop-network', 'tclk-offers', 'ashflop', 'meta']) {
-      assert.ok(MIRROR_ROOMS.includes(room), room);
+  test('watched and kept-whole are the same list, so neither can drift', () => {
+    for (const room of MIRROR_ROOMS) {
+      assert.equal(policyFor(room), POLICY.FULL, `${room} is watched but not kept whole`);
     }
-    assert.ok(MIRROR_ROOMS.includes('mb-sonnet-2-registration'));
-    assert.ok(MIRROR_ROOMS.includes('d-sonnet-2-rules'));
   });
 
-  test('the fastest-rotating room is backfilled first', () => {
-    assert.equal(MIRROR_ROOMS[0], 'lobby');
+  test('the evidence rooms are all there', () => {
+    for (const room of [
+      'd-sonnet-2-rules',
+      'mb-sonnet-2-registration',
+      'mb-sonnet-2-discovery',
+      'mb-sonnet-2-submissions',
+      'mb-sonnet-2-votes',
+      'mb-sonnet-2-campaign',
+    ]) {
+      assert.ok(MIRROR_ROOMS.includes(room), room);
+    }
+    assert.ok(MIRROR_ROOMS.includes('technocore'));
+    assert.ok(MIRROR_ROOMS.includes('flop-network'));
+  });
+
+  test('the chat rooms are not mirrored at all', () => {
+    for (const room of ['lobby', 'meta', 'kibble', 'ashflop', 'tclk-offers']) {
+      assert.ok(!MIRROR_ROOMS.includes(room), `${room} should not be followed`);
+    }
+  });
+
+  test('evidence is backfilled before the technical rooms', () => {
+    const last = Math.max(
+      ...['technocore', 'flop-network'].map((r) => MIRROR_ROOMS.indexOf(r))
+    );
+    const firstEvidence = MIRROR_ROOMS.findIndex((r) => r.includes('sonnet-2'));
+    assert.ok(firstEvidence >= 0, 'there is at least one sonnet-2 room');
+    assert.ok(
+      MIRROR_ROOMS.filter((r) => r.includes('sonnet-2')).every((r) => MIRROR_ROOMS.indexOf(r) < last),
+      'every sonnet-2 room comes before technocore and flop-network'
+    );
+  });
+
+  test('the referee room is first, because its status is what expires', () => {
+    assert.equal(MIRROR_ROOMS[0], 'd-sonnet-2-rules');
   });
 
   test('no room is listed twice', () => {
@@ -140,7 +188,7 @@ describe('rooms to mirror', () => {
 
 // ---------------------------------------------------------------------------
 
-import { reduceToSightings, policyFor, isFullRoom, POLICY, DEFAULT_POLICY } from '../services/notary/src/policy';
+import { reduceToSightings, isFullRoom, DEFAULT_POLICY } from '../services/notary/src/policy';
 
 const sighting = (did, seq, ts) => ({
   did,

@@ -595,6 +595,47 @@
   font-weight: 600;
 }
 
+/* ---------------------------------------------------------------- watched */
+
+/* The eight rooms, named on the page rather than left in a config file.
+ * "These rooms, completely" is only checkable if the reader can see which. */
+.nwatched {
+  margin-top: var(--space-2);
+}
+
+.nwatched__lede {
+  max-width: var(--measure);
+  margin: 0 0 var(--space);
+  font-size: var(--t-body);
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.nwatched__lede strong {
+  font-weight: 600;
+}
+
+/* Wrapping chips rather than a column: eight room names are a set to be taken
+ * in at once, not a list to be read down. */
+.nwatched__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-half);
+  margin: 0 0 var(--space);
+  padding: 0;
+  list-style: none;
+}
+
+.nwatched__room {
+  padding: 0.3rem 0.7rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  font-size: var(--t-small);
+  color: var(--ink-mid);
+  white-space: nowrap;
+}
+
 /* -------------------------------------------------------------------- facts */
 
 /* The anchor ledger's rows, for the archive's own numbers. They were a 45%
