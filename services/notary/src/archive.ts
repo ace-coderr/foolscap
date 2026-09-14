@@ -88,9 +88,41 @@ export interface DidReport {
   days: Array<{ day: string; records: number }>;
   /** The earliest few, because a cutoff question is always about the earliest. */
   earliest: RecordRow[];
+  /**
+   * The permanent tier, per room. Empty for a key whose records are all still
+   * inside the retention window — there is nothing the originals do not say.
+   */
+  summary: SummaryRow[];
   cutoff: CutoffResult | null;
   coverage: Coverage;
   caveat: string;
+}
+
+/**
+ * What the permanent tier says about one (did, room) pair.
+ *
+ * A SECOND SOURCE, NOT A CORRECTION TO THE FIRST. The record-derived figures
+ * beside it are counted from originals Notary still holds and can hand over;
+ * these are counted from originals it held and deleted. Both are true and they
+ * answer different questions, so they are served apart and labelled apart —
+ * the same discipline the page already applies to live-versus-archive, for the
+ * same reason: a reader has to know which kind of thing they are leaning on.
+ *
+ * The cutoff answer is never built from these. The pinned record is the
+ * earliest Notary captured and it survives the prune, so the strongest claim
+ * on the page stays backed by a signed message anyone can re-verify.
+ */
+export interface SummaryRow {
+  room: string;
+  firstCapturedAt: string;
+  firstSourceTs: string | null;
+  lastCapturedAt: string;
+  lastSourceTs: string | null;
+  messageCount: number;
+  /** The one original kept back from pruning, if there is one. */
+  pinnedRecordId: string | null;
+  /** True when the tier stands for messages that are no longer held whole. */
+  prunedBehind: boolean;
 }
 
 export interface GapRow {
@@ -373,7 +405,7 @@ const EARLIEST_SAMPLE = 10;
 export async function didReport(did: string, before: string | null): Promise<DidReport> {
   const pool = getPool();
 
-  const [totals, rooms, days, earliest, cov] = await Promise.all([
+  const [totals, rooms, days, earliest, summary, cov] = await Promise.all([
     pool.query(
       `select count(*)::text as total,
               min(captured_at) as first_captured_at, max(captured_at) as last_captured_at,
@@ -410,6 +442,20 @@ export async function didReport(did: string, before: string | null): Promise<Did
         limit ${EARLIEST_SAMPLE}`,
       [did]
     ),
+    // The tier, read alongside rather than folded in. A pair whose records are
+    // all still held has a row here saying the same thing; the page shows it
+    // only where it says MORE than the records do, which is where records have
+    // been pruned out from under it.
+    pool.query(
+      `select s.room, s.first_captured_at, s.first_source_ts,
+              s.last_captured_at, s.last_source_ts,
+              s.message_count::text as message_count,
+              s.pinned_record_id::text as pinned_record_id,
+              (s.message_count > (select count(*) from records r
+                                   where r.did = s.did and r.room = s.room)) as pruned_behind
+         from summaries s where s.did = $1 order by s.room`,
+      [did]
+    ),
     coverage(),
   ]);
 
@@ -438,6 +484,16 @@ export async function didReport(did: string, before: string | null): Promise<Did
     })),
     days: days.rows.map((row) => ({ day: row.day, records: Number(row.records) })),
     earliest: earliestRows,
+    summary: summary.rows.map((row) => ({
+      room: row.room,
+      firstCapturedAt: iso(row.first_captured_at)!,
+      firstSourceTs: iso(row.first_source_ts),
+      lastCapturedAt: iso(row.last_captured_at)!,
+      lastSourceTs: iso(row.last_source_ts),
+      messageCount: Number(row.message_count),
+      pinnedRecordId: row.pinned_record_id ?? null,
+      prunedBehind: row.pruned_behind === true,
+    })),
     cutoff: before
       ? evaluateCutoff({ before, firstCapturedAt, firstSourceTs, earliest: earliestRows })
       : null,

@@ -164,6 +164,26 @@ export interface Cutoff {
   caveat: string;
 }
 
+/**
+ * What the permanent tier says about one (did, room) pair.
+ *
+ * A second source, never a correction to the first. The record figures beside
+ * it are counted from originals Notary still holds; these are counted from
+ * originals it held and deleted. Served apart and shown apart, the same way
+ * live and archive are — a reader has to know which they are leaning on.
+ */
+export interface SummaryRow {
+  room: string;
+  firstCapturedAt: string;
+  firstSourceTs: string | null;
+  lastCapturedAt: string;
+  lastSourceTs: string | null;
+  messageCount: number;
+  pinnedRecordId: string | null;
+  /** True where the tier stands for messages no longer held whole. */
+  prunedBehind: boolean;
+}
+
 export interface DidReport {
   did: string;
   totalRecords: number;
@@ -181,6 +201,8 @@ export interface DidReport {
   }>;
   days: Array<{ day: string; records: number }>;
   earliest: ArchiveRecord[];
+  /** The permanent tier, per room. Shown only where it says more than the records. */
+  summary: SummaryRow[];
   cutoff: Cutoff | null;
   coverage: Coverage;
   caveat: string;

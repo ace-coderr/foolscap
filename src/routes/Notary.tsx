@@ -1216,8 +1216,66 @@ function ArchivePanel({ state }: { state: Async<DidReport> }) {
         <RecordRow record={record} key={record.id} />
       ))}
 
+      <Summarised rows={report.summary} />
+
       <p className="notary__note">{report.caveat}</p>
     </>
+  );
+}
+
+/**
+ * The permanent tier, set apart from the records above it.
+ *
+ * NEVER BLENDED, for the reason this whole page is built on. The figures above
+ * are counted from originals Notary still holds and will hand over; these are
+ * counted from originals it held and deleted. Both are true, they answer
+ * different questions, and a reader leaning on one has to know which — the same
+ * discipline that keeps live and archive in separate panes, applied one level
+ * down.
+ *
+ * Shown only where the tier says MORE than the records do. A key whose messages
+ * are all still inside the window has a summary row that repeats what the
+ * originals already say, and a second block restating it would be noise
+ * pretending to be evidence.
+ *
+ * The cutoff answer above is not built from any of this. The pinned record is
+ * the earliest Notary captured and it survives the prune, so the strongest
+ * claim on the page stays a signed message a stranger can check.
+ */
+function Summarised({ rows }: { rows: DidReport['summary'] }) {
+  const pruned = rows.filter((row) => row.prunedBehind);
+  if (pruned.length === 0) return null;
+
+  return (
+    <div className="nsummarised">
+      <p className="notary__rooms-title">
+        Beyond the retention window <span className="nsource__tag">summary, not originals</span>
+      </p>
+      <ul className="notary__rooms">
+        {pruned.map((row) => (
+          <li className="notary__room" key={row.room}>
+            <span className="mono">{row.room}</span>
+            <span className="notary__room-detail">
+              {plural(row.messageCount, 'message')}, {stamp(row.firstSourceTs ?? row.firstCapturedAt)}{' '}
+              → {stamp(row.lastSourceTs ?? row.lastCapturedAt)}
+            </span>
+            {row.pinnedRecordId && <span className="notary__sampled">1 kept</span>}
+          </li>
+        ))}
+      </ul>
+      <p className="notary__note">
+        Notary captured more messages from this key in these rooms than it still holds; the
+        difference was pruned, and the window above says when. What is left for each room is when
+        the key was first and last seen there and a running count kept as the messages arrived —
+        Notary&rsquo;s word, not something you can re-verify, and not a figure that can be
+        recounted now that the messages are gone.{' '}
+        {pruned.every((row) => row.pinnedRecordId)
+          ? 'The earliest message in each is the exception: it was kept back, and it is the one the cutoff answer above is built on.'
+          : 'Where no message was kept back, nothing here can be re-verified at all.'}{' '}
+        A count here is not a count of everything the key posted; it is a count of what Notary
+        captured before the messages were pruned.
+      </p>
+    </div>
   );
 }
 
