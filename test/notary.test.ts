@@ -19,6 +19,7 @@ import {
   resumePoint,
 } from '../services/notary/src/mirror';
 import { LOSS_KINDS } from '../services/notary/src/archive';
+import { parseTableNames } from '../services/notary/src/db';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const ROOM = 'mb-sonnet-2-registration';
@@ -433,5 +434,76 @@ describe('loss accounting', () => {
     // And the other half of it: had downtime been recorded correctly while
     // rotated was still being summed, the answer would have been wronger still.
     assert.equal(pct(sum(rows)), '4.1');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+/**
+ * What the migration says it did.
+ *
+ * `npm run migrate` printed "Schema applied: records, anchors, gaps." — a
+ * literal, which stayed literally true of a three-table schema long after the
+ * schema had four. A run that had correctly created `cursors` reported three
+ * names and left it looking as though it had not: the migration succeeded and
+ * said otherwise, which is the worst way for one to be wrong.
+ *
+ * There were two copies of that list, the log line and assertSchema's array,
+ * and neither was near the file it described. Both read the schema now, and
+ * these cover the reading.
+ */
+describe('the schema describes itself', () => {
+  test('every declared table is found, however it is declared', () => {
+    assert.deepEqual(
+      parseTableNames(`
+        create table records (id bigserial);
+        create table if not exists anchors (day date);
+        CREATE TABLE IF NOT EXISTS  Gaps (id bigserial);
+        create   table
+          cursors (room text);
+      `),
+      ['anchors', 'cursors', 'gaps', 'records']
+    );
+  });
+
+  test('prose about tables is not a table', () => {
+    // Every line here is the kind of sentence schema.sql actually contains.
+    assert.deepEqual(
+      parseTableNames(`
+        -- An archive that quietly has holes is worse than no archive.
+        -- This used to create table lies out of a comment, which is the point.
+        -- create table ghost (id int);
+        create table real_one (id int);
+      `),
+      ['real_one']
+    );
+  });
+
+  test('indexes, alters and constraints are not tables', () => {
+    assert.deepEqual(
+      parseTableNames(`
+        create table only_one (id int);
+        create unique index if not exists only_one_key on only_one (id);
+        create index if not exists only_one_idx on only_one (id);
+        alter table only_one add column if not exists extra text;
+        alter table only_one add constraint only_one_check check (id > 0);
+      `),
+      ['only_one']
+    );
+  });
+
+  test('the real schema declares the four tables the service needs', () => {
+    const sql = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '..', 'services', 'notary', 'db', 'schema.sql'),
+      'utf8'
+    );
+    const tables = parseTableNames(sql);
+    for (const table of ['records', 'anchors', 'gaps', 'cursors']) {
+      assert.ok(tables.includes(table), `schema.sql should declare ${table}`);
+    }
+    // cursors is the one that was added and not reported. If it ever leaves the
+    // file, assertSchema stops requiring it and the mirror goes back to
+    // inferring its resume point from stored records — silently.
+    assert.ok(tables.includes('cursors'), 'the resume point has nowhere to live without it');
   });
 });

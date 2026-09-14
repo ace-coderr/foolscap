@@ -100,18 +100,55 @@ export async function migrate(): Promise<void> {
   await getPool().query(sql);
 }
 
+/**
+ * Every table the schema file declares, read from the file.
+ *
+ * NOT A LIST WRITTEN OUT HERE. There was one, and the migrate script had a
+ * second copy of it in a console.log, and when `cursors` was added neither was
+ * updated — so a migration that had correctly created the table reported three
+ * tables and left it looking like it had not. A list of what the schema
+ * contains, kept anywhere other than the schema, is a list that goes stale on
+ * the first change nobody thinks to mirror.
+ *
+ * Comments are stripped first so the prose above each table — which discusses
+ * tables at length — cannot be read as a declaration.
+ */
+export async function schemaTables(): Promise<string[]> {
+  return parseTableNames(await readFile(join(HERE, '..', 'db', 'schema.sql'), 'utf8'));
+}
+
+/**
+ * The parsing half, separated so it can be tested without a file or a database.
+ *
+ * Line comments go first. The schema's prose discusses tables at length — "the
+ * mirror writes down where it read", "an archive that quietly has holes" — and
+ * a parser that read the commentary would report whatever the last person
+ * happened to write about.
+ */
+export function parseTableNames(sql: string): string[] {
+  const stripped = sql.replace(/--.*$/gm, '');
+  const names = new Set<string>();
+  for (const match of stripped.matchAll(
+    /create\s+table\s+(?:if\s+not\s+exists\s+)?([a-z_][a-z0-9_]*)/gi
+  )) {
+    names.add(match[1].toLowerCase());
+  }
+  return [...names].sort();
+}
+
+/** The public tables that exist right now. */
+export async function publicTables(): Promise<Set<string>> {
+  const { rows } = await getPool().query(
+    `select table_name from information_schema.tables where table_schema = 'public'`
+  );
+  return new Set(rows.map((r: { table_name: string }) => r.table_name));
+}
+
 /** Fail loudly and early rather than a thousand times inside the write loop. */
 export async function assertSchema(): Promise<void> {
-  const { rows } = await getPool().query(
-    `select table_name from information_schema.tables
-      where table_schema = 'public'
-        and table_name in ('records', 'anchors', 'gaps', 'cursors')`
-  );
-  const found = new Set(rows.map((r: { table_name: string }) => r.table_name));
-  // cursors is newer than the others. Named here rather than allowed to be
-  // absent, because a mirror that silently fell back to inferring its resume
-  // point from stored records is the exact condition this table removes.
-  const missing = ['records', 'anchors', 'gaps', 'cursors'].filter((t) => !found.has(t));
+  const expected = await schemaTables();
+  const found = await publicTables();
+  const missing = expected.filter((t) => !found.has(t));
   if (missing.length) {
     throw new Error(
       `Missing table(s): ${missing.join(', ')}. Run "npm run migrate" against this database first.`
