@@ -531,9 +531,10 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
       <section className="nband nband--rules" id="coverage" ref={bandRef} data-in={seen}>
         <div className="nband__inner">
           <p className="nband__eyebrow">What this archive covers</p>
+          <Ratio held={cov.records} missing={cov.lostMessages} />
           <ul className="nstats">
-            <Stat value={cov.records} label="signed records held, every original kept" active={seen} />
             <Stat value={cov.dids} label="distinct DIDs seen at least once" active={seen} />
+            <Stat value={cov.rooms} label="rooms swept, of the network’s many" active={seen} />
             <Stat
               value={days ?? 0}
               unit={days === 1 ? 'day' : 'days'}
@@ -545,80 +546,220 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
       </section>
 
       <section className="section nband">
-        <div className="nband__inner nband__split">
-          <div className="nband__left">
-            <p className="notary__coverage-lede">
-              Nothing before <span className="mono">{start ?? 'capture has not started'}</span>{' '}
-              exists here, for any key. Notary began capturing then; the network’s own history
-              from before that moment had already rotated away and cannot be recovered by anyone.
+        <div className="nband__inner">
+          <p className="notary__coverage-lede nband__prose">
+            Nothing before <span className="mono">{start ?? 'capture has not started'}</span> exists
+            here, for any key. Notary began capturing then; the network’s own history from before
+            that moment had already rotated away and cannot be recovered by anyone.
+          </p>
+
+          {stale && (
+            <p className="coverage__problem nband__prose">
+              Sweeping is not running. The mirror last captured a message{' '}
+              {formatAge(cov.staleSeconds! * 1000)} ago, so everything since then is uncovered and
+              is being lost as the rings turn. Anything submitted directly in the meantime is still
+              held — it just does not mean the rooms are being watched.
             </p>
-            <p className="notary__note">
-              The oldest message held is older than the capture window because the first sweep
-              read whatever the rings still contained. Its timestamp is the room’s claim, not
-              something Notary watched happen — the distinction is kept everywhere below.
-            </p>
-          </div>
+          )}
 
-          <div className="nband__right">
-            <dl className="facts">
-              <dt>Swept</dt>
-              <dd className="mono">
-                {start ?? '—'} → {end ?? '—'}
-              </dd>
-              <dt>Held</dt>
-              <dd>
-                {num.format(cov.records)} records across {num.format(cov.dids)} DIDs and{' '}
-                {plural(cov.rooms, 'room')}
-              </dd>
-              <dt>Known missing</dt>
-              <dd>
-                {cov.lostMessages > 0
-                  ? `${num.format(cov.lostMessages)} messages rotated past Notary and are gone`
-                  : 'no unrecovered gaps recorded'}
-              </dd>
-              <dt>Oldest message held</dt>
-              <dd className="mono">{cov.earliestSourceTs ? stamp(cov.earliestSourceTs) : '—'}</dd>
-              {cov.submitted > 0 && (
-                <>
-                  <dt>Submitted</dt>
-                  <dd>
-                    {plural(cov.submitted, 'record')} handed to Notary directly rather than swept
-                  </dd>
-                </>
-              )}
-            </dl>
-
-            {stale && (
-              <p className="coverage__problem">
-                Sweeping is not running. The mirror last captured a message{' '}
-                {formatAge(cov.staleSeconds! * 1000)} ago, so everything since then is uncovered
-                and is being lost as the rings turn. Anything submitted directly in the meantime
-                is still held — it just does not mean the rooms are being watched.
-              </p>
+          {/* The anchor ledger's treatment, for the same reason: these are the
+              archive's own numbers and a reader checks them one line at a time,
+              which a 45% column full of wrapped prose does not let them do. */}
+          <dl className="nfacts">
+            <dt>Swept</dt>
+            <dd className="mono">
+              {start ?? '—'} → {end ?? '—'}
+            </dd>
+            <dt>Oldest message held</dt>
+            <dd className="mono">{cov.earliestSourceTs ? stamp(cov.earliestSourceTs) : '—'}</dd>
+            {/* Not "known missing" — the bar above is that number, at the size it
+                deserves, and restating it here is the repetition this section was
+                rebuilt to lose. What the bar does not say is how many separate
+                stretches those messages came from. */}
+            <dt>Recorded holes</dt>
+            <dd>
+              {/* Spelled out rather than run through plural(), which appends an
+                  "s" and would have written "40 stretchs". */}
+              {unrecovered.length > 0
+                ? `${num.format(unrecovered.length)} separate ${
+                    unrecovered.length === 1 ? 'stretch' : 'stretches'
+                  } of a room, listed below`
+                : 'none recorded'}
+            </dd>
+            {cov.submitted > 0 && (
+              <>
+                <dt>Submitted</dt>
+                <dd>
+                  {plural(cov.submitted, 'record')} handed to Notary directly rather than swept
+                </dd>
+              </>
             )}
+          </dl>
 
-            {unrecovered.length > 0 && (
-              <div className="notary__gaps">
-                <p className="notary__gaps-title">Recorded holes</p>
-                {unrecovered.map((gap) => (
-                  <p className="coverage__problem" key={gap.id}>
-                    <span className="mono">{gap.room}</span>: {num.format(gap.lost)} messages
-                    rotated out before Notary could recover them
-                    {gap.recovered > 0 &&
-                      ` (${num.format(gap.recovered)} of ${num.format(gap.missing ?? 0)} were recovered)`}
-                    , noticed {stamp(gap.noticedAt)}.
-                  </p>
-                ))}
-                <p className="notary__note">
-                  These are holes Notary noticed and wrote down. A hole means an absence inside it
-                  proves nothing at all.
-                </p>
-              </div>
-            )}
-          </div>
+          <p className="notary__note nband__prose">
+            The oldest message held is older than the capture window because the first sweep read
+            whatever the rings still contained. Its timestamp is the room’s claim, not something
+            Notary watched happen — the distinction is kept everywhere below.
+          </p>
         </div>
       </section>
+
+      <Holes gaps={unrecovered} />
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The ratio
+// ---------------------------------------------------------------------------
+
+/**
+ * Held against lost, to scale, and the first thing this section says.
+ *
+ * It is the most honest fact on the site and it used to be a clause in the
+ * middle of a definition list: 565,311 records held, 6,409,232 messages gone
+ * past — about eight percent of what Notary watched. Written out, a reader has
+ * to divide two seven-digit numbers to learn what the page is admitting. Drawn,
+ * they cannot miss it.
+ *
+ * --warn fills the missing segment, which is the one place on this site a state
+ * colour is an AREA rather than a mark. It earns it: the area is the datum, and
+ * what it marks is precisely the part of the record that is missing. Mixed down
+ * to a fifth so the bar reads as a measurement and not as a warning stripe.
+ *
+ * BOTH NUMBERS COUNT ONLY WHAT NOTARY WATCHED. Messages in rooms it never
+ * followed are in neither, so this is a ratio for the rooms it swept and not a
+ * coverage figure for the network. The line underneath says so, because a
+ * proportion with an unstated denominator is the exact failure this page exists
+ * to avoid.
+ */
+function Ratio({ held, missing }: { held: number; missing: number }) {
+  const passed = held + missing;
+  if (passed === 0) return null;
+
+  const heldPct = (held / passed) * 100;
+  // Never below a tenth: "0.0%" of half a million records would read as none.
+  const shown = heldPct >= 0.1 ? heldPct.toFixed(1) : '<0.1';
+
+  return (
+    <div className="nratio">
+      <div className="nratio__keys">
+        <div className="nratio__key">
+          <span className="nratio__label">Held</span>
+          <span className="nratio__figure">{num.format(held)}</span>
+          <span className="nratio__unit">signed records, every original kept</span>
+        </div>
+        <div className="nratio__key nratio__key--missing">
+          <span className="nratio__label">Rotated past</span>
+          <span className="nratio__figure">{num.format(missing)}</span>
+          <span className="nratio__unit">messages gone before capture</span>
+        </div>
+      </div>
+
+      {/* Both figures are already in the keys above, so the bar is a picture of
+          them rather than a second source of the same facts. */}
+      <div className="nratio__bar" aria-hidden="true">
+        <div className="nratio__held" style={{ flexGrow: heldPct }} />
+        <div className="nratio__missing" style={{ flexGrow: 100 - heldPct }} />
+      </div>
+
+      <p className="nratio__reading">
+        Notary holds <strong>{shown}%</strong> of everything it watched pass. The rest rotated out
+        of the rings before it could be captured, and this counts only the holes Notary noticed and
+        wrote down — rooms it never followed are in neither figure.
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Recorded holes
+// ---------------------------------------------------------------------------
+
+/** Shown before the list folds. The rest are a click away, not a scroll. */
+const HOLES_SHOWN = 6;
+
+/**
+ * A table, because it is one.
+ *
+ * Every hole used to be its own amber sentence — "N messages rotated out before
+ * Notary could recover them, noticed X" — forty times over, which made the
+ * page's most careful section read as a wall of alarm and buried the two holes
+ * that matter among thirty-eight that do not. The sentence is true and it is
+ * now said once, above; what varies between the rows is a room, a count and a
+ * timestamp, and those are columns.
+ *
+ * Sorted by size so the largest leads, and the figures are not coloured: the
+ * ratio above spends --warn once on this whole subject, and a column of amber
+ * numbers would be the wall again in a narrower shape.
+ */
+function Holes({ gaps }: { gaps: Coverage['gaps'] }) {
+  const [all, setAll] = useState(false);
+  if (gaps.length === 0) return null;
+
+  const sorted = [...gaps].sort((a, b) => b.lost - a.lost);
+  const shown = all ? sorted : sorted.slice(0, HOLES_SHOWN);
+  const anyRecovered = sorted.some((gap) => gap.recovered > 0);
+
+  return (
+    <section className="section nband" id="holes">
+      <div className="nband__inner">
+        <p className="nband__eyebrow">Recorded holes</p>
+        <p className="nband__prose nholes__lede">
+          Each of these is a stretch of a room that rotated out before Notary could recover it.
+          They are the holes Notary noticed and wrote down, and a hole means an absence inside it
+          proves nothing at all.
+        </p>
+
+        {/* The one thing on this page allowed to be wider than the page. Four
+            columns of room names, seven-digit figures and timestamps do not fit
+            343px however they are sized, and reflowing them into stacked cards
+            would throw away the only reason this is a table: that 6,290,114 and
+            4,210 line up on their last digit and can be compared at a glance. */}
+        <div className="nholes__scroll">
+          <table className="nholes">
+            <thead>
+              <tr>
+                <th scope="col" className="nholes__col-room">
+                  Room
+                </th>
+                <th scope="col" className="nholes__num nholes__col-lost">
+                  Messages lost
+                </th>
+                {anyRecovered && (
+                  <th scope="col" className="nholes__num nholes__col-recovered">
+                    Recovered
+                  </th>
+                )}
+                <th scope="col" className="nholes__when nholes__col-when">
+                  Noticed
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((gap) => (
+                <tr key={gap.id}>
+                  <td className="mono">{gap.room}</td>
+                  <td className="nholes__num">{num.format(gap.lost)}</td>
+                  {anyRecovered && (
+                    <td className="nholes__num">
+                      {gap.recovered > 0 ? num.format(gap.recovered) : '—'}
+                    </td>
+                  )}
+                  <td className="nholes__when mono">{stamp(gap.noticedAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {sorted.length > HOLES_SHOWN && (
+          <button className="nholes__more" type="button" onClick={() => setAll((was) => !was)}>
+            {all ? 'Show the largest six' : `Show all ${num.format(sorted.length)} holes`}
+          </button>
+        )}
+      </div>
+    </section>
   );
 }
 

@@ -405,6 +405,288 @@
   color: var(--ink-faint);
 }
 
+/* ------------------------------------------------------------------- ratio */
+
+/* Held against lost, to scale. The section's lead, because the proportion is
+ * the honest headline and it used to be a clause inside a definition list.
+ *
+ * The two figures are set as keys either side, not inside the bar: at eight
+ * percent the held segment is ninety pixels at --shell and thirty on a phone,
+ * and a label that has to fit inside it would have to be unreadable to fit. */
+
+.nratio {
+  margin: var(--space) 0 0;
+}
+
+.nratio__keys {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space);
+  margin-bottom: var(--space-half);
+}
+
+.nratio__key {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+  min-width: 0;
+}
+
+/* The right-hand key reads inward, so each figure sits over the end of the
+ * segment it measures rather than both crowding the left. */
+.nratio__key--missing {
+  text-align: right;
+  align-items: flex-end;
+}
+
+.nratio__label {
+  font-family: var(--display);
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.nratio__figure {
+  font-family: var(--display);
+  font-stretch: 112%;
+  font-weight: 600;
+  font-size: var(--t-h1);
+  line-height: 1;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.nratio__unit {
+  font-size: var(--t-small);
+  line-height: 1.4;
+  color: var(--ink-faint);
+}
+
+/* Hairlines top and bottom and one between the segments — the band treatment
+ * at the scale of a single figure. */
+.nratio__bar {
+  display: flex;
+  height: 2.5rem;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  overflow: hidden;
+  transform: scaleX(0);
+  transform-origin: left center;
+  /* Held back until the band's own rules have finished drawing, the same
+   * 500ms the counted figures wait for. */
+  transition: transform 600ms ease-out 500ms;
+}
+
+[data-in='true'] .nratio__bar {
+  transform: scaleX(1);
+}
+
+.nratio__held,
+.nratio__missing {
+  /* Grow alone decides the split, so a basis of zero is what makes the two
+   * segments proportional to the numbers rather than to their content. */
+  flex-basis: 0;
+  min-width: 2px;
+}
+
+.nratio__held {
+  background: rgba(255, 255, 255, 0.14);
+  border-right: 1px solid var(--rule-strong);
+}
+
+/* The one place a state colour is an AREA on this site rather than a mark, and
+ * it earns it: the area is the datum, and what it marks is the part of the
+ * record that is missing. Mixed down to a fifth so the bar reads as a
+ * measurement and not as a warning stripe — and taken from --warn rather than
+ * restated, so it cannot drift from the sentences that use the same colour. */
+.nratio__missing {
+  background: color-mix(in srgb, var(--warn) 20%, transparent);
+}
+
+.nratio__reading {
+  max-width: var(--measure);
+  margin: var(--space) 0 0;
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-mid);
+}
+
+.nratio__reading strong {
+  color: var(--ink);
+}
+
+/* -------------------------------------------------------------------- facts */
+
+/* The anchor ledger's rows, for the archive's own numbers. They were a 45%
+ * column beside a paragraph that ran out well before they did, so half the
+ * section was a column of air next to a column of wrapped text. */
+.nfacts {
+  display: grid;
+  grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+  margin: var(--space-2) 0 0;
+  border-top: 1px solid var(--rule);
+  font-size: var(--t-small);
+}
+
+.nfacts dt,
+.nfacts dd {
+  padding: var(--space-half) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.nfacts dt {
+  color: var(--ink-faint);
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  /* The label is a step smaller than its value; sharing a baseline is what
+   * makes the two read as one line. */
+  align-self: baseline;
+}
+
+.nfacts dd {
+  margin: 0;
+  color: var(--ink-mid);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------- holes */
+
+/* Forty amber sentences became a table, because what varies between them is a
+ * room, a count and a timestamp. The sentence they all carried is said once,
+ * above this. */
+
+.nholes__lede {
+  margin: 0 0 var(--space-2);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-mid);
+}
+
+/* The one element on this page allowed to be wider than the page, which the
+ * shell's rules permit for exactly three things and a table is one of them.
+ * Below about 44rem no sizing makes four columns of room names, seven-digit
+ * figures and timestamps fit, and reflowing into stacked cards would throw away
+ * the only reason this is a table. */
+.nholes__scroll {
+  overflow-x: auto;
+}
+
+.nholes {
+  /* min-width rather than width: it fills the band at every width it fits, and
+   * is allowed to exceed the scroller below that rather than crushing. */
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-small);
+}
+
+.nholes th {
+  padding: var(--space-half);
+  border-bottom: 1px solid var(--rule-strong);
+  color: var(--ink-faint);
+  font-family: var(--display);
+  font-size: var(--t-micro);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.nholes td {
+  padding: var(--space-half);
+  color: var(--ink-mid);
+  /* Nothing in this table wraps. A room name is one token and breaking it —
+   * "flop-networ / k" — is worse than the sideways scroll the wrapper already
+   * provides, and the figures and timestamps must stay on one line to be
+   * compared at all. */
+  white-space: nowrap;
+}
+
+/* Closes the stripes off. Without it the last row's fill just stops. */
+.nholes tbody tr:last-child td {
+  border-bottom: 1px solid var(--rule);
+}
+
+/* The room takes whatever is left; the three narrow columns are sized so the
+ * figures sit together on the right rather than drifting into the middle of a
+ * table that has more width than content. */
+.nholes__col-room {
+  width: auto;
+}
+
+.nholes__col-lost {
+  width: 11rem;
+}
+
+.nholes__col-recovered {
+  width: 9rem;
+}
+
+.nholes__col-when {
+  width: 13rem;
+}
+
+/* Striped rather than ruled: forty hairlines would be the wall again in
+ * another form, and the stripe is what lets an eye track one room across four
+ * columns. */
+.nholes tbody tr:nth-child(even) {
+  background: var(--paper-sunk);
+}
+
+.nholes td:first-child {
+  color: var(--ink);
+}
+
+/* Figures line up on their last digit, which is the whole reason to make this
+ * a table: 6,290,114 against 4,210 is the comparison the section is about. And
+ * the heading goes with them — `.nholes th` sets text-align on every header and
+ * outranks a bare class, so the labels sat left while their columns sat right. */
+.nholes th.nholes__num,
+.nholes td.nholes__num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.nholes__when {
+  white-space: nowrap;
+  color: var(--ink-faint);
+}
+
+.nholes__more {
+  margin-top: var(--space);
+  padding: 0.45rem 0.95rem;
+  background: transparent;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  color: var(--ink-mid);
+  font-family: var(--body);
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.nholes__more:hover {
+  color: var(--ink);
+  border-color: var(--rule-strong);
+}
+
+.nholes__more:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
 /* ----------------------------------------------------------------- sources */
 
 /* Two panes of glass, beside each other. Stacked in one column they read as one
@@ -569,6 +851,49 @@
     max-width: 30rem;
   }
 
+  /* Two keys either side of a bar need a bar wide enough to have sides. They
+   * stack, and the missing key comes back to the left so the two figures read
+   * as a list rather than as a ragged pair. */
+  .nratio__keys {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space);
+  }
+
+  .nratio__key--missing {
+    text-align: left;
+    align-items: flex-start;
+  }
+
+  .nfacts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nfacts dt {
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+
+  /* The fixed columns are what the desktop table needs to keep its figures
+   * together on the right; here they are 33rem of demand in a 21rem band, so
+   * they are released and the table falls back to its own content minimum
+   * inside the scroller. */
+  .nholes__col-lost,
+  .nholes__col-recovered,
+  .nholes__col-when {
+    width: auto;
+  }
+
+  .nholes th,
+  .nholes td {
+    padding: var(--space-half) 0.5rem;
+  }
+
+  .nholes th:first-child,
+  .nholes td:first-child {
+    padding-left: 0;
+  }
+
   /* The day stops being a gutter and becomes a heading over its own root. */
   .nanchor {
     grid-template-columns: minmax(0, 1fr);
@@ -586,11 +911,17 @@
 /* ---------------------------------------------------------- reduced motion */
 
 @media (prefers-reduced-motion: reduce) {
-  /* The band's rules are simply there. The figures inside them resolve to their
-   * values on the first render — see useCountUp. */
+  /* The band's rules are simply there, and so is the ratio bar: the split is
+   * the content, not the sweep that reveals it. The figures inside resolve to
+   * their values on the first render — see useCountUp. */
   .nband--rules::before,
-  .nband--rules::after {
+  .nband--rules::after,
+  .nratio__bar {
     transform: scaleX(1);
+    transition: none;
+  }
+
+  .nholes__more {
     transition: none;
   }
 }
@@ -633,23 +964,15 @@
   color: var(--ink);
 }
 
-.notary__gaps {
-  margin-top: var(--space);
-  padding-top: var(--space-half);
-  border-top: 1px solid var(--rule);
-}
+/* .notary__gaps and .notary__gaps-title went with the wall of amber sentences
+ * they wrapped — the holes are a table now, see .nholes. */
 
-.notary__gaps-title,
 .notary__rooms-title {
-  margin: 0 0 var(--space-half);
+  margin: var(--space) 0 var(--space-half);
   color: var(--ink-faint);
   font-size: var(--t-micro);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-}
-
-.notary__rooms-title {
-  margin-top: var(--space);
 }
 
 .notary__rooms {
