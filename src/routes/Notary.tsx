@@ -60,6 +60,7 @@ import {
   looksLikeDid,
   archiveConfigured,
   LIVE_ROOMS,
+  type ArchiveGap,
   type ArchiveRecord,
   type Coverage,
   type Cutoff,
@@ -708,6 +709,32 @@ function Ratio({ held, lost, rooms }: { held: number; lost: number; rooms: numbe
 const HOLES_SHOWN = 8;
 
 /**
+ * Why a hole exists, in words rather than in the column's own vocabulary.
+ *
+ * The ledger above this table separates "lost while reading" from "lost while
+ * down", and until now the table could not tell them apart: a six-million
+ * message hole from a mirror that was switched off looked exactly like a four
+ * thousand message hole from a mirror that could not keep up. They are
+ * different failures with different fixes, and the row that names the room
+ * should name the cause.
+ *
+ * Plain words, not 'missed' / 'downtime' / 'rotated'. Those are the values the
+ * database stores and they mean nothing to a reader; two of them actively
+ * mislead, since "missed" sounds like carelessness and "rotated" sounds like
+ * loss when it is the opposite.
+ *
+ * All four kinds are mapped even though /coverage only serves the two that are
+ * loss. A table that rendered a raw enum the first time the archive sent
+ * something else would be a worse bug than the one this column fixes.
+ */
+const HOLE_CAUSE: Record<ArchiveGap['kind'], string> = {
+  missed: 'Fell behind',
+  downtime: 'Was not running',
+  rotated: 'Before coverage',
+  regenerated: 'Room recreated',
+};
+
+/**
  * A table, because it is one.
  *
  * Every hole used to be its own amber sentence — "N messages rotated out before
@@ -762,6 +789,11 @@ function Holes({ gaps, total }: { gaps: Coverage['gaps']; total: number }) {
                 <th scope="col" className="nholes__col-room">
                   Room
                 </th>
+                {/* Beside the room rather than at the end: both are what the
+                    row IS, and the three numeric columns stay grouped right. */}
+                <th scope="col" className="nholes__col-cause">
+                  Cause
+                </th>
                 <th scope="col" className="nholes__num nholes__col-lost">
                   Messages lost
                 </th>
@@ -779,6 +811,7 @@ function Holes({ gaps, total }: { gaps: Coverage['gaps']; total: number }) {
               {shown.map((gap) => (
                 <tr key={gap.id}>
                   <td className="mono">{gap.room}</td>
+                  <td className="nholes__cause">{HOLE_CAUSE[gap.kind] ?? gap.kind}</td>
                   <td className="nholes__num">{num.format(gap.lost)}</td>
                   {anyRecovered && (
                     <td className="nholes__num">

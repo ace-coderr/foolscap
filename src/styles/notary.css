@@ -663,6 +663,10 @@
   width: auto;
 }
 
+.nholes__col-cause {
+  width: 11rem;
+}
+
 .nholes__col-lost {
   width: 11rem;
 }
@@ -695,6 +699,13 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* Quieter than the room it sits beside. The room is what you look up; the
+ * cause is what you read once you have found the row. */
+.nholes__cause {
+  white-space: nowrap;
+  color: var(--ink-faint);
 }
 
 .nholes__when {
@@ -921,6 +932,7 @@
    * together on the right; here they are 33rem of demand in a 21rem band, so
    * they are released and the table falls back to its own content minimum
    * inside the scroller. */
+  .nholes__col-cause,
   .nholes__col-lost,
   .nholes__col-recovered,
   .nholes__col-when {
