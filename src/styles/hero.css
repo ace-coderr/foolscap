@@ -17,22 +17,10 @@
  * fails the build if it turns up anywhere it has not been argued for. */
 
 .hero {
-  /* Type */
-  --hero-display: Saira, "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
-  --hero-body: "Chakra Petch", ui-monospace, "SF Mono", Menlo, system-ui, sans-serif;
-
-  /* Greys, all of them white at an opacity, so they sit on black predictably */
-  --hero-line: rgba(255, 255, 255, 0.06);
-  --hero-text: rgba(255, 255, 255, 0.75);
-  --hero-mid: rgba(255, 255, 255, 0.52);
-  --hero-faint: rgba(255, 255, 255, 0.34);
-  --hero-glass: rgba(255, 255, 255, 0.04);
-  --hero-edge: rgba(255, 255, 255, 0.1);
-
-  /* The only colour on the page. */
-  --hero-live: #3fb3c4;
-
-  --hero-gutter: clamp(1.15rem, 2.4vw, 2.25rem);
+  /* The --hero-* tokens used to be declared here and again on .landing, which
+   * meant they existed on the landing and nowhere else. The shell renders this
+   * file's nav on every page, so they are on :root in foolscap.css now — see
+   * the note there for what a nav with no --hero-gutter actually did. */
 
   position: relative;
   /* Exactly one screen. The chrome layer is absolute over the whole of it, so
@@ -55,21 +43,12 @@
   /* Keeps the cursor glow's blending inside the page. */
   isolation: isolate;
 
-  /* The page's shared tokens, so the sections below the hero can use them. The
-   * hero declares the same three on itself, above, and is left alone: this file
-   * is being extended, not rewritten. They are identical and must stay so. */
-  --hero-display: Saira, "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
-  --hero-body: "Chakra Petch", ui-monospace, "SF Mono", Menlo, system-ui, sans-serif;
-  --hero-line: rgba(255, 255, 255, 0.06);
-  --hero-text: rgba(255, 255, 255, 0.75);
-  --hero-mid: rgba(255, 255, 255, 0.52);
-  --hero-faint: rgba(255, 255, 255, 0.34);
-  --hero-glass: rgba(255, 255, 255, 0.04);
-  --hero-edge: rgba(255, 255, 255, 0.1);
-  --hero-live: #3fb3c4;
-  --hero-gutter: clamp(1.15rem, 2.4vw, 2.25rem);
-
-  /* Structure below the hero. Twice the weight of the grid, so a divider reads
+  /* The --hero-* tokens this block used to restate are on :root now. The
+   * comment that stood here said the two copies "are identical and must stay
+   * so", which was the right worry aimed at the wrong pair — the copy that
+   * mattered was the one that did not exist on any other page.
+   *
+   * Structure below the hero. Twice the weight of the grid, so a divider reads
    * as a divider and the grid stays wallpaper. */
   --about-rule: rgba(255, 255, 255, 0.1);
   --about-quiet: #8a8a8a;

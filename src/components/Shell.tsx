@@ -9,7 +9,7 @@
 // point of the rule in SHELL.md: a second nav written by hand is how a link ends
 // up on four of six pages. Different chrome, same map.
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useInView, useParallax, usePrefersReducedMotion } from '../motion';
 import { startPointerField } from '../pointer';
 import { Link, NavLink } from 'react-router-dom';
@@ -98,6 +98,7 @@ export function HeroNav({
 }) {
   const [floating, setFloating] = useState(false);
   const [open, setOpen] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const onScroll = () =>
@@ -107,6 +108,41 @@ export function HeroNav({
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  /**
+   * What the nav occupies at the top of the window, published as --nav-height
+   * for every page that has to begin below it.
+   *
+   * MEASURED, NOT DESCRIBED. It was a constant, and a constant cannot know
+   * this nav: its padding is a clamp, the row is as tall as the action pill,
+   * under 56rem the six links drop to a second row, and by 320 they wrap to a
+   * third. Every attempt to write that as arithmetic is the nav's own CSS
+   * restated in a second place, and it was wrong by 29px at 320 — where /city
+   * puts its floating header at exactly this value, so the header sat on top
+   * of the links.
+   *
+   * The TOP-state height, and held while the nav is floating. As a pill it is
+   * meant to have content scroll under it, and a value that shrank on scroll
+   * would pull the first line of every page upward as the reader moved. The
+   * property is never removed, for the same reason: releasing it mid-session
+   * would drop the page back to the stylesheet's estimate in one frame.
+   */
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav || floating || typeof ResizeObserver === 'undefined') return;
+    // The rect, not offsetHeight: that rounds to whole pixels, and /city sets
+    // its floating header at exactly this value, so rounding down is the
+    // header starting a fraction inside the nav.
+    const write = () =>
+      document.documentElement.style.setProperty(
+        '--nav-height',
+        `${nav.getBoundingClientRect().height}px`
+      );
+    write();
+    const observer = new ResizeObserver(write);
+    observer.observe(nav);
+    return () => observer.disconnect();
+  }, [floating]);
+
   // The menu belongs to the floating state; coming back to the top takes the
   // button away, and a panel with no button to close it is a trap.
   useEffect(() => {
@@ -114,7 +150,7 @@ export function HeroNav({
   }, [floating]);
 
   return (
-    <nav className="hero__nav" data-floating={floating} aria-label="Foolscap">
+    <nav className="hero__nav" data-floating={floating} aria-label="Foolscap" ref={navRef}>
       <Link className="hero__mark" to="/" onClick={() => setOpen(false)}>
         <Lockup />
       </Link>

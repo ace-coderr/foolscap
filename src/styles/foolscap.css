@@ -105,9 +105,63 @@
   --measure: 46rem; /* prose */
   --shell: 72rem; /* page content */
 
-  --nav-height: 3.5rem;
+  /* --- the shared nav's tokens ------------------------------------------
+   *
+   * These were declared on .landing and .hero, which was right while the nav
+   * belonged to the landing and wrong the moment the shell started rendering
+   * it on every page. Off the landing none of them resolved, and a custom
+   * property that does not resolve does not fall back to anything sensible:
+   * the declaration using it is invalid at computed-value time and the
+   * property takes its inherited or initial value instead.
+   *
+   * So `padding: clamp(1rem, 2.1vw, 1.6rem) var(--hero-gutter)` computed to
+   * ZERO on /city, /notary and /track — the nav sat flush against the top of
+   * the window there and an inch below it on the landing, from one rule. The
+   * quieter two: nav links took `color` by inheritance, landing at --ink-mid
+   * rather than the --hero-mid they were written for, and the action pill's
+   * focus ring resolved to `outline: initial`, which is none at all.
+   *
+   * Most are the site's own tokens under the landing's names, so they alias
+   * rather than restate: a second literal is a second thing to keep in step,
+   * which is exactly how this file and hero.css drifted apart before. The two
+   * that are genuinely the landing's own keep their values. */
+  --hero-display: var(--display);
+  --hero-body: var(--body);
+  --hero-line: var(--grid-line);
+  --hero-text: var(--ink-mid);
+  --hero-mid: var(--ink-faint);
+  --hero-faint: rgba(255, 255, 255, 0.34);
+  --hero-glass: var(--glass);
+  --hero-edge: var(--edge);
+  --hero-live: var(--accent);
+  --hero-gutter: clamp(1.15rem, 2.4vw, 2.25rem);
+
+  /* What the fixed nav occupies in its top state, so a page can start below it.
+   *
+   * THIS IS THE FIRST-PAINT ESTIMATE ONLY. HeroNav measures itself and writes
+   * the real height over it — see the note there for why arithmetic cannot get
+   * this right, and what it cost when it was a flat 3.5rem. The estimate is
+   * kept close rather than merely safe, so the correction on the first frame is
+   * a pixel or two and never a visible jump. */
+  --nav-pad: clamp(1rem, 2.1vw, 1.6rem);
+  /* The action pill, which is the tallest thing in the row. */
+  --nav-row: 2.75rem;
+  --nav-height: calc(var(--nav-pad) * 2 + var(--nav-row));
 
   color-scheme: dark;
+}
+
+/* Under 56rem the nav wraps to two rows — the wordmark and the action, then
+ * the six links — so the estimate has to carry both. Mirrors the row-gap in
+ * hero.css's own breakpoint. Narrower still they wrap again, which is exactly
+ * the part no arithmetic here can predict and the measurement does. */
+@media (max-width: 56rem) {
+  :root {
+    --nav-links-row: 1rem;
+    --nav-height: calc(
+      var(--nav-pad) * 2 + var(--nav-row) + 0.9rem + var(--nav-links-row)
+    );
+  }
 }
 
 /* Contrast got better, not worse, when the ground went black: every text token
