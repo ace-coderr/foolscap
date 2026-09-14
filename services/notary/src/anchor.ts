@@ -15,7 +15,7 @@
 //   npm run anchor --workspace services/notary -- --all        # every unanchored day
 
 import { pathToFileURL } from 'node:url';
-import { recordsForDay, anchors, type AnchorRow } from './archive.ts';
+import { anchorRowsForDay, anchors, type AnchorRow } from './archive.ts';
 import {
   closePool,
   getPool,
@@ -55,31 +55,74 @@ export interface BuiltAnchor {
  * same day and the root either matches what was published or it does not.
  */
 export async function buildAnchor(day: string): Promise<BuiltAnchor> {
-  const records = await recordsForDay(day);
+  // Hash on the way past, then sort the hashes. A leaf is 64 characters where
+  // the record it came from is several hundred bytes, so this holds a day of
+  // 750,000 records in tens of megabytes rather than hundreds, and the server
+  // never has to sort anything.
+  const entries: { at: string; iso: string; id: string; leaf: string }[] = [];
 
-  const leaves = records.map((record) =>
-    leafHash({
-      did: record.did,
-      room: record.room,
-      nonce: record.nonce,
-      sig: record.sig,
-      capturedAt: isoStamp(record.capturedAt),
-    })
-  );
+  for await (const page of anchorRowsForDay(day)) {
+    for (const record of page) {
+      entries.push({
+        at: record.sortAt,
+        iso: record.capturedAt,
+        id: record.id,
+        leaf: leafHash({
+          did: record.did,
+          room: record.room,
+          nonce: record.nonce,
+          sig: record.sig,
+          capturedAt: isoStamp(record.capturedAt),
+        }),
+      });
+    }
+  }
+
+  // THE ORDER IS THE ONE THE DATABASE USED, kept to the letter.
+  //
+  // `at` is a fixed-width microsecond stamp, not the parsed Date: the driver
+  // hands back milliseconds and Postgres sorted microseconds, so comparing the
+  // Date reorders everything captured inside the same millisecond — which, for
+  // rows written by one batch insert, is nearly all of them. Checked against
+  // the database's own ordering over 35,441 rows of a real day.
+  //
+  // NOTARY.md orders a day's leaves by capture time. The query that did it read
+  // `order by captured_at asc, id asc` against a select of `id::text as id`, so
+  // `id` there was the TEXT alias and the tie-break has always been
+  // lexicographic — "1000" before "999". Ties are the common case, not the rare
+  // one: a batch insert gives every row in it the same now().
+  //
+  // So this comparator is string-on-string deliberately. Sorting numerically
+  // would be tidier and would change the root of every day already published,
+  // which is the one thing an anchor exists to make impossible.
+  entries.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
   const built: BuiltAnchor = {
     day,
-    root: merkleRoot(leaves),
-    recordCount: records.length,
-    firstCapture: records[0]?.capturedAt ?? null,
-    lastCapture: records[records.length - 1]?.capturedAt ?? null,
+    root: merkleRoot(entries.map((entry) => entry.leaf)),
+    recordCount: entries.length,
+    firstCapture: entries[0]?.iso ?? null,
+    lastCapture: entries[entries.length - 1]?.iso ?? null,
   };
 
-  await upsertAnchor(built);
-  return built;
+  const stored = await upsertAnchor(built);
+
+  // A published day that no longer computes to its published root is a fact
+  // worth shouting. It does not mean the archive was tampered with — a day
+  // anchored mid-flight keeps receiving records, and the retention run deletes
+  // some — but it does mean the commitment covers a different set than the one
+  // now held, and nobody should learn that by noticing a hash looked odd.
+  if (stored.wasPublished && stored.storedRoot !== built.root) {
+    console.warn(
+      `[anchor] ${day}: recomputes to ${built.root} but the published root is ` +
+        `${stored.storedRoot}. The published root stands; the day's records are no longer ` +
+        `the set it committed to. Nothing was overwritten.`
+    );
+  }
+
+  return { ...built, root: stored.wasPublished ? stored.storedRoot : built.root };
 }
 
-/** The message body published into the room. One shape, shared with the client. */
 export function anchorPayload(anchor: BuiltAnchor): string {
   return buildPayload({ ...anchor, root: anchor.root ?? '' });
 }
@@ -219,13 +262,25 @@ export async function signingStatus(): Promise<{ did: string; canSign: boolean; 
   return { did: NOTARY_DID, canSign: key.ok, reason: key.ok ? null : key.reason };
 }
 
-/** Capture days that have records but no stored root. */
+/**
+ * Closed capture days that have records but no stored root.
+ *
+ * CLOSED, and the guard is not decoration. `--all` is the one path that used to
+ * be missing it, and the open day is the largest and most tempting one in the
+ * table: running `--all` at 23:12 UTC built a root over 614,510 records of a day
+ * that reached 883,445 before midnight. That root was wrong the instant it was
+ * written, and had it published, upsertAnchor would then — correctly — have
+ * refused every later correction, freezing a commitment to a partial day for
+ * good. The default path and the hourly sweep both wait for UTC to leave a day.
+ * This one now does too.
+ */
 export async function unanchoredDays(): Promise<string[]> {
   const { rows } = await getPool().query(
     `select to_char(r.day, 'YYYY-MM-DD') as day
        from (select distinct day from records) r
        left join anchors a on a.day = r.day
-      where a.root is null
+      where r.day < (now() at time zone 'utc')::date
+        and a.root is null
       order by r.day`
   );
   return rows.map((row: { day: string }) => row.day);

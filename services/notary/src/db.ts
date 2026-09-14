@@ -530,23 +530,49 @@ export async function captureRecord(record: {
 }
 
 /** Write a day's Merkle root. Re-running a day overwrites its row. */
+/**
+ * Store a day's root.
+ *
+ * A PUBLISHED ROOT IS NEVER OVERWRITTEN. It used to be, unconditionally, while
+ * published_at and published_seq stayed put — so rebuilding an already-anchored
+ * day left the table holding a root that disagreed with the message in the
+ * room, silently, which is precisely the failure the whole anchor mechanism
+ * exists to make impossible. It happened here: a day was rebuilt after its
+ * contents had grown and been pruned, and the stored root moved while the
+ * published one could not.
+ *
+ * Returns what is stored afterwards, so the caller can say out loud when a
+ * recomputation disagrees with a commitment. That disagreement is information,
+ * not an error — it means the day's records are no longer the set that was
+ * committed to — and the one thing that must not happen is for it to pass
+ * unremarked.
+ */
 export async function upsertAnchor(anchor: {
   day: string;
   root: string | null;
   recordCount: number;
   firstCapture: string | null;
   lastCapture: string | null;
-}): Promise<void> {
-  await getPool().query(
+}): Promise<{ storedRoot: string | null; wasPublished: boolean }> {
+  const { rows } = await getPool().query(
     `insert into anchors (day, root, record_count, first_capture, last_capture)
      values ($1::date, $2, $3, $4::timestamptz, $5::timestamptz)
      on conflict (day) do update set
-       root = excluded.root,
-       record_count = excluded.record_count,
-       first_capture = excluded.first_capture,
-       last_capture = excluded.last_capture`,
+       root = case when anchors.published_at is null
+                   then excluded.root else anchors.root end,
+       record_count = case when anchors.published_at is null
+                   then excluded.record_count else anchors.record_count end,
+       first_capture = case when anchors.published_at is null
+                   then excluded.first_capture else anchors.first_capture end,
+       last_capture = case when anchors.published_at is null
+                   then excluded.last_capture else anchors.last_capture end
+     returning root, (published_at is not null) as was_published`,
     [anchor.day, anchor.root, anchor.recordCount, anchor.firstCapture, anchor.lastCapture]
   );
+  return {
+    storedRoot: rows[0]?.root ?? null,
+    wasPublished: rows[0]?.was_published === true,
+  };
 }
 
 /** Note where a root was published, once it is in a room. */

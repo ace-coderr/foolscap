@@ -591,6 +591,93 @@ export async function recordById(id: string): Promise<RecordRow | null> {
  * gives a whole INSERT the same now() — and a tie broken differently on two
  * runs would produce two different roots for the same data.
  */
+/** The five fields a Merkle leaf is made of. No text: it is not in the leaf. */
+export interface AnchorLeafRow {
+  id: string;
+  did: string;
+  room: string;
+  nonce: string;
+  sig: string;
+  capturedAt: string;
+  /**
+   * captured_at at FULL precision, fixed-width, for ordering.
+   *
+   * node-postgres parses timestamptz into a JS Date, which is milliseconds —
+   * and Postgres stores and sorts microseconds. Ordering on the parsed Date
+   * silently reorders every pair of records captured inside the same
+   * millisecond, which in a batch insert is most of them. Measured: the two
+   * orderings diverged after 15,980 rows of one day.
+   *
+   * YYYYMMDDHH24MISSUS is zero-padded and fixed-width, so byte order is time
+   * order, and it survives the driver as a string.
+   */
+  sortAt: string;
+}
+
+/**
+ * A day's records, in pages, for building its anchor.
+ *
+ * recordsForDay pulled the whole day in one query with an ORDER BY, and at
+ * 752,186 records that is a parallel sequential scan feeding an external merge
+ * sort of 75 MB to disk — 110 seconds, past the statement timeout. The day
+ * could not be anchored, so the retention run would not prune it, so the
+ * window could not move: a deadlock at exactly the moment it needed to.
+ *
+ * Three things make this version cheap, and only the first is the obvious one.
+ *
+ * NO TEXT. A leaf is did|room|nonce|sig|captured_at. The message body is the
+ * largest column in the table and was being hauled across the wire for every
+ * record to be thrown away.
+ *
+ * PAGED ON THE PRIMARY KEY, which is the one index that can serve an ordered
+ * scan here without a sort.
+ *
+ * NO ORDER BY AT ALL. The anchor's order is captured_at then id — and `id` in
+ * that clause resolves to the SELECT's `id::text` alias, so Postgres has always
+ * sorted it as a string. That is reproducible, which is what an anchor needs,
+ * and it is also why no index could ever serve it. Ordering now happens in the
+ * caller, over hashes rather than rows, on exactly the same key. See
+ * buildAnchor: changing the key would change every root already published.
+ */
+export async function* anchorRowsForDay(
+  day: string,
+  pageSize = 20_000
+): AsyncGenerator<AnchorLeafRow[]> {
+  let after = '0';
+  for (;;) {
+    const { rows } = await getPool().query(
+      // `id` BARE, NOT `id::text as id`. Aliasing the cast to the column's own
+      // name makes ORDER BY bind to the text output instead of the bigint
+      // column, so the page comes back in lexicographic order — "1000000"
+      // before "459506" — while the keyset filters numerically. The pager then
+      // takes a text-last row as its cursor and skips every id numerically
+      // below it. Measured: 143,423 of 763,547 rows silently missing, and a
+      // root built over the remainder.
+      //
+      // node-postgres returns int8 as a string already, so nothing is lost by
+      // not casting, and the primary key can serve the ordering.
+      `select id, did, room, nonce::text as nonce, sig, captured_at,
+              to_char(captured_at at time zone 'utc', 'YYYYMMDDHH24MISSUS') as sort_at
+         from records
+        where day = $1::date and id > $2::bigint
+        order by id asc
+        limit $3`,
+      [day, after, pageSize]
+    );
+    if (rows.length === 0) return;
+    after = rows[rows.length - 1].id;
+    yield rows.map((row) => ({
+      id: row.id,
+      did: row.did,
+      room: row.room,
+      nonce: row.nonce,
+      sig: row.sig,
+      capturedAt: iso(row.captured_at)!,
+      sortAt: row.sort_at,
+    }));
+  }
+}
+
 export async function recordsForDay(day: string): Promise<RecordRow[]> {
   const { rows } = await getPool().query(
     `select id::text, did, room, nonce::text as nonce, sig, text,
