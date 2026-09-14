@@ -244,6 +244,32 @@ async function main(): Promise<void> {
   }
   console.log(`  ${n(removed)} records deleted.      `);
 
+  // THE TIER ONLY EARNS ITS SPACE WHERE IT COLLAPSES SOMETHING.
+  //
+  // A pair with one message has a summary saying first = last = that message
+  // and count = 1, sitting beside the pinned original that says all of it
+  // already. That is 308 bytes to restate 685 bytes of record. At current data
+  // 175,940 of 213,179 pairs are singletons — 83% — so the tier was paying 52
+  // of its 62 MB to say nothing twice.
+  //
+  // Removed here rather than skipped at capture, and the difference matters: a
+  // pair's second message routinely arrives in a later batch than its first, so
+  // a write path that skipped singletons would have to ask the database whether
+  // each pair already had records — a query per pair per batch — or lose the
+  // first message's timestamps when the second arrived. Reconciling at prune
+  // time reaches the same steady state and cannot lose anything.
+  //
+  // The condition is not really "count = 1"; it is "the surviving records say
+  // everything this row says". The pinned record has to still exist, or the row
+  // is the only thing left and stays.
+  const { rowCount: redundant } = await pool.query(
+    `delete from summaries s
+      where s.message_count = 1
+        and s.pinned_record_id is not null
+        and exists (select 1 from records r where r.id = s.pinned_record_id)`
+  );
+  console.log(`  ${n(redundant)} singleton summaries dropped — their record is its own evidence.`);
+
   // A root over the tier as it now stands. The daily record roots stay
   // published and stay true; what they can no longer do is produce an inclusion
   // proof for a record nobody holds. The tier needs a commitment of its own or

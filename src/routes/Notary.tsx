@@ -562,6 +562,7 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
       <section className="nband nband--rules" id="coverage" ref={bandRef} data-in={seen}>
         <div className="nband__inner">
           <p className="nband__eyebrow">What this archive covers</p>
+          <Ceiling hours={cov.retainHours} />
           <Ratio held={cov.records} lost={cov.lostMessages} rooms={cov.roomsBegunMidRing} />
           <ul className="nstats">
             <Stat value={cov.dids} label="distinct DIDs seen at least once" active={seen} />
@@ -645,6 +646,38 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
 
       <Holes gaps={unrecovered} total={cov.gapsTotal} />
     </>
+  );
+}
+
+/**
+ * The archive is full, said at the top rather than discovered at the bottom.
+ *
+ * Not an apology and not an outage. The rooms Notary follows produce about
+ * 840 MB of signed records a day and the database it has holds 500, so full
+ * records are kept for a window and what lies behind it is the summary tier.
+ * That is a real limit on what this page can answer, and a reader deciding
+ * whether to trust an answer needs it before the answer, not after.
+ *
+ * Capture has not stopped. The window is about what is KEPT, not about what is
+ * read, and saying "at its ceiling" without saying "still capturing" would
+ * leave a reader thinking the archive had stopped growing when the thing it is
+ * short of is room, not messages.
+ *
+ * --warn, because this is a degrading condition rather than a failed one: it
+ * is the palette's middle state and it is the right one. The page already
+ * spends that colour on a coverage hole and on a mirror that has stopped.
+ */
+function Ceiling({ hours }: { hours: number }) {
+  if (!Number.isFinite(hours) || hours <= 0) return null;
+  const window = hours % 24 === 0 ? plural(hours / 24, 'day') : plural(hours, 'hour');
+
+  return (
+    <p className="nceiling">
+      <strong>This archive is at its storage ceiling.</strong> Full records are kept for{' '}
+      {window}; past that a period is reduced to a summary and the earliest signed message of each
+      key in each room. Capture has not stopped — what is short is room, not messages — and
+      everything below describes what is held rather than what went past.
+    </p>
   );
 }
 

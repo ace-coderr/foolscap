@@ -461,6 +461,31 @@
   color: var(--ink-faint);
 }
 
+/* ---------------------------------------------------------------- ceiling */
+
+/* First thing in the coverage band, because it bounds everything under it.
+ * --warn on the rule and nowhere else: the colour marks a degrading state, and
+ * a filled panel would make a limit look like a failure. */
+.nceiling {
+  max-width: var(--measure);
+  margin: 0 0 var(--space-2);
+  padding-left: var(--space);
+  border-left: 2px solid var(--warn);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-mid);
+}
+
+.nceiling strong {
+  display: block;
+  margin-bottom: 0.2em;
+  font-family: var(--display);
+  font-size: var(--t-h2);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
 /* ------------------------------------------------------------------- ratio */
 
 /* Held against lost, to scale. The section's lead, because the proportion is
