@@ -36,6 +36,7 @@ import {
   closePool,
   archiveStats,
   lastSeqFor,
+  upsertSummaries,
   readCursor,
   writeCursor,
 } from './db.ts';
@@ -98,6 +99,7 @@ const stats = {
   badNonce: 0,
   gapsMissed: 0,
   gapsDowntime: 0,
+  summarised: 0,
   recovered: 0,
   lost: 0,
   sampledAway: 0,
@@ -199,8 +201,14 @@ async function store(records: ArchiveRecord[], room: string): Promise<void> {
     for (let i = 0; i < records.length; i += INSERT_BATCH) {
       const slice = records.slice(i, i + INSERT_BATCH);
       const inserted = await insertRecords(slice);
-      stats.captured += inserted;
-      stats.duplicate += slice.length - inserted;
+      stats.captured += inserted.length;
+      stats.duplicate += slice.length - inserted.length;
+
+      // The permanent tier is written on every capture, from the rows that
+      // actually landed. Building it at prune time instead would mean reading
+      // the records it exists to replace, on the run that deletes them — and a
+      // prune that failed halfway would leave a period with neither.
+      stats.summarised += await upsertSummaries(inserted);
     }
     return;
   }

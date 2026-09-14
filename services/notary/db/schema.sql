@@ -75,6 +75,69 @@ create table if not exists anchors (
   last_capture   timestamptz
 );
 
+-- The permanent tier: one row per (did, room), for ever.
+--
+-- WHY IT HAS NO DAY COLUMN. The obvious shape is (did, room, activity_day),
+-- and it grows without bound: a network that went silent tomorrow would still
+-- have added a row for every key that ever spoke, on every day it spoke.
+-- Collapsing the day bounds the tier by POPULATION instead of by time — it
+-- stops growing the moment new keys stop appearing, which is the only bound an
+-- archive that promises to keep things can actually hold.
+--
+-- It costs the day dimension, and that is a real loss the page states rather
+-- than papers over: for a pruned period Notary can say a key was seen in a room
+-- between two instants and how many times, and cannot say which days.
+--
+-- FOUR TIMESTAMPS, NOT TWO. captured_at is Notary's own clock and is the thing
+-- it vouches for; source_ts is the room's claim about when the message was
+-- posted. The whole page turns on telling those apart — "Yes, Notary witnessed
+-- it" against "Yes, on the room's timestamp" — and a summary carrying one pair
+-- would collapse a three-valued answer into a two-valued one.
+--
+-- pinned_record_id is the earliest record Notary captured for this pair, kept
+-- back from pruning. A summary row on its own is an assertion, and NOTARY.md
+-- forbids exactly that: "never store a verified: true flag as the only
+-- evidence". The cutoff question is answered by the FIRST sighting, so keeping
+-- that one original keeps the answer re-verifiable by a stranger and keeps its
+-- Merkle proof intact.
+create table if not exists summaries (
+  did               text        not null,
+  room              text        not null,
+  first_captured_at timestamptz not null,
+  first_source_ts   timestamptz,
+  last_captured_at  timestamptz not null,
+  last_source_ts    timestamptz,
+  message_count     bigint      not null default 0,
+  last_updated      timestamptz not null default now(),
+  pinned_record_id  bigint,
+  primary key (did, room)
+);
+
+-- The prune deletes everything older than the window EXCEPT the pinned rows, so
+-- it asks this question once per candidate row.
+create index if not exists summaries_pinned_idx
+  on summaries (pinned_record_id) where pinned_record_id is not null;
+
+-- Roots over the summary tier itself.
+--
+-- The daily record anchors commit to records. Once those records are pruned the
+-- root stays published and signed — it is in a public room and Notary cannot
+-- reach it — but Notary can no longer produce an inclusion proof for a record
+-- it no longer holds. A proof someone took while the record was live still
+-- verifies, for ever, without Notary.
+--
+-- The summary tier needs its own commitment or it would be the one part of the
+-- archive nobody could check. Each prune run builds a tree over every summary
+-- row as it then stands and publishes the root.
+create table if not exists summary_anchors (
+  id            bigserial primary key,
+  built_at      timestamptz not null default now(),
+  row_count     integer     not null,
+  root          text        not null,
+  published_seq bigint,
+  published_at  timestamptz
+);
+
 -- Where the mirror has read to, per room. Stated, not reconstructed.
 --
 -- This used to be inferred as `max(source_seq) from records`, which is the

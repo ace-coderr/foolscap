@@ -164,8 +164,8 @@ const COLUMNS = ['did', 'room', 'nonce', 'sig', 'text', 'source', 'source_ts', '
  * Agents retry and rings overlap, so re-seeing a message is normal, not an
  * error. Returns how many rows were new.
  */
-export async function insertRecords(records: ArchiveRecord[]): Promise<number> {
-  if (records.length === 0) return 0;
+export async function insertRecords(records: ArchiveRecord[]): Promise<StoredRecord[]> {
+  if (records.length === 0) return [];
 
   const values: string[] = [];
   const params: unknown[] = [];
@@ -189,10 +189,118 @@ export async function insertRecords(records: ArchiveRecord[]): Promise<number> {
     );
   });
 
-  const { rowCount } = await getPool().query(
+  // RETURNING, because the summary tier has to be built from the rows that
+  // actually landed. `on conflict do nothing` silently drops retries and
+  // overlapping ring reads, and a summary counted from the batch instead of
+  // from the result would inflate message_count every time the mirror re-read
+  // a stretch it already had.
+  const { rows } = await getPool().query(
     `insert into records (${COLUMNS.join(', ')}, captured_at, day)
      values ${values.join(', ')}
-     on conflict (did, room, nonce) where sighting is null do nothing`,
+     on conflict (did, room, nonce) where sighting is null do nothing
+     returning id, did, room, captured_at, source_ts`,
+    params
+  );
+  return rows.map((r: InsertedRow) => ({
+    id: String(r.id),
+    did: r.did,
+    room: r.room,
+    capturedAt: r.captured_at,
+    sourceTs: r.source_ts,
+  }));
+}
+
+interface InsertedRow {
+  id: string | number;
+  did: string;
+  room: string;
+  captured_at: Date;
+  source_ts: Date | null;
+}
+
+/** What an insert actually wrote, which is what the summary tier is built from. */
+export interface StoredRecord {
+  id: string;
+  did: string;
+  room: string;
+  capturedAt: Date;
+  sourceTs: Date | null;
+}
+
+/**
+ * Fold a batch of stored records into the permanent tier.
+ *
+ * One row per (did, room), upserted on every capture rather than derived at
+ * prune time — deriving it later would mean reading the records it is meant to
+ * replace, on the run that is deleting them.
+ *
+ * least() and greatest() ignore nulls in Postgres, which is what makes
+ * source_ts safe here: a message the room gave no timestamp for leaves the
+ * claimed-clock bounds alone instead of poisoning them.
+ *
+ * The pin moves only backwards. It names the earliest record Notary CAPTURED —
+ * the strongest thing it can say, and the one whose captured_at the summary's
+ * first_captured_at reports — so the evidence offered always matches the
+ * witnessed answer. A backfill reaching further back re-pins; nothing else does.
+ */
+export async function upsertSummaries(stored: StoredRecord[]): Promise<number> {
+  if (stored.length === 0) return 0;
+
+  const folded = new Map<string, {
+    did: string; room: string; first: StoredRecord; firstSrc: Date | null;
+    lastCap: Date; lastSrc: Date | null; count: number;
+  }>();
+
+  for (const r of stored) {
+    const key = `${r.did} ${r.room}`;
+    const seen = folded.get(key);
+    if (!seen) {
+      folded.set(key, {
+        did: r.did, room: r.room, first: r, firstSrc: r.sourceTs,
+        lastCap: r.capturedAt, lastSrc: r.sourceTs, count: 1,
+      });
+      continue;
+    }
+    seen.count++;
+    if (r.capturedAt < seen.first.capturedAt) seen.first = r;
+    if (r.sourceTs && (!seen.firstSrc || r.sourceTs < seen.firstSrc)) seen.firstSrc = r.sourceTs;
+    if (r.capturedAt > seen.lastCap) seen.lastCap = r.capturedAt;
+    if (r.sourceTs && (!seen.lastSrc || r.sourceTs > seen.lastSrc)) seen.lastSrc = r.sourceTs;
+  }
+
+  const values: string[] = [];
+  const params: unknown[] = [];
+  let i = 0;
+  for (const f of folded.values()) {
+    const b = i * 8;
+    values.push(
+      `($${b + 1}, $${b + 2}, $${b + 3}::timestamptz, $${b + 4}::timestamptz, ` +
+        `$${b + 5}::timestamptz, $${b + 6}::timestamptz, $${b + 7}::bigint, $${b + 8}::bigint)`
+    );
+    params.push(
+      f.did, f.room, f.first.capturedAt, f.firstSrc,
+      f.lastCap, f.lastSrc, f.count, f.first.id
+    );
+    i++;
+  }
+
+  const { rowCount } = await getPool().query(
+    `insert into summaries (did, room, first_captured_at, first_source_ts,
+                            last_captured_at, last_source_ts, message_count, pinned_record_id)
+     values ${values.join(', ')}
+     on conflict (did, room) do update set
+       first_source_ts  = least(summaries.first_source_ts, excluded.first_source_ts),
+       last_captured_at = greatest(summaries.last_captured_at, excluded.last_captured_at),
+       last_source_ts   = greatest(summaries.last_source_ts, excluded.last_source_ts),
+       message_count    = summaries.message_count + excluded.message_count,
+       last_updated     = now(),
+       -- The pin and the first_captured_at it explains move together or not at
+       -- all: splitting them would let the summary report a witnessed time the
+       -- record it offers does not show.
+       pinned_record_id = case
+         when excluded.first_captured_at < summaries.first_captured_at
+           then excluded.pinned_record_id else summaries.pinned_record_id end,
+       first_captured_at = least(summaries.first_captured_at, excluded.first_captured_at)`,
     params
   );
   return rowCount ?? 0;

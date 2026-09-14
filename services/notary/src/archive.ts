@@ -161,6 +161,17 @@ export interface Coverage {
    */
   roomsWatched: string[];
 
+  /**
+   * How many hours of full records are kept. Past it, a period survives as the
+   * summary tier plus each pair's earliest pinned original.
+   *
+   * Served so the page can say what it no longer has rather than returning a
+   * thinner answer that looks like a complete one.
+   */
+  retainHours: number;
+  /** Whether the earliest original per (did, room) is held back from pruning. */
+  pinsEarliest: boolean;
+
   roomsCovered: Array<{ room: string; policy: Policy; records: number; firstCapturedAt: string | null; lastCapturedAt: string | null }>;
 }
 
@@ -340,6 +351,8 @@ export async function coverage(): Promise<Coverage> {
 
     roomsBegunMidRing: int(g.rooms_begun_mid_ring),
     roomsWatched: [...WATCHED_ROOMS],
+    retainHours: Number(process.env.NOTARY_RETAIN_HOURS ?? 12),
+    pinsEarliest: process.env.NOTARY_PIN_EARLIEST !== '0',
 
     roomsCovered: rooms.rows.map((row) => ({
       room: row.room,

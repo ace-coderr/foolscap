@@ -586,6 +586,8 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
 
           <Watched rooms={cov.roomsWatched} />
 
+          <Retention hours={cov.retainHours} pins={cov.pinsEarliest} />
+
           {stale && (
             <p className="coverage__problem nband__prose">
               Sweeping is not running. The mirror last captured a message{' '}
@@ -686,6 +688,64 @@ function Watched({ rooms }: { rooms: string[] }) {
         of thousands of keys that posted once, which is a great deal of storage for evidence that
         proves very little. A key that only ever posted in one of those has nothing here, and that
         is a fact about this list rather than a fact about the key.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * WHAT THE ARCHIVE NO LONGER HAS, said before anyone asks a question it cannot
+ * answer completely.
+ *
+ * Full records cost about 840 MB a day and the database holds 500, so records
+ * past the window are deleted and what survives is one row per key per room —
+ * first and last seen on both clocks, and how many messages — plus the single
+ * earliest original of each pair, kept back so the answer stays re-verifiable.
+ *
+ * TWO THINGS GO, AND BOTH ARE NAMED. The day-by-day list of when a key was
+ * active: the summary has no day column, deliberately, because a tier with one
+ * grows for ever and a tier without one stops growing when new keys stop
+ * appearing. And the message text beyond the window: one original per pair
+ * survives, the rest do not.
+ *
+ * The alternative was to keep answering in the same shape with thinner data
+ * behind it, which is the failure this whole page is built against. An answer
+ * that has lost something should say so in the place the reader is looking.
+ */
+function Retention({ hours, pins }: { hours: number; pins: boolean }) {
+  if (!Number.isFinite(hours) || hours <= 0) return null;
+  const window = hours % 24 === 0 ? plural(hours / 24, 'day') : plural(hours, 'hour');
+
+  return (
+    <div className="nretain">
+      <p className="nretain__lede">
+        Full records are kept for <strong>{window}</strong>. Older than that, a key’s activity
+        survives as a summary — when it was first and last seen in each room, on both clocks, and
+        how many messages — and not as the messages themselves.
+      </p>
+      <dl className="nfacts nretain__facts">
+        <dt>Kept for ever</dt>
+        <dd>
+          One row per key per room: first and last seen on Notary’s clock and on the room’s, and a
+          message count.
+          {pins
+            ? ' Plus the earliest original of each pair, held back from deletion so the answer to' +
+              ' “active before X” is still a signed message you can re-verify yourself.'
+            : ' Pinning is off, so a pruned period rests on Notary’s word rather than on an' +
+              ' original anyone can check.'}
+        </dd>
+        <dt>Lost past the window</dt>
+        <dd>
+          Which days a key was active — the summary has no day column, so Notary can say a key was
+          seen between two moments and how often, not on which days. And the text of every message
+          except the earliest one kept per room.
+        </dd>
+      </dl>
+      <p className="notary__note nband__prose">
+        The daily roots stay published and signed either way. A proof taken while a record was held
+        still verifies against its root for ever, without Notary — but Notary cannot produce a new
+        proof for a record it no longer has, and says so rather than returning a thinner answer in
+        the same shape as a complete one.
       </p>
     </div>
   );

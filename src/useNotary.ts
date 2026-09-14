@@ -82,6 +82,9 @@ export interface Coverage {
   roomsBegunMidRing: number;
   /** The rooms the mirror follows — all of them completely. Named on the page. */
   roomsWatched: string[];
+  /** Hours of full records kept. Past it: the summary tier plus pinned originals. */
+  retainHours: number;
+  pinsEarliest: boolean;
   roomsCovered: Array<{ room: string; policy: 'full' | 'sightings'; records: number }>;
   caveat: string;
 }

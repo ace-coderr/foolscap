@@ -13,7 +13,8 @@
     "anchor": "node --env-file-if-exists=../../.env --experimental-strip-types src/anchor.ts",
     "stats": "node --env-file-if-exists=../../.env --experimental-strip-types src/stats.ts",
     "prune": "node --env-file-if-exists=../../.env --experimental-strip-types src/prune.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "retain": "node --env-file-if-exists=../../.env --experimental-strip-types src/retain.ts"
   },
   "dependencies": {
     "pg": "^8.13.1"
