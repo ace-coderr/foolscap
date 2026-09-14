@@ -1,0 +1,678 @@
+/* holdfast.css — the Holdfast page's own furniture.
+ *
+ * The same split notary.css has from foolscap.css: the design system and the
+ * band composition are shared and live there, and what is here is one page's
+ * arrangement of them. When this page was built, the band scaffolding moved OUT
+ * of notary.css into foolscap.css rather than being copied under an `h` prefix —
+ * two band systems would have drifted the way two renderers would have.
+ *
+ * MONOCHROME. There is exactly one coloured thing on this page and it is not in
+ * this file: the roof of a plot the connected key holds, which the City's
+ * renderer paints with the accent because that plot is in a state — yours, now,
+ * alive. Everything here is white at an opacity, with --warn on the two places
+ * that mean "this is running out": a plot inside its last day, and the caveat on
+ * a leaderboard computed from a board only partly read.
+ *
+ * The board itself is the City's renderer and the City's stage classes —
+ * .city__stage, .city__gl, .city__labels, .city__label — which is why they are
+ * not redefined here. They belong to the renderer, and both pages that draw with
+ * it get them. */
+
+/* --------------------------------------------------------------------- hero */
+
+/* The game left, the key right. Shorter than Notary's hero: the board is the
+ * thing, and a hero that filled the screen would push it under the fold. */
+.hband-hero {
+  position: relative;
+  margin-top: 0;
+  padding-top: calc(var(--nav-height) + var(--space-2));
+  padding-bottom: clamp(2rem, 5vh, 3.5rem);
+}
+
+.hband-hero__inner {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 45%));
+  justify-content: space-between;
+  align-items: start;
+  gap: clamp(1.5rem, 4vw, 3rem);
+}
+
+.hband-hero__lede,
+.hband-hero__ask {
+  min-width: 0;
+}
+
+.hband-hero__eyebrow {
+  margin: 0 0 var(--space);
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: var(--t-micro);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* --t-h1, not --t-answer. The page spends --t-answer on the figure below, which
+ * is the thing a player came for; a title at the larger step would leave the
+ * answer quieter than the question. Same rule as Notary's hero. */
+.hband-hero__title {
+  margin: 0 0 var(--space);
+  font-family: var(--display);
+  font-stretch: 112%;
+  font-weight: 600;
+  font-size: var(--t-h1);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.hband-hero__line {
+  margin: 0;
+  max-width: 30rem;
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-mid);
+}
+
+.hband-hero__answer {
+  margin-top: var(--space-2);
+}
+
+.hband-hero__caption {
+  margin: var(--space-half) 0 0;
+  max-width: 32rem;
+  font-size: var(--t-small);
+  line-height: 1.55;
+  color: var(--ink-mid);
+}
+
+/* ------------------------------------------------------------------- lookup */
+
+.hlookup {
+  display: grid;
+  gap: var(--space-half);
+}
+
+.hlookup > * {
+  margin: 0;
+}
+
+/* Its own row: a did:key is 56 characters and will not share one. */
+.hlookup__did {
+  display: block;
+  width: 100%;
+}
+
+.hlookup__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-half);
+  margin-top: var(--space-half);
+}
+
+.hlookup__clear {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--t-small);
+  color: var(--ink-faint);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.hlookup__clear:hover {
+  color: var(--ink-mid);
+}
+
+.hlookup__problem {
+  margin: var(--space-half) 0 0;
+  font-size: var(--t-small);
+  line-height: 1.55;
+  color: var(--warn);
+}
+
+/* Outside the card. It is a statement about the whole page rather than a hint
+ * for the field above it. */
+.hlookup__nokey {
+  margin: var(--space) 0 0;
+  font-size: var(--t-small);
+  line-height: 1.55;
+  color: var(--ink-faint);
+}
+
+/* -------------------------------------------------------------------- board */
+
+/* Not the shell's `bleed` variant, which is a whole viewport with nothing under
+ * it. This page has four bands below the board, so the board is a band of its
+ * own that happens to contain a canvas — tall enough to be the centre of the
+ * page and short enough that the standings show under it. */
+.hboard-band {
+  margin-top: 0;
+  padding: 0;
+}
+
+.hboard {
+  position: relative;
+  height: min(76dvh, 44rem);
+  min-height: 26rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 25rem;
+  border-block: 1px solid var(--rule);
+  overflow: hidden;
+}
+
+/* The renderer's stage is absolutely positioned inside this, under the panel,
+ * so the board carries on behind the glass exactly as the City does. */
+.hboard__panel {
+  grid-column: 2;
+}
+
+.hboard__empty {
+  grid-column: 1;
+  align-self: center;
+  justify-self: center;
+  max-width: 28rem;
+  padding: var(--space-2);
+  text-align: center;
+}
+
+.hboard__empty-title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: var(--t-h2);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.hboard__empty-line {
+  margin: var(--space-half) 0 0;
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-mid);
+}
+
+/* ------------------------------------------------------------------- panel */
+
+/* Label and figure, for the short facts that would be a sentence each. */
+.hfacts {
+  margin: var(--space) 0 0;
+  display: grid;
+  gap: var(--space-half);
+}
+
+.hfacts > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-half);
+}
+
+.hfacts dt {
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+}
+
+.hfacts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  text-align: right;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hlegend {
+  margin: var(--space-half) 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-half);
+  font-size: var(--t-micro);
+  line-height: 1.5;
+  color: var(--ink-mid);
+}
+
+.hlegend__term {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+}
+
+/* The one place the page NAMES the accent without spending it: the legend entry
+ * for a plot you hold. It is a word, not a swatch — painting a teal square here
+ * would be the colour decorating a list rather than marking a state, and the
+ * state it marks is out on the board where the cap actually is. */
+.hlegend__term--mine {
+  color: var(--ink);
+}
+
+.hlands {
+  margin: var(--space) 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-half);
+  font-size: var(--t-micro);
+}
+
+.hlands li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-half);
+}
+
+.hlands__count {
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.hlands__capped {
+  margin: var(--space) 0 0;
+  padding-left: var(--space);
+  border-left: 2px solid var(--warn);
+  font-size: var(--t-micro);
+  line-height: 1.6;
+  color: var(--ink-mid);
+}
+
+.hplot__heading {
+  margin-top: var(--space);
+}
+
+.hplot__did {
+  font-size: var(--t-micro);
+}
+
+.hplot__unread,
+.hplot__fault {
+  margin: var(--space) 0 0;
+  padding-left: var(--space);
+  border-left: 2px solid var(--rule-strong);
+  font-size: var(--t-small);
+  line-height: 1.55;
+  color: var(--ink-mid);
+}
+
+/* Running out — the same idiom as Notary's ceiling notice and its lost window.
+ * A rule, never a fill: a limit is not a failure. */
+.hplot__danger {
+  color: var(--warn);
+}
+
+.hplot__mine {
+  margin: var(--space) 0 0;
+  font-size: var(--t-small);
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.hplot__link {
+  font-size: var(--t-micro);
+  overflow-wrap: anywhere;
+  color: var(--ink-faint);
+}
+
+.hbutton {
+  margin-top: var(--space);
+  padding: 0.5rem var(--space);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  font: inherit;
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.hbutton:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.hbutton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* --------------------------------------------------------------- standings */
+
+/* A panel rather than bare rows on black — the treatment /notary's tables got,
+ * so the site's tables are one object seen in several places. */
+.hstandings {
+  margin-top: var(--space-2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+
+.hstandings__head,
+.hstandings__row {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr) 5rem 9rem 8rem;
+  align-items: baseline;
+  gap: var(--space-half);
+  padding: 0.85rem var(--space);
+}
+
+.hstandings__head {
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+}
+
+.hstandings__head > *:nth-child(n + 3),
+.hstandings__figure {
+  text-align: right;
+}
+
+.hstandings__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hstandings__row {
+  font-size: var(--t-small);
+}
+
+.hstandings__row:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.hstandings__row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* The connected key's own row, marked by weight and a rule rather than by
+ * colour. The accent is spent on the board; a second use of it here would make
+ * it mean two things on one page. */
+.hstandings__row--mine {
+  box-shadow: inset 2px 0 0 var(--ink);
+}
+
+.hstandings__rank {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
+
+.hstandings__did {
+  font-size: var(--t-micro);
+  overflow-wrap: anywhere;
+}
+
+.hstandings__figure {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.hstandings__caveat {
+  margin: var(--space) 0 0;
+  padding-left: var(--space);
+  border-left: 2px solid var(--warn);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-mid);
+}
+
+.hstandings__note {
+  margin-top: var(--space-2);
+}
+
+/* ---------------------------------------------------------------- claiming */
+
+.hclaim__gate,
+.hclaim__free {
+  margin: 0;
+  font-size: var(--t-small);
+  line-height: 1.55;
+  color: var(--ink-faint);
+}
+
+.hclaim__heading {
+  margin-bottom: var(--space-half);
+}
+
+.hclaim__letters {
+  margin: 0 0 var(--space);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+/* One character per cell, so the set reads as an alphabet the player has rather
+ * than as a word. Fixed width, so the gaps in it are visible — what a player
+ * cannot name is as much the point as what they can. */
+.hclaim__letter {
+  display: inline-grid;
+  place-items: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: var(--t-small);
+  color: var(--ink);
+}
+
+.hclaim {
+  margin-top: var(--space-2);
+  display: grid;
+  gap: var(--space-half);
+}
+
+.hclaim > * {
+  margin: 0;
+}
+
+.hclaim__row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-half);
+  flex-wrap: wrap;
+}
+
+.hclaim__field {
+  min-width: 0;
+}
+
+.hclaim__field--grow {
+  flex: 1 1 14rem;
+}
+
+.hclaim__field--grow .lookup__input {
+  display: block;
+  width: 100%;
+}
+
+.hclaim__select {
+  min-width: 11rem;
+}
+
+.hclaim__go {
+  flex: 0 0 auto;
+}
+
+.hclaim__problem {
+  margin: var(--space-half) 0 0;
+  font-size: var(--t-small);
+  line-height: 1.55;
+  color: var(--warn);
+}
+
+/* ------------------------------------------------------------------- steps */
+
+.hsteps {
+  margin-top: var(--space-2);
+}
+
+.hsteps__list {
+  margin: 0;
+  padding: 0 0 0 var(--space-2);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.hsteps__list li::marker {
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.hsteps__label {
+  margin: 0 0 var(--space-half);
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+}
+
+/* The payload. Selectable, wrapping anywhere, at a size somebody can read back
+ * against what they signed — these are the two strings on the page a player
+ * actually has to copy, and a string you have to reassemble across a line break
+ * is one nobody checks. */
+.hsteps__value {
+  margin: 0;
+  padding: var(--space);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.hsteps__url {
+  font-size: var(--t-micro);
+}
+
+.hsteps__note {
+  margin: var(--space-half) 0 0;
+  max-width: var(--measure);
+  font-size: var(--t-small);
+  line-height: 1.55;
+  color: var(--ink-faint);
+}
+
+.hsteps__sig {
+  display: block;
+  width: 100%;
+}
+
+.hsteps__good {
+  margin: var(--space-half) 0 0;
+  font-size: var(--t-small);
+  color: var(--ink);
+}
+
+/* ----------------------------------------------------------------- honesty */
+
+.hhonesty__heading {
+  margin-top: var(--space-2);
+  margin-bottom: var(--space-half);
+}
+
+.hhonesty__heading:first-child {
+  margin-top: 0;
+}
+
+.hhonesty__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-mid);
+}
+
+.hhonesty__term {
+  color: var(--ink);
+}
+
+.hhonesty__close {
+  margin: var(--space-2) 0 0;
+  padding-top: var(--space);
+  border-top: 1px solid var(--rule);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-faint);
+}
+
+/* ------------------------------------------------------------------ narrow */
+
+@media (max-width: 62rem) {
+  .hband-hero__inner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hband-hero__line,
+  .hband-hero__caption {
+    max-width: none;
+  }
+
+  /* The panel goes under the board rather than beside it, so the board keeps a
+   * usable width instead of being a strip. Its own height, and the page scrolls
+   * past both — the panel does not get an internal scroll at this width, for
+   * the same reason /notary's holes table does not: a scroll region inside a
+   * scrolling page traps the gesture. */
+  .hboard {
+    height: auto;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hboard .city__stage {
+    position: relative;
+    height: min(56dvh, 26rem);
+  }
+
+  .hboard__panel {
+    grid-column: 1;
+    position: relative;
+    overflow: visible;
+    max-height: none;
+    padding-top: var(--space);
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .hboard__empty {
+    padding-block: var(--space-2);
+  }
+
+  .hstandings__head,
+  .hstandings__row {
+    grid-template-columns: 2rem minmax(0, 1fr) 4rem 6.5rem 5rem;
+    padding-inline: var(--space-half);
+    font-size: var(--t-micro);
+  }
+}
+
+@media (max-width: 44rem) {
+  /* The two long columns go. Plots and block stay, because they are the two a
+   * player checks at a glance; the longest hold is in the plot panel for
+   * anybody who wants it, and a five-column table at this width is a smear. */
+  .hstandings__head > :nth-child(4),
+  .hstandings__row > :nth-child(4) {
+    display: none;
+  }
+
+  .hstandings__head,
+  .hstandings__row {
+    grid-template-columns: 2rem minmax(0, 1fr) 3.5rem 4.5rem;
+  }
+}

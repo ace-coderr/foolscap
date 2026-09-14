@@ -82,7 +82,7 @@ export default function City() {
 
   return (
     <Shell page="city" variant="bleed">
-      <div className="city">
+      <div className="city" data-canvas-stage>
         {noCanvas === null && (
           <Suspense fallback={<div className="city__stage" />}>
             <CityCanvas
@@ -98,7 +98,7 @@ export default function City() {
           </Suspense>
         )}
 
-        <aside className="panel" aria-label="What the network is doing">
+        <aside className="panel" data-canvas-panel aria-label="What the network is doing">
           <section className="panel__answer">
             {city.watchedRate == null ? (
               <>

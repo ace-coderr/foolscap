@@ -229,7 +229,7 @@ function Hero({
         <DrawingMerkle className="nhero__figure" reducedMotion={reducedMotion} />
       </Suspense>
 
-      <div className="nband__inner nhero__inner">
+      <div className="band__inner nhero__inner">
         <div className="nhero__lede">
           <p className="nhero__eyebrow rise">{page.eyebrow}</p>
           <h1 className="nhero__title" id="notary-title">
@@ -344,9 +344,9 @@ function Verdict({
   const reading = read(archive, live, asked);
 
   return (
-    <section className="section nband nband--verdict" id="answer" aria-live="polite" ref={bandRef}>
-      <div className="nband__inner">
-        <p className="nband__eyebrow">The answer</p>
+    <section className="section band band--verdict" id="answer" aria-live="polite" ref={bandRef}>
+      <div className="band__inner">
+        <p className="band__eyebrow">The answer</p>
 
         {reading === null ? (
           <Loading>Asking the archive, and reading the rings here…</Loading>
@@ -523,8 +523,8 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
 
   if (state.phase === 'loading') {
     return (
-      <section className="section nband">
-        <div className="nband__inner">
+      <section className="section band">
+        <div className="band__inner">
           <Loading>Reading what the archive covers…</Loading>
         </div>
       </section>
@@ -533,8 +533,8 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
 
   if (state.phase === 'failed') {
     return (
-      <section className="section nband">
-        <div className="nband__inner nband__prose">
+      <section className="section band">
+        <div className="band__inner band__prose">
           <p className="coverage__problem">
             {archiveConfigured()
               ? `The archive did not answer: ${state.error}`
@@ -560,9 +560,9 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
 
   return (
     <>
-      <section className="nband nband--rules" id="coverage" ref={bandRef} data-in={seen}>
-        <div className="nband__inner">
-          <p className="nband__eyebrow">What this archive covers</p>
+      <section className="band band--rules" id="coverage" ref={bandRef} data-in={seen}>
+        <div className="band__inner">
+          <p className="band__eyebrow">What this archive covers</p>
           <Ceiling hours={cov.retainHours} />
           <Ratio held={cov.records} lost={cov.lostMessages} rooms={cov.roomsBegunMidRing} />
           <ul className="nstats">
@@ -578,9 +578,9 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
         </div>
       </section>
 
-      <section className="section nband">
-        <div className="nband__inner">
-          <p className="notary__coverage-lede nband__prose">
+      <section className="section band">
+        <div className="band__inner">
+          <p className="notary__coverage-lede band__prose">
             Nothing before <span className="mono">{start ?? 'capture has not started'}</span> exists
             here, for any key. Notary began capturing then; the network’s own history from before
             that moment had already rotated away and cannot be recovered by anyone.
@@ -591,7 +591,7 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
           <Retention hours={cov.retainHours} pins={cov.pinsEarliest} />
 
           {stale && (
-            <p className="coverage__problem nband__prose">
+            <p className="coverage__problem band__prose">
               Sweeping is not running. The mirror last captured a message{' '}
               {formatAge(cov.staleSeconds! * 1000)} ago, so everything since then is uncovered and
               is being lost as the rings turn. Anything submitted directly in the meantime is still
@@ -637,7 +637,7 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
             )}
           </dl>
 
-          <p className="notary__note nband__prose">
+          <p className="notary__note band__prose">
             The oldest message held is older than the capture window because the first sweep read
             whatever the rings still contained. Its timestamp is the room’s claim, not something
             Notary watched happen — the distinction is kept everywhere below.
@@ -716,7 +716,7 @@ function Watched({ rooms }: { rooms: string[] }) {
           </li>
         ))}
       </ul>
-      <p className="notary__note nband__prose">
+      <p className="notary__note band__prose">
         No other room is watched. The network’s chat rooms — lobby, meta, kibble, ashflop,
         tclk-offers — were followed until 14 September and are not any more: they carried hundreds
         of thousands of keys that posted once, which is a great deal of storage for evidence that
@@ -775,7 +775,7 @@ function Retention({ hours, pins }: { hours: number; pins: boolean }) {
           except the earliest one kept per room.
         </dd>
       </dl>
-      <p className="notary__note nband__prose">
+      <p className="notary__note band__prose">
         The daily roots stay published and signed either way. A proof taken while a record was held
         still verifies against its root for ever, without Notary — but Notary cannot produce a new
         proof for a record it no longer has, and says so rather than returning a thinner answer in
@@ -964,10 +964,10 @@ function Holes({ gaps, total }: { gaps: Coverage['gaps']; total: number }) {
   const capped = total > sorted.length;
 
   return (
-    <section className="section nband" id="holes" ref={sectionRef}>
-      <div className="nband__inner">
-        <p className="nband__eyebrow">Recorded holes</p>
-        <p className="nband__prose nholes__lede">
+    <section className="section band" id="holes" ref={sectionRef}>
+      <div className="band__inner">
+        <p className="band__eyebrow">Recorded holes</p>
+        <p className="band__prose nholes__lede">
           Each of these is a stretch of a room that went past before Notary could capture it —
           either because the ring outran the mirror or because the mirror was not running. They
           are the holes Notary noticed and wrote down, and a hole means an absence inside it proves
@@ -1129,8 +1129,8 @@ function Stat({
  */
 function Sources({ archive, live }: { archive: Async<DidReport>; live: Async<LiveResult> }) {
   return (
-    <section className="section nband" id="sources">
-      <div className="nband__inner">
+    <section className="section band" id="sources">
+      <div className="band__inner">
         <div className="nsources">
           <div className="nsource glass" id="archive">
             <h2 className="nsource__title">
@@ -1398,17 +1398,17 @@ function AnchorBand({
   if (state.phase !== 'ready') {
     return (
       <section
-        className="nband nband--rules nband--anchors"
+        className="band band--rules band--anchors"
         id="anchors"
         ref={bandRef}
         data-in={seen}
       >
-        <div className="nband__inner">
-          <p className="nband__eyebrow">Anchors</p>
+        <div className="band__inner">
+          <p className="band__eyebrow">Anchors</p>
           {state.phase === 'loading' ? (
             <Loading>Reading the anchor log…</Loading>
           ) : (
-            <p className="coverage__problem nband__prose">{state.error}</p>
+            <p className="coverage__problem band__prose">{state.error}</p>
           )}
         </div>
       </section>
@@ -1418,12 +1418,12 @@ function AnchorBand({
   const log = state.value;
 
   return (
-    <section className="nband nband--rules nband--anchors" id="anchors" ref={bandRef} data-in={seen}>
-      <div className="nband__inner nband__split">
-        <div className="nband__left">
-          <p className="nband__eyebrow">Anchors</p>
-          <h2 className="nband__title">Why you need not trust the clock.</h2>
-          <p className="nband__copy">
+    <section className="band band--rules band--anchors" id="anchors" ref={bandRef} data-in={seen}>
+      <div className="band__inner band__split">
+        <div className="band__left">
+          <p className="band__eyebrow">Anchors</p>
+          <h2 className="band__title">Why you need not trust the clock.</h2>
+          <p className="band__copy">
             Once a day Notary builds a Merkle tree over everything it captured that day and
             publishes the root into <span className="mono">{log.anchor_room}</span>, signed by its
             own key. Fetch any record from the API and it comes with a proof: fold it into the leaf
@@ -1431,7 +1431,7 @@ function AnchorBand({
           </p>
         </div>
 
-        <div className="nband__right">
+        <div className="band__right">
           <p className="pinned__label">Notary’s key, pinned</p>
           <p className="pinned__did mono">{log.pinned}</p>
           <p className="notary__note">
@@ -1461,7 +1461,7 @@ function AnchorBand({
           column beside the explanation. A 64-character hash in 45% of the page
           wraps to two lines, and a hash you have to reassemble across a line
           break is a hash nobody will check against the room. */}
-      <div className="nband__inner">
+      <div className="band__inner">
         {log.anchors.length === 0 ? (
           <p className="empty">No day has been anchored yet.</p>
         ) : (
@@ -1503,7 +1503,7 @@ function SummaryAnchors({ rows, room }: { rows: SummaryAnchor[]; room: string })
   if (rows.length === 0) return null;
 
   return (
-    <div className="nband__inner">
+    <div className="band__inner">
       <p className="notary__rooms-title nsummary-anchors__title">
         The summary tier <span className="nsource__tag">roots over what outlives the window</span>
       </p>
@@ -1527,7 +1527,7 @@ function SummaryAnchors({ rows, room }: { rows: SummaryAnchor[]; room: string })
           ))}
         </ul>
       </div>
-      <p className="notary__note nband__prose">
+      <p className="notary__note band__prose">
         Each of these commits to the whole tier as it stood at that moment — every key, every room,
         first and last seen, how many times — rather than to one day&rsquo;s messages. They are
         snapshots and do not add up to a history the way the daily roots do. For any period whose

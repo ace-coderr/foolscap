@@ -20,117 +20,6 @@
  * No accent in here except one: .nverdict__word--yes, allowlisted in
  * test/accent.test.ts. Everything else is white at an opacity. */
 
-/* ------------------------------------------------------------------- bands */
-
-/* A banded page hands the gutter and the vertical rhythm to the bands, so the
- * shell stops being a column and becomes the page. The nav is fixed in both its
- * states, so the hero owns the clearance under it rather than the shell. */
-.shell--bands {
-  max-width: none;
-  padding: 0;
-}
-
-.nband {
-  position: relative;
-  /* .section's own margin is the column layout's rhythm. A band's spacing is
-   * its padding, or two adjacent bands would be separated twice. */
-  margin-top: 0;
-  padding-block: clamp(2.5rem, 7vh, 4.5rem);
-  /* Every in-page scroll on this page targets a band — the verdict on submit,
-   * the holes section on collapse — and the nav is fixed over the top of it.
-   * Without this they land under the nav by exactly its height. */
-  scroll-margin-top: var(--nav-height);
-}
-
-.nband__inner {
-  position: relative;
-  z-index: 1;
-  max-width: var(--shell);
-  margin-inline: auto;
-  padding-inline: var(--space);
-}
-
-/* Heading one side, the detail the other, using the width instead of running a
- * strip down the left of an empty page. The landing's About head, exactly: two
- * 45% columns pushed apart, top-aligned. */
-.nband__split {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 45%));
-  justify-content: space-between;
-  align-items: start;
-  gap: clamp(1.5rem, 4vw, 3rem);
-}
-
-.nband__left,
-.nband__right {
-  min-width: 0;
-}
-
-.nband__eyebrow {
-  margin: 0 0 var(--space);
-  font-family: var(--display);
-  font-weight: 500;
-  font-size: var(--t-micro);
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-.nband__title {
-  margin: 0 0 var(--space);
-  font-family: var(--display);
-  font-stretch: 112%;
-  font-weight: 600;
-  font-size: var(--t-h1);
-  line-height: 1.08;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-}
-
-.nband__copy {
-  margin: 0 0 var(--space);
-  font-size: var(--t-small);
-  line-height: 1.6;
-  color: var(--ink-mid);
-}
-
-.nband__prose {
-  max-width: var(--measure);
-}
-
-/* ----------------------------------------------------------- ruled bands */
-
-/* Hairlines the full width of the page, which says "this is the evidence" more
- * plainly than a heading would — the same band the landing's stats sit in.
- *
- * Drawn rather than bordered, so they arrive from one end. 500ms, and the
- * figures inside start counting as they land; BAND_DRAW in Notary.tsx is the
- * same number. */
-.nband--rules::before,
-.nband--rules::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: var(--rule);
-  transform: scaleX(0);
-  transform-origin: left center;
-  transition: transform 500ms ease-out;
-}
-
-.nband--rules::before {
-  top: 0;
-}
-
-.nband--rules::after {
-  bottom: 0;
-}
-
-.nband--rules[data-in='true']::before,
-.nband--rules[data-in='true']::after {
-  transform: scaleX(1);
-}
 
 /* -------------------------------------------------------------------- hero */
 
@@ -331,7 +220,7 @@
  * It used to be a card heading at the same size as the sentence under it, which
  * meant the page had no answer — it had a paragraph that happened to begin with
  * one. The word lands first now and everything qualifying it follows. */
-.nband--verdict {
+.band--verdict {
   padding-block: clamp(3.5rem, 12vh, 7rem);
 }
 
@@ -1017,7 +906,7 @@
 
 /* The last band on the page and the one a sceptic came for, so it is given more
  * room than the bands that merely report. */
-.nband--anchors {
+.band--anchors {
   padding-block: clamp(3rem, 9vh, 5.5rem);
 }
 
@@ -1116,7 +1005,6 @@
   }
 
   .nhero__inner,
-  .nband__split,
   .nsources {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1134,9 +1022,6 @@
     max-width: none;
   }
 
-  .nband__eyebrow {
-    margin-bottom: var(--space-half);
-  }
 }
 
 @media (max-width: 44rem) {
@@ -1272,11 +1157,10 @@
 /* ---------------------------------------------------------- reduced motion */
 
 @media (prefers-reduced-motion: reduce) {
-  /* The band's rules are simply there, and so is the ratio bar: the split is
-   * the content, not the sweep that reveals it. The figures inside resolve to
-   * their values on the first render — see useCountUp. */
-  .nband--rules::before,
-  .nband--rules::after,
+  /* The ratio bar is simply there: the split is the content, not the sweep
+   * that reveals it. The figures inside resolve to their values on the first
+   * render — see useCountUp. The band hairlines get the same treatment in
+   * foolscap.css, where the bands themselves now live. */
   .nratio__bar {
     transform: scaleX(1);
     transition: none;

@@ -6,8 +6,11 @@ import './styles/foolscap.css';
 // every page, so the stylesheet that draws it has to be there on every page.
 import './styles/hero.css';
 // Likewise the Notary page's own composition, which moved out of foolscap.css
-// when that page stopped being a column of sections.
+// when that page stopped being a column of sections. The BAND system those two
+// pages share went the other way — out of notary.css and into foolscap.css —
+// when Holdfast needed it too.
 import './styles/notary.css';
+import './styles/holdfast.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('No #root element to mount into.');
