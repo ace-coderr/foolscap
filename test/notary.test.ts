@@ -339,6 +339,39 @@ describe('loss accounting', () => {
     assert.equal(classifyRingStart({ resumeFrom: 0, firstSeq: 1 }), null, 'a whole ring is no hole');
   });
 
+  /**
+   * A REDEPLOY MUST NOT BOOK A HOLE, and the reason it does not is that the
+   * resume point is the stored high-water mark rather than a fresh look.
+   *
+   * Checked against the real restart log: of 73 mirror starts across two days —
+   * a restart every hundred minutes or so, which is what a platform doing
+   * deploys and crash-restarts looks like — 68 booked nothing. The ring still
+   * held everything back to the cursor, so there was nothing to write down.
+   *
+   * The five that did book were rooms whose ring genuinely outran the cursor
+   * during a traffic burst, and those bookings are correct: the messages really
+   * are gone. The largest was mb-sonnet-2-registration during the contest rush.
+   */
+  test('an ordinary restart books nothing; only a ring that outran the cursor does', () => {
+    // A redeploy: away long enough for a few thousand messages, ring far deeper.
+    assert.equal(
+      classifyRingStart({ resumeFrom: 6_650_286, firstSeq: 6_620_000 }),
+      null,
+      'the ring tail is still older than where we stopped'
+    );
+
+    // The five real bookings, smallest and largest. Both are rooms the ring
+    // outran, and both spans are exact.
+    assert.equal(
+      classifyRingStart({ resumeFrom: 6_365_631, firstSeq: 6_386_661 })?.missing,
+      21_029
+    );
+    assert.equal(
+      classifyRingStart({ resumeFrom: 94_830, firstSeq: 316_898 })?.missing,
+      222_067
+    );
+  });
+
   test('the three categories cannot be added into one number', () => {
     // The real table on 2026-09-14, reduced to one row per kind.
     const HELD = 1_271_363;
