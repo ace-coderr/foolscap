@@ -125,7 +125,20 @@ export interface RoomWatcherOptions {
   minInterval?: number;
   lowBudgetInterval?: number;
   maxBackoff?: number;
-  onMessages?: (batch: { room: string; messages: Message[]; source: 'backfill' | 'poll' }) => void;
+  /**
+   * `lastSeq` is the cursor this read advanced to — the watcher's own `since`
+   * after the batch, which is NOT always the highest seq in `messages`: a
+   * trailing line that would not parse is skipped, and the next poll starts
+   * past it. A consumer recording where it has read to must use this and not
+   * the last message, or the difference reappears later as a hole that was
+   * never there.
+   */
+  onMessages?: (batch: {
+    room: string;
+    messages: Message[];
+    source: 'backfill' | 'poll';
+    lastSeq: number;
+  }) => void;
   onGap?: (gap: Gap) => void;
   onBudget?: (budget: Budget) => void;
   onStatus?: (status: WatcherStatus) => void;
@@ -831,7 +844,8 @@ const isAbort = (err: unknown): boolean =>
  * Backfill a room from /export, then follow it with long polls.
  *
  * Handlers, all optional:
- *   onMessages({ room, messages, source })  source is 'backfill' or 'poll'
+ *   onMessages({ room, messages, source, lastSeq })  source is 'backfill' or 'poll';
+ *                       lastSeq is where the cursor now stands
  *   onGap(gap)          a ring gap, shaped by detectGap
  *   onBudget(budget)    read budget, only once the server starts reporting it
  *   onStatus(status)    { room, state, since, generation, error, retryIn }
@@ -939,7 +953,12 @@ export class RoomWatcher {
         this.generation = dump.generation;
         if (dump.messages.length) {
           this.since = dump.lastSeq;
-          this.onMessages({ room: this.room, messages: dump.messages, source: 'backfill' });
+          this.onMessages({
+            room: this.room,
+            messages: dump.messages,
+            source: 'backfill',
+            lastSeq: this.since,
+          });
         }
         if (dump.truncatedTail != null) {
           // Expected: /export cuts at the last complete line. The next poll covers it.
@@ -985,7 +1004,12 @@ export class RoomWatcher {
 
         if (result.messages.length) {
           this.since = result.lastSeq ?? this.since;
-          this.onMessages({ room: this.room, messages: result.messages, source: 'poll' });
+          this.onMessages({
+            room: this.room,
+            messages: result.messages,
+            source: 'poll',
+            lastSeq: this.since,
+          });
         }
 
         if (result.budget) {

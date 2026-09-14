@@ -104,10 +104,14 @@ export async function migrate(): Promise<void> {
 export async function assertSchema(): Promise<void> {
   const { rows } = await getPool().query(
     `select table_name from information_schema.tables
-      where table_schema = 'public' and table_name in ('records', 'anchors', 'gaps')`
+      where table_schema = 'public'
+        and table_name in ('records', 'anchors', 'gaps', 'cursors')`
   );
   const found = new Set(rows.map((r: { table_name: string }) => r.table_name));
-  const missing = ['records', 'anchors', 'gaps'].filter((t) => !found.has(t));
+  // cursors is newer than the others. Named here rather than allowed to be
+  // absent, because a mirror that silently fell back to inferring its resume
+  // point from stored records is the exact condition this table removes.
+  const missing = ['records', 'anchors', 'gaps', 'cursors'].filter((t) => !found.has(t));
   if (missing.length) {
     throw new Error(
       `Missing table(s): ${missing.join(', ')}. Run "npm run migrate" against this database first.`
@@ -235,6 +239,13 @@ export async function markGapRecovered(id: number | null, recovered: number): Pr
 }
 
 /** The highest source_seq held for a room, so a restart resumes where it stopped. */
+/**
+ * The highest sequence STORED for a room.
+ *
+ * No longer the resume point — see readCursor. It survives as the one-time seed
+ * for an archive that predates the cursors table, and as the honest answer to a
+ * different question: what is the newest thing actually held.
+ */
 export async function lastSeqFor(room: string): Promise<number> {
   const { rows } = await getPool().query(
     `select max(source_seq) as seq from records where room = $1`,
@@ -242,6 +253,31 @@ export async function lastSeqFor(room: string): Promise<number> {
   );
   const seq = rows[0]?.seq;
   return seq == null ? 0 : Number(seq);
+}
+
+/** Where the mirror has read to, or null if it has never written one. */
+export async function readCursor(room: string): Promise<number | null> {
+  const { rows } = await getPool().query(`select last_seq from cursors where room = $1`, [room]);
+  const seq = rows[0]?.last_seq;
+  return seq == null ? null : Number(seq);
+}
+
+/**
+ * Advance the cursor, never retreat it.
+ *
+ * `greatest` rather than a plain assignment because the sweep re-exports a room
+ * to fill an old hole, and that read ends far below the follow cursor. A write
+ * that took the last value would drag the resume point backwards and the next
+ * restart would book everything since as lost.
+ */
+export async function writeCursor(room: string, lastSeq: number): Promise<void> {
+  await getPool().query(
+    `insert into cursors (room, last_seq) values ($1, $2::bigint)
+     on conflict (room) do update
+       set last_seq = greatest(cursors.last_seq, excluded.last_seq),
+           updated_at = now()`,
+    [room, lastSeq]
+  );
 }
 
 /** What /capture answers with, and whether this call is what created the row. */

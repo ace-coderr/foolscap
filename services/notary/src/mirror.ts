@@ -36,6 +36,8 @@ import {
   closePool,
   archiveStats,
   lastSeqFor,
+  readCursor,
+  writeCursor,
 } from './db.ts';
 
 /**
@@ -304,6 +306,27 @@ async function recordGap(room: string, gap: RecordedGap): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
+ * Where to resume a room, and why it is not `max(source_seq)` any more.
+ *
+ * The cursor is what the mirror READ. The stored maximum is what it KEPT, and
+ * under the sightings policy those differ by everything the sampling dropped.
+ * Resuming from what was kept made the loss accounting a side effect of the
+ * capture policy: widen the sampling and the archive would report itself losing
+ * more messages while losing none. On a page whose whole argument is that
+ * "lost" and "never ours to capture" are different things, the loss figure
+ * cannot move because a storage decision changed.
+ *
+ * The fallback is a seed, not a strategy. An archive that predates the cursors
+ * table has records and no cursor, and treating that as a first-ever look would
+ * book every room's whole history as a hole on the first restart after this
+ * ships. One read of the stored maximum, then the cursor is written and is
+ * authoritative from then on.
+ */
+export function resumePoint({ cursor, stored }: { cursor: number | null; stored: number }): number {
+  return cursor ?? stored;
+}
+
+/**
  * A ring starts above seq 1. Which of two different facts is that?
  *
  * NOTHING STORED FOR THIS ROOM YET — this is the first look, and everything
@@ -357,7 +380,9 @@ export function classifyRingStart({
  * and keeps the read budget from being spent all at once.
  */
 async function backfill(room: string): Promise<{ lastSeq: number; generation: number | null }> {
-  const resumeFrom = DRY_RUN ? 0 : await lastSeqFor(room);
+  const resumeFrom = DRY_RUN
+    ? 0
+    : resumePoint({ cursor: await readCursor(room), stored: await lastSeqFor(room) });
   const dump = await exportRoom(room);
 
   if (dump.messages.length === 0) {
@@ -371,7 +396,7 @@ async function backfill(room: string): Promise<{ lastSeq: number; generation: nu
   const fresh = dump.messages.filter((m) => m.seq > resumeFrom);
   log(
     `[${room}] ring holds ${dump.messages.length} (seq ${dump.firstSeq}–${dump.lastSeq}); ` +
-      `${fresh.length} newer than what is already stored.`
+      `${fresh.length} past the cursor at ${resumeFrom}.`
   );
 
   await absorb(fresh, room);
@@ -379,7 +404,26 @@ async function backfill(room: string): Promise<{ lastSeq: number; generation: nu
   if (dump.malformed.length) {
     log(`[${room}] ${dump.malformed.length} record(s) in the export could not be parsed.`);
   }
+
+  // After absorbing, not before: a crash mid-write must leave the cursor where
+  // the next run will re-read the batch rather than past it.
+  await advanceCursor(room, dump.lastSeq);
+
   return { lastSeq: dump.lastSeq, generation: dump.generation };
+}
+
+/** Write the cursor, unless this is a dry run, and never let a failure stop capture. */
+async function advanceCursor(room: string, lastSeq: number): Promise<void> {
+  if (DRY_RUN || !Number.isFinite(lastSeq) || lastSeq <= 0) return;
+  try {
+    await writeCursor(room, lastSeq);
+  } catch (err) {
+    // Capture matters more than bookkeeping. A cursor that failed to advance
+    // costs a re-read and, at worst, a hole recorded larger than it was; a
+    // throw here would take the room down.
+    stats.errors++;
+    log(`[${room}] could not advance the cursor: ${(err as Error).message}`);
+  }
 }
 
 function follow(room: string, since: number): RoomWatcher {
@@ -388,13 +432,22 @@ function follow(room: string, since: number): RoomWatcher {
     backfill: false,
     wait: 10,
     limit: POLL_LIMIT,
-    onMessages: async ({ messages }) => {
+    onMessages: async ({ messages, lastSeq }) => {
       try {
         await absorb(messages, room);
       } catch (err) {
         stats.errors++;
         log(`[${room}] write failed: ${(err as Error).message}`);
+        // The cursor does NOT advance past a batch that failed to store. The
+        // next run re-reads it, which costs a duplicate insert and nothing
+        // else, where advancing would turn a write failure into a silent hole.
+        return;
       }
+      // lastSeq, not the highest message seq: this is the watcher's own cursor,
+      // and a line it skipped as unparseable is behind it. Recording the
+      // messages instead would leave that line looking like a hole at the next
+      // restart, every restart, forever.
+      await advanceCursor(room, lastSeq);
     },
     onGap: (gap) => {
       recordGap(room, gap).catch(() => {});

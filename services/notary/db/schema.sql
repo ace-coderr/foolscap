@@ -70,6 +70,33 @@ create table if not exists anchors (
   last_capture   timestamptz
 );
 
+-- Where the mirror has read to, per room. Stated, not reconstructed.
+--
+-- This used to be inferred as `max(source_seq) from records`, which is the
+-- highest sequence that was STORED. For a full room the two are the same. For a
+-- sampled room they are not: the mirror reads everything and keeps the first and
+-- last sighting per DID per day, so the stored maximum trails the read position
+-- by whatever the sampling and its throttle dropped.
+--
+-- The lag was small — five messages on lobby, five thousand on ashflop — and the
+-- size was never the point. The resume point decides what a restart books as
+-- LOST, so with it inferred from records, the loss figure was a side effect of
+-- the capture policy: widen the sampling and the archive would report itself
+-- losing more, having lost nothing. A page built to hold "lost" and "never ours
+-- to capture" apart cannot have its loss number move when a storage decision
+-- changes.
+--
+-- So the mirror writes down what it read, on every poll, and the accounting
+-- reads that. last_seq is the watcher's own cursor, which is not always the
+-- highest sequence in the batch — an unparseable trailing line is skipped and
+-- the next poll starts past it. Recording the messages rather than the cursor
+-- would put that difference back as a phantom hole.
+create table if not exists cursors (
+  room       text primary key,
+  last_seq   bigint not null,
+  updated_at timestamptz not null default now()
+);
+
 -- Holes in the archive, recorded rather than hidden.
 --
 -- TWO OF THESE ARE LOSS AND ONE IS NOT, and conflating them is the mistake this

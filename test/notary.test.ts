@@ -16,6 +16,7 @@ import {
   MIRROR_ROOMS,
   classifyRingStart,
   storedMissing,
+  resumePoint,
 } from '../services/notary/src/mirror';
 import { LOSS_KINDS } from '../services/notary/src/archive';
 
@@ -314,6 +315,42 @@ describe('loss accounting', () => {
       !LOSS_KINDS.includes('regenerated' as never),
       'a recreated room is not messages Notary lost'
     );
+  });
+
+  /**
+   * THE RESUME POINT IS STATED, NOT RECONSTRUCTED.
+   *
+   * It used to be max(source_seq) — the highest sequence STORED. For a full room
+   * that equals what was read; for a sampled room it trails by whatever the
+   * sightings policy dropped, measured at five messages on lobby and 5,299 on
+   * ashflop.
+   *
+   * The size was never the argument. The resume point decides what a restart
+   * books as lost, so inferring it from stored rows made the loss figure a side
+   * effect of the capture policy: widen the sampling and the archive would
+   * report itself losing more while losing nothing. On a page whose whole claim
+   * is that "lost" and "never ours to capture" are different categories, the
+   * loss number cannot move because a storage decision changed.
+   */
+  test('the resume point is the cursor, not the high-water mark of what was kept', () => {
+    // A sampled room mid-run: read to 6,650,438, stored only up to 6,650,286.
+    assert.equal(resumePoint({ cursor: 6_650_438, stored: 6_650_286 }), 6_650_438);
+    // A full room, where the two agree and always did.
+    assert.equal(resumePoint({ cursor: 8_503_210, stored: 8_503_210 }), 8_503_210);
+  });
+
+  test('an archive older than the cursors table seeds from what it stored', () => {
+    // The first run after this ships has records and no cursor. Treating that as
+    // a first-ever look would book every room's whole history as a hole.
+    assert.equal(resumePoint({ cursor: null, stored: 6_650_286 }), 6_650_286);
+    // And a genuinely new room still reads as one.
+    assert.equal(resumePoint({ cursor: null, stored: 0 }), 0);
+  });
+
+  test('a cursor of zero is a cursor, not an absent one', () => {
+    // ?? rather than ||, which would send a room that has legitimately read
+    // nothing back to the stored maximum every time.
+    assert.equal(resumePoint({ cursor: 0, stored: 900 }), 0);
   });
 
   test('a first look at a room that has already turned is not loss', () => {
