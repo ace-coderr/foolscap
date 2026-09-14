@@ -264,14 +264,22 @@ export async function coverage(): Promise<Coverage> {
     //
     // 'rotated' is excluded from the rows AND from every total here. It is not
     // a hole in the record; it is where the record starts.
+    //
+    // AND SO ARE ROOMS NOTARY NO LONGER WATCHES. The chat rooms were followed
+    // until 14 September and their holes are still on the table, correctly —
+    // they describe history that really was missed. But the ratio above them
+    // says "of the messages that went through the rooms it was watching", and
+    // once a room is not watched its holes belong to a different question.
+    // Counting them would put loss in the numerator for rooms the archive
+    // holds nothing from, against a claim of "these rooms, completely".
     pool.query(
       `select id::text, room, kind, missing, recovered,
               expected_seq::text as expected_seq, first_seq::text as first_seq, noticed_at
          from gaps
-        where kind = any($1::text[])
+        where kind = any($1::text[]) and room = any($2::text[])
         order by greatest(0, coalesce(missing, 0) - recovered) desc, noticed_at desc
-        limit $2`,
-      [LOSS_KINDS, GAP_LIMIT]
+        limit $3`,
+      [LOSS_KINDS, WATCHED_ROOMS, GAP_LIMIT]
     ),
     pool.query(
       `select
@@ -281,8 +289,9 @@ export async function coverage(): Promise<Coverage> {
          coalesce(sum(greatest(0, coalesce(missing,0) - recovered))
                   filter (where kind = 'downtime'), 0)::text          as lost_downtime,
          count(distinct room) filter (where kind = 'rotated')::text   as rooms_begun_mid_ring
-       from gaps`,
-      [LOSS_KINDS]
+       from gaps
+      where room = any($2::text[])`,
+      [LOSS_KINDS, WATCHED_ROOMS]
     ),
     pool.query(
       `select room, count(*)::text as records,
