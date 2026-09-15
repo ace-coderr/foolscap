@@ -3,6 +3,7 @@ import Landing from './routes/Landing';
 import City from './routes/City';
 import Notary from './routes/Notary';
 import Track from './routes/Track';
+import Bench from './routes/Bench';
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
         <Route path="/city" element={<City />} />
         <Route path="/notary" element={<Notary />} />
         <Route path="/track" element={<Track />} />
+        <Route path="/bench" element={<Bench />} />
         {/* The static site lived at these paths; old links still work. */}
         <Route path="/index.html" element={<Navigate to="/" replace />} />
         <Route path="/track.html" element={<Navigate to="/track" replace />} />

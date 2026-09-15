@@ -89,6 +89,17 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
     why: 'a read is in flight, for as long as it is and no longer',
   },
 
+  // --- verified, on the write lane ------------------------------------------
+  // /bench checks a pasted signature against the DID above it and the exact
+  // string on screen, here, in the reader's own browser, before it will build
+  // the request. Same meaning as /notary's verdict: this verified. The word is
+  // the only coloured thing on that page, and the URL beneath it does not exist
+  // until the word says yes — absence is the other half of the signal.
+  {
+    selector: '.verdict__word--yes',
+    why: 'a signature that verified against the string and the key on screen',
+  },
+
   // --- current ------------------------------------------------------------
   // "Current" is in the token's own definition, and where you are is state.
   { selector: ".hero__nav-link[aria-current='page']", why: 'the page you are on' },
@@ -96,6 +107,12 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
   { selector: '.lookup__input:focus-visible', why: 'the field keyboard focus is on' },
   { selector: '.rooms__row:focus-visible', why: 'the room keyboard focus is on' },
   { selector: '.hero__pill:focus-visible', why: 'the pill keyboard focus is on' },
+  {
+    selector:
+      '.field__input:focus-visible, .field__area:focus-visible, .field__select:focus-visible',
+    why: 'the field keyboard focus is on, on the bench',
+  },
+  { selector: '.bbutton:focus-visible', why: 'the button keyboard focus is on, on the bench' },
 ];
 
 /**

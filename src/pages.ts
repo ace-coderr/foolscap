@@ -63,7 +63,7 @@ export const PAGES: Page[] = [
     id: 'bench',
     label: 'Bench',
     path: '/bench',
-    available: false,
+    available: true,
     eyebrow: 'Bench',
     title: 'How do I sign and post a message without handing over my key?',
     line:

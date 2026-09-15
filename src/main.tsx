@@ -9,6 +9,7 @@ import './styles/hero.css';
 // when that page stopped being a column of sections. The band system it is
 // built from lives in foolscap.css.
 import './styles/notary.css';
+import './styles/bench.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('No #root element to mount into.');
