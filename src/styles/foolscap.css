@@ -1833,12 +1833,11 @@ body:not(.on-black) .footer {
 /* BANDS                                                                      */
 /* ========================================================================== */
 
-/* The banded page composition, shared.
+/* The banded page composition.
  *
- * It was written for /notary and lived in notary.css until /holdfast needed the
- * same thing. A second copy under a second prefix would have been two band
- * systems to keep in step and one of them would have drifted — the same reason
- * Holdfast draws with the City's renderer instead of getting one of its own.
+ * It was written for /notary and lived in notary.css. It is here because it is
+ * the shell's composition rather than one page's furniture, and because a
+ * second page wanting bands should find them rather than copy them.
  *
  * What is HERE is the frame: the band, its inner, the two-column split, the
  * label and heading steps, and the hairlines that draw themselves in. What

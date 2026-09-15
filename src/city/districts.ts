@@ -136,35 +136,18 @@ export interface Layout {
  * tall buildings gather at one corner of each district instead of scattering. The
  * sort is by name on ties, which is what makes the layout stable across loads:
  * two rooms with identical volume must not be able to swap places.
- *
- * `districts` is both the classifier and the running order — first match wins,
- * and plots are laid out in the order given. It defaults to the City's own list.
- * Holdfast passes a set built from the board it actually found, because its
- * districts are key prefixes nobody can know in advance; passing the list in is
- * what lets one layout serve a fixed taxonomy and a discovered one without this
- * function knowing which it is looking at.
- *
- * Holdfast also passes `volume: 0` throughout, which leaves the sort inside a
- * plot on the name — and that is exactly what it wants, because in Holdfast
- * adjacency in name order IS the adjacency the game scores.
  */
-export function layoutCity(
-  rooms: { room: string; volume: number }[],
-  districts: District[] = DISTRICTS
-): Layout {
-  const classify = (room: string): District =>
-    districts.find((district) => district.match(room)) ?? districts[districts.length - 1];
-
+export function layoutCity(rooms: { room: string; volume: number }[]): Layout {
   const grouped = new Map<string, { room: string; volume: number }[]>();
   for (const entry of rooms) {
-    const id = classify(entry.room).id;
+    const id = districtFor(entry.room).id;
     const list = grouped.get(id);
     if (list) list.push(entry);
     else grouped.set(id, [entry]);
   }
 
   // Plot dimensions first, in lots, before anything is given a position.
-  const blocks = districts.filter((d) => grouped.has(d.id)).map((district) => {
+  const blocks = DISTRICTS.filter((d) => grouped.has(d.id)).map((district) => {
     const members = grouped.get(district.id)!;
     members.sort((a, b) => b.volume - a.volume || a.room.localeCompare(b.room));
     const cols = Math.max(1, Math.ceil(Math.sqrt(members.length)));

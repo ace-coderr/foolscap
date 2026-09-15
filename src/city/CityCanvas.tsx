@@ -71,15 +71,10 @@ const ENTRY_MS = 900;
 /**
  * What this renderer actually needs, which is much less than a CityRoom.
  *
- * Written down as its own type because Holdfast draws its board with this file
- * and a second renderer would be the wrong answer twice over — the same bug
- * fixed in two places, and two isometric styles on one site. The City passes
- * CityRoom, which satisfies this structurally; Holdfast passes a plot. Neither
- * knows about the other.
- *
- * The field names are the City's, because it was here first and renaming them
- * would churn a working page to no visible end. What they MEAN is general, and
- * that is what these comments are for.
+ * Seven fields — everything else on a CityRoom is the City's business and none
+ * of this file's. Written down separately so the renderer states its own
+ * requirements rather than importing a page's model to describe them; CityRoom
+ * satisfies it structurally, so the City passes one unchanged.
  */
 export interface Building {
   /** Opaque identity. Reported back by onHover and onSelect; never parsed here. */
@@ -165,9 +160,7 @@ interface Scene {
  *
  * Found by data attribute rather than by class, so the renderer does not have to
  * know the name of the page it is drawing for. It used to look for `.city
- * .panel`; the moment Holdfast drew with this file, that was a renderer with one
- * page's stylesheet compiled into it, and the second page would have centred its
- * board under its own panel for no reason anyone could see from here.
+ * .panel`, which compiled one page's stylesheet into the renderer.
  */
 function occludedRight(canvas: HTMLCanvasElement): number {
   const panel = canvas.closest('[data-canvas-stage]')?.querySelector('[data-canvas-panel]');
@@ -403,16 +396,7 @@ export default function CityCanvas({
   }, [reducedMotion, onUnavailable]);
 
   // --- the city's shape ----------------------------------------------------
-  //
-  // WHICH BUILDINGS HAVE A ROOF IS PART OF THE SHAPE, not part of the values.
-  // Roofs are a second instanced mesh sized to the set that has one, allocated
-  // in this effect; the values effect below can recolour a roof and cannot
-  // conjure one. On the City that never mattered, because `watched` is a
-  // constant list fixed at module scope and no room's membership of it ever
-  // changes. On Holdfast it changes the instant a player connects a key — and
-  // with only the ids in this key, every plot they hold stayed capless: the
-  // board drew the state correctly and drew no accent at all.
-  const shapeKey = rooms.map((room) => `${room.room} ${room.watched ? '1' : '0'}`).join('\n');
+  const shapeKey = rooms.map((room) => room.room).join('\n');
   useEffect(() => {
     const state = sceneRef.current;
     const labelHost = labelHostRef.current;

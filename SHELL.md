@@ -1,13 +1,13 @@
 # Foolscap — shell spec
 
-One system, seven pages, each a distinct tool. This defines the shell everything is built
+One system, six pages, each a distinct tool. This defines the shell everything is built
 into: tokens, navigation, layout, and the boundary between pages.
 
 Build this before any new page. Retro-fit `track.html` onto it last.
 
 ---
 
-## The pages
+## The six pages
 
 Each answers a question no other page answers. If two pages would answer the same
 question, one of them is wrong.
@@ -20,18 +20,9 @@ question, one of them is wrong.
 | **Bench** (`/bench`) | How do I sign and post a message without handing over my key? |
 | **Lens** (`/lens`) | Who actually said what in this room? |
 | **Vault** (`/vault`) | What notes exist, who owns them, and when do they expire? |
-| **Holdfast** (`/holdfast`) | How much ground can you hold, and for how long? |
 
-Holdfast was written last and is the test of the sentence above it: the shell was not to
-assume six was final, and adding the seventh was adding a row to `src/pages.ts` — the nav,
-the page header and the tab title all read from it. What it did cost was a phone-width nav
-that wrapped six-and-one, fixed where the nav is styled rather than where the page is.
-
-It also reuses rather than repeats, twice over, and both were deliberate: the board is the
-City's renderer with a structural prop type, not a second isometric renderer; and the band
-composition moved out of `notary.css` into `foolscap.css` rather than being copied under a
-new prefix. The rule below about `js/` is the same rule, and it applies to CSS and to
-renderers as much as to logic.
+Holdfast — the territory game — comes later and gets its own page plus a leaderboard. The
+shell must not assume six is final.
 
 Shared plumbing lives in `js/`: `did.js`, `technocore.js`, `contest.js`. Pages own their own
 view logic and nothing else. If two pages need the same logic, it moves into `js/`, it does
@@ -114,18 +105,15 @@ Persistent, on every page including the city.
 
 - Fixed top bar, `--paper-raised`, one hairline `--rule` underneath. No shadow.
 - Left: "Foolscap" as a wordmark linking to `/`. Not a logo — set in Spectral, `--t-h2`.
-- Centre or right: every page link, `--t-small`, uppercase, letterspaced. Current page
+- Centre or right: the six page links, `--t-small`, uppercase, letterspaced. Current page
   marked with `--accent` on the text and a 2px underline. Never a filled pill.
 - On the city, the bar sits over the canvas with the surface at 85% opacity and a backdrop
   blur. Everywhere else it is opaque.
-- Under 768px the floating state collapses to the wordmark plus a menu button; the panel
-  hangs off the pill, links at `--t-h2`. The top state keeps the links on their own row
-  and wraps them, held to a width that breaks them evenly — seven labels do not fit one
-  phone line, and an unconstrained row orphans the last one.
+- Under 768px it collapses to the wordmark plus a menu button; the panel is a full-height
+  sheet from `--paper-raised`, links at `--t-h2`.
 
-Nav is one shared partial, driven by `src/pages.ts`. Do not hand-write it per page — a
-link that only exists on four pages out of seven is the bug this prevents, and a page count
-hard-coded anywhere is the bug that lets it back in.
+Nav is one shared partial. Do not hand-write it per page — a link that only exists on four
+of six pages is the bug this prevents.
 
 ## Page layout
 

@@ -88,21 +88,6 @@ export const PAGES: Page[] = [
     title: 'What notes exist, who owns them, and when do they expire?',
     line: 'Technocore reclaims what it is not asked to keep.',
   },
-  {
-    // The seventh, and the reason this list is a list. SHELL.md: "Holdfast — the
-    // territory game — comes later and gets its own page plus a leaderboard. The
-    // shell must not assume six is final." It did not: the nav, the page header
-    // and the tab title all come from this row, so adding one is adding one.
-    id: 'holdfast',
-    label: 'Holdfast',
-    path: '/holdfast',
-    available: true,
-    eyebrow: 'Holdfast',
-    title: 'How much ground can you hold, and for how long?',
-    line:
-      'A territory game on Technocore’s notes. The server settles every race and reclaims ' +
-      'anything left alone for seven days — and nobody owns a note, which is the game.',
-  },
 ];
 
 export const pageById = (id: string): Page | null => PAGES.find((page) => page.id === id) ?? null;

@@ -824,18 +824,6 @@ body.on-black {
     gap: 0.85rem 1.05rem;
   }
 
-  /* SEVEN LINKS DO NOT FIT ONE PHONE ROW, so the question is only where they
-   * break. Measured at 375: the labels are 311px of text before any gap, and
-   * an unconstrained row wraps six-then-one — the seventh page sitting alone
-   * under the other six, which reads as a mistake rather than as a second row.
-   * Holding the row to 16rem breaks it four-and-three, which reads as a list
-   * of seven. Only under 27rem, so a wider phone that can still fit them all
-   * on one line is not made to wrap for the sake of it. */
-  .hero__nav-links:not([data-open='true']) {
-    max-width: min(100%, 26rem);
-    margin-inline: auto;
-  }
-
   .hero__nav-link {
     font-size: 11px;
     letter-spacing: 0.13em;
@@ -1334,13 +1322,5 @@ body.on-black {
 @media (max-width: 44rem) {
   .tools__list {
     grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* See the note on .hero__nav-links above: at this width seven links wrap
- * six-and-one unless the row is held narrower than it needs to be. */
-@media (max-width: 27rem) {
-  .hero__nav-links:not([data-open='true']) {
-    max-width: 16rem;
   }
 }
