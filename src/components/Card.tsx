@@ -125,8 +125,15 @@ export function BarColumn({
   height = 88,
 }: {
   values: number[];
-  /** Per-bar tone class suffix: 'ok' | 'warn' | 'bad'. Defaults to 'ok'. */
-  tone?: Array<'ok' | 'warn' | 'bad'>;
+  /**
+   * Per-bar tone: 'dim' is the quiet grey, 'ok' the brighter one, and 'warn'
+   * and 'bad' are the two state colours. Defaults to 'ok'.
+   *
+   * Grey is the common case on purpose. A strip that coloured every ordinary
+   * bar would put the ordinary case in the same register as the alarming one,
+   * which is the same rule the message rows follow.
+   */
+  tone?: Array<'dim' | 'ok' | 'warn' | 'bad'>;
   height?: number;
 }) {
   const peak = Math.max(1, ...values);

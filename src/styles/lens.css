@@ -48,6 +48,23 @@
   min-width: 0;
 }
 
+/* AND SO DOES THE MESSAGE LIST, for the same reason and a worse symptom.
+ * Measured on `lobby` with 400 messages in the ring: the document was 43,341px
+ * tall, which put the page's closing prose and its whole question block below
+ * four hundred messages — reachable in principle and not in practice. DESIGN.md
+ * asks for "both full height with independent scroll" and only the left pane
+ * had it.
+ *
+ * The cap is on the list rather than on the panel body, so the counts, the
+ * coverage holes and the cap notice stay put and only the messages move. A
+ * reader scrolling a room should not lose the line telling them how much of it
+ * verified. */
+.split__main .msgs {
+  max-height: clamp(20rem, calc(100dvh - 24rem), 44rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 /* ------------------------------------------------------------- room search */
 
 /* In the panel header, as DESIGN.md asks: the list's own search belongs to the
@@ -156,6 +173,16 @@
   overflow-wrap: anywhere;
 }
 
+/* The twelve-bar strip: fixed width, so a room with four messages and a room
+ * with four hundred put it in the same place. */
+.rhead__strip {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 58px;
+  height: 16px;
+  align-self: center;
+}
+
 /* The one accent in the header: how many verified, climbing live as it checks. */
 .rhead__verified {
   color: var(--accent);
@@ -173,9 +200,19 @@
   list-style: none;
 }
 
+/* The row: a glyph, then a line of who and when, then the message itself in a
+ * bubble. The amendment's shape, in this site's palette.
+ *
+ * EVERYTHING LEFT-ALIGNED. The amendment asks the question and answers it: this
+ * is a log, not a conversation, and alternating sides would imply a
+ * correspondence between two parties that a room of forty does not have. */
 .msg {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 6px;
+  align-items: start;
   padding: 12px var(--pad-panel);
-  border-left: 2px solid var(--rule);
   border-bottom: 1px solid var(--s-divider);
 }
 
@@ -183,32 +220,71 @@
   border-bottom: 0;
 }
 
-.msg[data-verdict='verified'] {
-  border-left-color: var(--rule-strong);
-}
-
-.msg[data-verdict='failed'] {
-  border-left-color: var(--alarm);
-}
-
 .msg[data-verdict='checking'] {
   opacity: 0.6;
 }
 
+/* The column is there whether or not there is a mark to put in it, so every
+ * row's name starts at the same place. Empty means the `from` is not a
+ * did:key — which is most of them, and which the row already says in words. */
+.msg__mark {
+  grid-column: 1;
+  grid-row: 1;
+  /* Optically level with the cap height of the line beside it. */
+  padding-top: 1px;
+}
+
 .msg__head {
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   align-items: baseline;
   gap: var(--space-half);
+  margin: 0;
   font-size: var(--t-micro);
   color: var(--ink-faint);
   min-width: 0;
 }
 
+/* THE VERDICT IS STILL A MARGIN RATHER THAN A BADGE — it has moved from the
+ * row's outer edge to the bubble's, which is closer to the words it is about.
+ * Grey for verified, quieter for unsigned, --alarm for a proof that did not
+ * hold: a column of grey rules with one red one in it is readable at arm's
+ * length and keeps the common case out of the alarming register. */
+.msg__bubble {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 10px;
+  /* Against --s2, not against the ground: see --rule-bright in foolscap.css
+   * for why the two weights here are one step up from the ones a rule on the
+   * page ground would use. */
+  border-left: 2px solid var(--rule-strong);
+  background: var(--s2);
+}
+
+.msg[data-verdict='verified'] .msg__bubble {
+  border-left-color: var(--rule-bright);
+}
+
+/* The one row that takes an edge all the way round: a proof that did not hold
+ * is the thing a reader came here to find. */
+.msg[data-verdict='failed'] .msg__bubble {
+  border-top: 1px solid var(--alarm);
+  border-right: 1px solid var(--alarm);
+  border-bottom: 1px solid var(--alarm);
+  border-left-color: var(--alarm);
+}
+
 .msg__from {
   font-family: var(--mono);
   color: var(--ink-mid);
-  /* Truncated here; the whole value is in the title, and printed in full below
-   * wherever it is the thing being checked. */
+  /* Shortened in the middle by shortDid, not clipped at the end — the first
+   * twelve characters of every Ed25519 did:key are the same twelve characters.
+   * The CSS truncation stays as the backstop for a `from` that is a long name
+   * rather than a key. The whole value is in the title, and printed in full
+   * below wherever it is the thing being checked. */
   max-width: 24ch;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -239,7 +315,7 @@
 }
 
 .msg__text {
-  margin: 0.35rem 0 0;
+  margin: 0;
   font-size: var(--t-small);
   line-height: 1.6;
   color: var(--ink);
@@ -265,10 +341,12 @@
 .msg__proof {
   display: grid;
   gap: 0.15rem;
-  margin-top: 0.4rem;
+  margin-top: 0.5rem;
   padding: var(--space-half);
   border-radius: var(--r-inner);
-  background: var(--s2);
+  /* Inside a bubble that is already --s2, so this one steps to the opaque
+   * level rather than repeating the surface it sits on. */
+  background: var(--s3);
   font-family: var(--mono);
   font-size: var(--t-micro);
   line-height: 1.55;
@@ -345,6 +423,6 @@
   }
 
   .msg__from {
-    max-width: 16ch;
+    max-width: 18ch;
   }
 }

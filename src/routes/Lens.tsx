@@ -27,9 +27,12 @@ import { useMemo, useState } from 'react';
 import { Shell } from '../components/Shell';
 import { Panel, PaneState, CapNotice } from '../components/Panel';
 import { Questions } from '../components/Questions';
+import { Glyph } from '../components/Glyph';
+import { BarColumn } from '../components/Card';
+import { looksLikeDid } from '../lib/did.ts';
 import { formatAge, num, plural } from '../format.ts';
 import { ROOMS, WATCHED_ROOMS } from '../lib/contest.ts';
-import { formatBytes, matchRooms, type Reading } from '../lib/lens.ts';
+import { formatBytes, matchRooms, shortDid, type Reading } from '../lib/lens.ts';
 import type { Message } from '../lib/technocore.ts';
 import { useLens, useRoomSurvey } from '../useLens.ts';
 
@@ -180,7 +183,11 @@ export default function Lens() {
               />
             ) : (
               <>
-                <RoomFacts feed={feed} />
+                {/* Not while the pane is still loading: a row reading "0 of 0
+                    verified, 0 unsigned, 0 failed" above the words "Reading
+                    technocore…" is three facts that are not facts yet, and it
+                    made the loading state look like a result. */}
+                {feed.counts.read > 0 && <RoomFacts feed={feed} />}
 
                 {feed.error && (
                   <PaneState
@@ -190,14 +197,17 @@ export default function Lens() {
                   />
                 )}
 
-                {feed.gaps.map((gap, i) => (
-                  <p className="lgap" key={`${gap.kind}-${i}`}>
-                    {gap.kind === 'rotated'
-                      ? `The ring had already dropped its oldest lines when Foolscap arrived: it starts at seq ${num.format(gap.firstSeq ?? 0)}. Nothing is wrong — it bounds what can be shown, and nothing can be said about what went before.`
-                      : `${plural(gap.missing ?? 0, 'message')} rotated out while Foolscap was following this room. They are absent, not unverified: nothing at all can be said about them.`}
-                  </p>
-                ))}
+                <Gaps gaps={feed.gaps} />
 
+                {/* NOTHING READ YET, AND FOUR REASONS IT MIGHT BE. The order
+                    matters: the filter is showing an empty result, the read is
+                    still in flight, the read failed, or the ring really is
+                    empty. With the network down this used to render "That room
+                    could not be read" and then, directly beneath it, "Nothing
+                    in the retained ring" — a claim about the room made on the
+                    strength of a request that never arrived. An unreachable
+                    server and an empty ring look nothing alike, so the failure
+                    above stands alone and this says nothing. */}
                 {shown.length === 0 ? (
                   failuresOnly ? (
                     <PaneState
@@ -212,7 +222,7 @@ export default function Lens() {
                     />
                   ) : feed.status === 'starting' || feed.status === 'backfilling' ? (
                     <PaneState state="loading" title={`Reading ${room}…`} />
-                  ) : (
+                  ) : feed.error ? null : (
                     <PaneState
                       state="empty"
                       title="Nothing in the retained ring."
@@ -248,12 +258,14 @@ export default function Lens() {
       </div>
 
       <div className="lens__tail">
-        <p className="lnote">
-          Every signature above was checked here, in this browser, against the key the message
-          names — nothing was taken from a server. Lens only reads: it has no write path and asks
-          for no key. To sign and post something, use the Bench.
-        </p>
-
+        {/* CUT AT THE CRITIQUE STEP: three lines of grey prose stood here saying
+            that every signature was checked in the browser, that Lens holds no
+            key, and that signing lives on the Bench. The footer directly below
+            says the first two on every page of the site — "it holds no key,
+            asks for none, and posts nothing on your behalf" — and the last of
+            the questions says the third. Three sentences competing with the
+            question block for the same reader, two inches above a footer that
+            had already made the claim. */}
         <Questions
           title="Who actually said what in this room?"
           items={[
@@ -267,6 +279,26 @@ export default function Lens() {
                   that arithmetic, not a server. It proves that key wrote those bytes — and
                   nothing else: not who holds the key, not that they are honest.
                 </p>
+              ),
+            },
+            {
+              q: 'What are the little square marks beside some messages?',
+              a: (
+                <>
+                  <p>
+                    A drawing of the key. Every did:key is 32 bytes, and the first sixteen of
+                    them decide a small symmetric field of squares, so the same key always draws
+                    the same mark and you can recognise a participant by shape before you have
+                    read a character of base58. Rows with no mark carry no key — their{' '}
+                    <span className="mono">from</span> is just a name.
+                  </p>
+                  <p>
+                    It is not identification and nothing here treats it as any. Fifteen cells is
+                    fifteen bits, so two different keys can draw the same mark; the mark is a
+                    memory aid, and the did:key printed beside it is the thing that decides who
+                    wrote something.
+                  </p>
+                </>
               ),
             },
             {
@@ -341,10 +373,95 @@ export default function Lens() {
   );
 }
 
+/**
+ * The holes in coverage, collapsed by kind.
+ *
+ * ONE LINE PER KIND OF HOLE, NOT ONE PER HOLE. A busy room drops lines
+ * repeatedly, and this rendered a paragraph for each: three identical sentences
+ * with different numbers in them, stacked, on a page whose whole argument is
+ * that a reader should be able to see what is missing. A warning repeated
+ * verbatim three times is a warning nobody finishes reading.
+ *
+ * The three kinds mean genuinely different things and keep their own lines:
+ *
+ *   rotated      the ring had already dropped lines before Foolscap arrived.
+ *                It bounds coverage; it does not lose anything that was held.
+ *   missed       lines went past while following. This is the one that costs
+ *                evidence, and the count is the running total.
+ *   regenerated  the room's ring restarted. Sequence numbers before and after
+ *                are not comparable, which "rotated out" would have implied
+ *                they were — this branch used to fall into that sentence.
+ */
+function Gaps({ gaps }: { gaps: Array<{ kind: string; missing: number | null; firstSeq?: number | null }> }) {
+  const rotated = gaps.find((gap) => gap.kind === 'rotated');
+  const missed = gaps.filter((gap) => gap.kind === 'missed');
+  const regenerated = gaps.filter((gap) => gap.kind === 'regenerated');
+  const missedTotal = missed.reduce((total, gap) => total + (gap.missing ?? 0), 0);
+
+  return (
+    <>
+      {rotated && (
+        <p className="lgap">
+          The ring had already dropped its oldest lines when Foolscap arrived: it starts at seq{' '}
+          {num.format(rotated.firstSeq ?? 0)}. Nothing is wrong — it bounds what can be shown, and
+          nothing can be said about what went before.
+        </p>
+      )}
+
+      {missed.length > 0 && (
+        <p className="lgap">
+          {plural(missedTotal, 'message')} rotated out while Foolscap was following this room
+          {missed.length > 1 ? `, in ${plural(missed.length, 'separate gap')}` : ''}. They are
+          absent, not unverified: nothing at all can be said about them.
+        </p>
+      )}
+
+      {regenerated.length > 0 && (
+        <p className="lgap">
+          The room&rsquo;s ring restarted while Foolscap was following it
+          {regenerated.length > 1 ? ` (${plural(regenerated.length, 'time')})` : ''}. Sequence
+          numbers began again from the start, so what came before is not comparable with what
+          comes after, and nothing was carried across.
+        </p>
+      )}
+    </>
+  );
+}
+
+/**
+ * The last twelve verdicts, in the order they arrived.
+ *
+ * The amendment's "12-bar column of the room's recent verified/unsigned/failed
+ * mix", drawn where the data exists rather than on a card for a room nobody has
+ * opened yet. It is a miniature of the column of left-edge rules beside the
+ * messages themselves and uses exactly the same three tones, so it says the one
+ * thing a count cannot: whether the failures are a burst or a scatter.
+ *
+ * Under two messages there is no shape to see, so it does not draw.
+ */
+function RecentStrip({ feed }: { feed: ReturnType<typeof useLens> }) {
+  const recent = feed.messages.slice(-12);
+  if (recent.length < 2) return null;
+
+  const tone = recent.map((message) => {
+    const verdict = feed.readings.get(message.seq)?.verdict;
+    if (verdict === 'failed') return 'bad' as const;
+    if (verdict === 'verified') return 'ok' as const;
+    return 'dim' as const;
+  });
+
+  return (
+    <span className="rhead__strip" title="The last twelve messages, in order: bright where a signature verified, red where one did not.">
+      <BarColumn values={recent.map(() => 1)} tone={tone} height={16} />
+    </span>
+  );
+}
+
 /** The counts, in the panel body rather than the header: there are five of them. */
 function RoomFacts({ feed }: { feed: ReturnType<typeof useLens> }) {
   return (
     <p className="lgap rhead" style={{ borderLeftColor: 'transparent' }}>
+      <RecentStrip feed={feed} />
       <span>
         <span className="rhead__verified">{num.format(feed.counts.verified)}</span> of{' '}
         {num.format(feed.counts.read)} verified
@@ -373,12 +490,21 @@ function Row({ message, reading }: { message: Message; reading: Reading | null }
 
   return (
     <article className="msg" data-verdict={verdict}>
+      {/* ONLY WHERE THERE IS A KEY TO DRAW. Most `from` values are names
+          somebody typed, and Glyph would happily draw the empty ground for one
+          — a column of blank tiles beside every unsigned row, which says
+          nothing the word "unsigned" two inches away does not say better. The
+          column itself stays, so the names all start in the same place. */}
+      <div className="msg__mark">
+        {looksLikeDid(from) && <Glyph did={from} size={20} />}
+      </div>
+
       <p className="msg__head">
         <span
           className={`msg__from${reading?.claimsKey ? ' msg__from--key' : ''}`}
           title={from}
         >
-          {from}
+          {shortDid(from)}
         </span>
         <span className="msg__state">{verdict === 'verified' ? 'verified' : verdict}</span>
         <span className="msg__time">
@@ -386,17 +512,19 @@ function Row({ message, reading }: { message: Message; reading: Reading | null }
         </span>
       </p>
 
-      <p className="msg__text">{message.text}</p>
+      <div className="msg__bubble">
+        <p className="msg__text">{message.text}</p>
 
-      {reading?.note && <p className="msg__note">{reading.note}</p>}
+        {reading?.note && <p className="msg__note">{reading.note}</p>}
 
-      {failed && (
-        <div className="msg__proof">
-          <span>did: {from}</span>
-          <span>nonce: {message.nonce ?? '(none)'}</span>
-          <span>sig: {message.sig ?? '(none)'}</span>
-        </div>
-      )}
+        {failed && (
+          <div className="msg__proof">
+            <span>did: {from}</span>
+            <span>nonce: {message.nonce ?? '(none)'}</span>
+            <span>sig: {message.sig ?? '(none)'}</span>
+          </div>
+        )}
+      </div>
     </article>
   );
 }

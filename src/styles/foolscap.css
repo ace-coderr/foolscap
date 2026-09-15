@@ -119,6 +119,11 @@
   /* structure */
   --rule: rgba(var(--surface-tint), 0.1);
   --rule-strong: rgba(var(--surface-tint), 0.18);
+  /* A third weight, for a mark that has to read against --s2 rather than
+   * against the ground. --rule-strong at 0.18 is a tenth of a step above an
+   * --s2 surface at 0.08, which is not a mark, it is a rumour: the verified
+   * rule down the side of a message bubble disappeared into the bubble. */
+  --rule-bright: rgba(var(--surface-tint), 0.4);
   /* The wallpaper grid. Half the weight of a rule, so a divider still divides. */
   --grid-line: rgba(var(--surface-tint), 0.06);
 
@@ -2718,7 +2723,13 @@ body:not(.on-black) .footer {
   flex: 1 1 0;
   min-width: 2px;
   border-radius: 1px;
-  background: var(--rule-strong);
+  /* The same two greys the message rules use, so a bar and a rule mean the
+   * same thing in the same colour. */
+  background: var(--rule-bright);
+}
+
+.bars__bar--dim {
+  background: var(--rule);
 }
 
 .bars__bar--warn {

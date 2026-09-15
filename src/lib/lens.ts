@@ -275,3 +275,27 @@ export function formatBytes(bytes: number | null | undefined): string | null {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KiB`;
   return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MiB`;
 }
+
+/**
+ * A did:key short enough for a row, cut in the middle rather than the end.
+ *
+ * `did:key:z6Mk` is the first twelve characters of EVERY Ed25519 did:key on
+ * this network, so an end-truncated one at a phone width showed the reader the
+ * part that is identical for everybody and hid the part that is not. At 375 the
+ * name column was rendering "did:key:z6M…", which distinguishes nothing.
+ *
+ * So: drop the scheme, keep the head and the tail of the multibase, and put an
+ * ellipsis between them. Anything that is not a did:key comes back untouched —
+ * a `from` is usually a name somebody typed, and a name is not a hash with a
+ * boring prefix.
+ *
+ * NEVER WHERE THE DID IS THE EVIDENCE. This is for the row's byline, which sits
+ * next to a glyph and above the message; the full value is on the element's
+ * title and is printed complete under any row whose proof did not hold.
+ */
+export function shortDid(value: string, head = 7, tail = 6): string {
+  if (!value.startsWith('did:key:z')) return value;
+  const body = value.slice('did:key:'.length);
+  if (body.length <= head + tail + 1) return body;
+  return `${body.slice(0, head)}…${body.slice(-tail)}`;
+}

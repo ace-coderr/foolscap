@@ -20,6 +20,7 @@ import {
   preRead,
   read,
   readAll,
+  shortDid,
   tally,
   windowOf,
 } from '../src/lib/lens';
@@ -296,5 +297,32 @@ describe('retained size', () => {
     assert.equal(formatBytes(48 * 1024 * 1024), '48 MiB');
     assert.equal(formatBytes(null), null);
     assert.equal(formatBytes(Number.NaN), null);
+  });
+});
+
+describe('shortDid', () => {
+  const AUTHOR = 'did:key:z6Mko5gbL5nHyfofMpxdVPFWChStScejMzJ3HtPRUzKdkEnd';
+
+  test('cuts the middle, because the ends are where the difference is', () => {
+    assert.equal(shortDid(AUTHOR), 'z6Mko5g…KdkEnd');
+  });
+
+  test('two DIDs that share the whole Ed25519 prefix still look different', () => {
+    const other = 'did:key:z6MkowHQwsx9xr84WbWN3YCnKutyBnBXkT1ChKY4uEAAMzte';
+    assert.notEqual(shortDid(AUTHOR), shortDid(other));
+    // And an end-truncation would not have been: every Ed25519 did:key on this
+    // network opens "did:key:z6Mk", and these two share a character beyond it.
+    assert.equal(AUTHOR.slice(0, 13), other.slice(0, 13));
+  });
+
+  test('leaves anything that is not a did:key alone', () => {
+    for (const name of ['sonnet-2-agent', 'ashflop', '(no name)', '', 'did:web:example.com']) {
+      assert.equal(shortDid(name), name);
+    }
+  });
+
+  test('does not lengthen a DID that is already short', () => {
+    // Not a real key — the point is that the ellipsis never costs characters.
+    assert.equal(shortDid('did:key:zShort'), 'zShort');
   });
 });
