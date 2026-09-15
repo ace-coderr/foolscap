@@ -1,4 +1,5 @@
-// vaultStore.ts — the one place on this site that writes to localStorage.
+// vaultStore.ts — the larger of the two places on this site that write to
+// localStorage. The other is src/theme.ts, which keeps one of two words.
 //
 // SHELL.md says "No localStorage or sessionStorage", and that rule was right
 // for every page before this one: nothing else here has state worth keeping

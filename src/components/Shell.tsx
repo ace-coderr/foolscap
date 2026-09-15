@@ -15,6 +15,8 @@ import { startPointerField } from '../pointer';
 import { Link, NavLink } from 'react-router-dom';
 import { PAGES, pageById } from '../pages';
 import { Lockup } from './Mark';
+import { ThemeSwitch } from './ThemeSwitch';
+import { useTheme } from '../theme';
 
 /**
  * The author's own key, published as authorship.
@@ -99,6 +101,7 @@ export function HeroNav({
   const [floating, setFloating] = useState(false);
   const [open, setOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
+  const { theme, choose } = useTheme();
 
   useEffect(() => {
     const onScroll = () =>
@@ -169,11 +172,28 @@ export function HeroNav({
 
       <ul className="hero__nav-links" id="hero-nav-links" data-open={open ? 'true' : 'false'}>
         <NavItems currentId={currentId} className="hero__nav-link" onNavigate={() => setOpen(false)} />
+        {/* Shown only inside the open menu panel, which is only a thing at phone
+            widths in the floating state — the one arrangement where the switch
+            has nowhere else to be. See the note in useTheme. */}
+        <li className="hero__nav-themeitem">
+          <ThemeSwitch theme={theme} onChoose={choose} />
+        </li>
       </ul>
 
-      <Link className="hero__pill hero__pill--solid hero__nav-action" to={action.to} data-magnetic>
-        {action.label}
-      </Link>
+      {/* One grid cell holding both, rather than a fifth column: the nav is a
+          three-column grid with named areas at narrow, and a new top-level child
+          would have landed in the links column and pushed the action onto a row
+          of its own.
+
+          The switch comes first, so the action stays the last thing in the row
+          on every page and at every width — it is the one thing the nav is
+          asking you to do. */}
+      <div className="hero__nav-right">
+        <ThemeSwitch theme={theme} onChoose={choose} />
+        <Link className="hero__pill hero__pill--solid hero__nav-action" to={action.to} data-magnetic>
+          {action.label}
+        </Link>
+      </div>
     </nav>
   );
 }

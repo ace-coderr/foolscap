@@ -98,7 +98,7 @@
 }
 
 .rooms2__row:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(var(--surface-tint), 0.03);
   color: var(--ink);
 }
 

@@ -29,8 +29,8 @@
    * the bottom of the fold. */
   height: 100dvh;
   min-height: 33rem;
-  background: #000;
-  color: #fff;
+  background: var(--bg);
+  color: var(--ink);
   font-family: var(--hero-body);
   font-weight: 300;
   /* Its own stacking context, so the layer order below is self-contained. */
@@ -39,7 +39,7 @@
 }
 
 .landing {
-  background: #000;
+  background: var(--bg);
   /* Keeps the cursor glow's blending inside the page. */
   isolation: isolate;
 
@@ -50,7 +50,7 @@
    *
    * Structure below the hero. Twice the weight of the grid, so a divider reads
    * as a divider and the grid stays wallpaper. */
-  --about-rule: rgba(255, 255, 255, 0.1);
+  --about-rule: rgba(var(--surface-tint), 0.1);
   --about-quiet: #8a8a8a;
   --about-label: #a8a8a8;
 }
@@ -58,7 +58,7 @@
 /* Body carries a gutter and a navy ground for every other page. The hero is
  * full bleed and black; the class is added and removed by the route. */
 body.on-black {
-  background: #000;
+  background: var(--bg);
   padding: 0;
 }
 
@@ -79,18 +79,18 @@ body.on-black {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.085) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.085) 1px, transparent 1px);
+    linear-gradient(to right, rgba(var(--surface-tint), 0.085) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(var(--surface-tint), 0.085) 1px, transparent 1px);
   background-size: inherit;
   -webkit-mask-image: radial-gradient(
     circle 210px at var(--lx, -9999px) var(--ly, -9999px),
-    #000 0%,
+    rgba(0, 0, 0, 1) 0%,
     rgba(0, 0, 0, 0.55) 45%,
     transparent 78%
   );
   mask-image: radial-gradient(
     circle 210px at var(--lx, -9999px) var(--ly, -9999px),
-    #000 0%,
+    rgba(0, 0, 0, 1) 0%,
     rgba(0, 0, 0, 0.55) 45%,
     transparent 78%
   );
@@ -137,10 +137,10 @@ body.on-black {
   pointer-events: none;
   background: radial-gradient(
     circle,
-    rgba(255, 255, 255, 0.09) 0%,
-    rgba(255, 255, 255, 0.055) 26%,
-    rgba(255, 255, 255, 0.018) 45%,
-    rgba(255, 255, 255, 0) 64%
+    rgba(var(--surface-tint), 0.09) 0%,
+    rgba(var(--surface-tint), 0.055) 26%,
+    rgba(var(--surface-tint), 0.018) 45%,
+    rgba(var(--surface-tint), 0) 64%
   );
 }
 
@@ -153,7 +153,7 @@ body.on-black {
   aspect-ratio: 1;
   z-index: 3;
   pointer-events: none;
-  color: rgba(255, 255, 255, 0.16);
+  color: rgba(var(--surface-tint), 0.16);
   overflow: visible;
 }
 
@@ -182,7 +182,7 @@ body.on-black {
   line-height: 0.88;
   letter-spacing: -0.035em;
   text-transform: uppercase;
-  color: #fff;
+  color: var(--ink);
   white-space: nowrap;
 }
 
@@ -265,7 +265,7 @@ body.on-black {
   align-items: center;
   gap: var(--hero-gutter);
   padding: clamp(1rem, 2.1vw, 1.6rem) var(--hero-gutter);
-  background: rgba(10, 10, 10, 0);
+  background: rgba(var(--bg-rgb), 0);
   border: 1px solid transparent;
   border-radius: 0;
   transform: translateY(0);
@@ -284,10 +284,10 @@ body.on-black {
   transform: translateY(16px);
   padding: 0.5rem 0.55rem 0.5rem 1.15rem;
   gap: clamp(0.6rem, 1.4vw, 1.2rem);
-  background: rgba(10, 10, 10, 0.85);
+  background: rgba(var(--bg-rgb), 0.85);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(var(--surface-tint), 0.1);
   border-radius: 999px;
 }
 
@@ -363,12 +363,12 @@ body.on-black {
 }
 
 .hero__nav-toggle:hover {
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.3);
+  color: var(--ink);
+  border-color: rgba(var(--surface-tint), 0.3);
 }
 
 .hero__nav-toggle:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
@@ -376,13 +376,13 @@ body.on-black {
  * so this nav and the shell's cannot disagree about what the name looks like. */
 .hero__mark {
   justify-self: start;
-  color: #fff;
+  color: var(--ink);
   text-decoration: none;
 }
 
 .hero__mark:hover {
   text-decoration: none;
-  color: #fff;
+  color: var(--ink);
 }
 
 .hero__nav-links {
@@ -409,7 +409,7 @@ body.on-black {
 }
 
 .hero__nav-link:hover {
-  color: #fff;
+  color: var(--ink);
   text-decoration: none;
 }
 
@@ -424,7 +424,7 @@ body.on-black {
 }
 
 .hero__nav-link--soon {
-  color: rgba(255, 255, 255, 0.26);
+  color: rgba(var(--surface-tint), 0.26);
   cursor: default;
 }
 
@@ -451,8 +451,26 @@ body.on-black {
   content: none;
 }
 
-.hero__nav-action {
+/* The right of the nav: the theme switch and the one action, in one grid cell.
+ * See the note in Shell.tsx for why they are wrapped rather than placed as two
+ * more children of the grid. */
+.hero__nav-right {
   justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: clamp(0.5rem, 1.1vw, 0.85rem);
+  min-width: 0;
+}
+
+.hero__nav-action {
+  flex: 0 0 auto;
+}
+
+/* The nav renders a second switch inside the links list, for the one layout
+ * that has nowhere else to put it — narrow and floating, where the links are a
+ * panel hanging off a pill. Everywhere else it is not there at all. */
+.hero__nav-themeitem {
+  display: none;
 }
 
 /* ------------------------------------------------------------------- pills */
@@ -482,22 +500,22 @@ body.on-black {
 }
 
 .hero__pill--solid {
-  background: #fff;
-  color: #000;
-  border: 1px solid #fff;
+  background: var(--ink);
+  color: var(--bg);
+  border: 1px solid var(--ink);
 }
 
 /* Inverted, not dimmed: the same pill with its two colours swapped. */
 .hero__pill--solid:hover {
   text-decoration: none;
-  background: #000;
-  border-color: #fff;
-  color: #fff;
+  background: var(--bg);
+  border-color: var(--ink);
+  color: var(--ink);
 }
 
 .hero__pill--ghost {
   background: transparent;
-  color: #fff;
+  color: var(--ink);
   border: 1px solid var(--hero-edge);
   padding: 0.5rem 0.95rem;
   font-size: 11.5px;
@@ -505,9 +523,9 @@ body.on-black {
 
 .hero__pill--ghost:hover {
   text-decoration: none;
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink);
+  border-color: rgba(var(--surface-tint), 0.3);
+  background: rgba(var(--surface-tint), 0.05);
 }
 
 .hero__pill:focus-visible {
@@ -541,7 +559,7 @@ body.on-black {
 }
 
 .hero__copy-strong {
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(var(--surface-tint), 0.92);
 }
 
 .hero__copy .hero__pill {
@@ -623,7 +641,7 @@ body.on-black {
   font-size: 2rem;
   line-height: 1;
   letter-spacing: -0.015em;
-  color: #fff;
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 
@@ -701,21 +719,74 @@ body.on-black {
   }
 
   /* The grid stays; everything inside it gives way. */
+  /* THE THEME SWITCH LEAVES THE RIGHT-HAND GROUP HERE. Measured at 375: the
+   * wordmark is 125, the action pill 155 and the switch 107, in 343 of content
+   * box — so the three of them on one row overlapped the wordmark by sixty
+   * pixels. `display: contents` drops the wrapper out of the layout so its two
+   * children can be placed separately, which is the whole reason the wrapper is
+   * allowed to exist at all: it is a grouping for the wide layout and nothing
+   * more.
+   *
+   * IT GETS ITS OWN ROW, which was the second attempt. Sharing the links row
+   * looked cheaper and was not: taking 94px off that row wrapped the six links
+   * from one line to three and added 62px to the nav, where a row of its own
+   * costs 42. A row that is honest about being a row beat a row that was
+   * pretending to be spare space. */
+  .hero__nav-right {
+    display: contents;
+  }
+
   .hero__nav {
     grid-template-columns: 1fr auto;
     grid-template-areas:
       "mark action"
-      "links links";
+      "links links"
+      "theme theme";
     row-gap: 0.9rem;
   }
 
+  .hero__nav .tswitch {
+    grid-area: theme;
+    justify-self: center;
+  }
+
+  /* Tighter here, because it is sharing a row rather than sitting at the end of
+   * one. The two names stay whole — an abbreviated switch would need explaining
+   * in exactly the place there is no room to explain it. */
+  .hero__nav .tswitch__opt {
+    padding: 0 0.5rem;
+    letter-spacing: 0.07em;
+  }
+
   /* Floating on a phone: the same pill, with the six links behind a button
-   * because they will not fit in it. */
+   * because they will not fit in it.
+   *
+   * AND NEITHER DOES THE SWITCH. Measured at 375: the pill's content box is
+   * 321px, and the ring at 17, the menu button at 64, the switch at 94 and the
+   * action at 161 want 365 before the gaps. It was tried in the bar first and
+   * the action hung 37px outside the pill.
+   *
+   * So at this one size, in this one state, the switch moves into the menu
+   * panel — which is where everything else that does not fit in the pill
+   * already lives. It is not hidden and it is not dropped: the button that
+   * reveals the links reveals it too. */
   .hero__nav[data-floating='true'] {
     grid-template-columns: auto 1fr auto;
     grid-template-areas: "mark toggle action";
     row-gap: 0;
     padding: 0.45rem 0.5rem 0.45rem 0.9rem;
+  }
+
+  .hero__nav[data-floating='true'] .hero__nav-right .tswitch {
+    display: none;
+  }
+
+  /* In the panel, as its own row under the six links, with the rule above it
+   * that separates every other row from the one before. */
+  .hero__nav[data-floating='true'] .hero__nav-links[data-open='true'] .hero__nav-themeitem {
+    display: flex;
+    justify-content: center;
+    padding-top: 0.7rem;
   }
 
   .hero__nav[data-floating='true'] .hero__nav-toggle {
@@ -789,8 +860,8 @@ body.on-black {
      * a backdrop root, so a filter on a descendant has nothing left to sample —
      * it is inert here, and at 0.92 the hero's card read straight through the
      * menu. The panel carries the pill's fill taken to solid instead. */
-    background: #0a0a0a;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--s3);
+    border: 1px solid rgba(var(--surface-tint), 0.1);
     border-radius: 20px;
   }
 
@@ -813,7 +884,7 @@ body.on-black {
     grid-area: mark;
   }
 
-  .hero__nav-action {
+  .hero__nav-right {
     grid-area: action;
   }
 
@@ -918,8 +989,8 @@ body.on-black {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  background: #000;
-  color: #fff;
+  background: var(--bg);
+  color: var(--ink);
   font-family: var(--hero-body);
   font-weight: 300;
   padding: clamp(3.5rem, 11vh, 7.5rem) 0 clamp(3.5rem, 10vh, 6.5rem);
@@ -969,7 +1040,7 @@ body.on-black {
   font-size: clamp(2rem, 5vw, 3.5rem);
   line-height: 1.04;
   letter-spacing: -0.025em;
-  color: #fff;
+  color: var(--ink);
 }
 
 /* Two lines at desktop, and the extra room beneath that a two-line heading
@@ -1012,7 +1083,7 @@ body.on-black {
   grid-row: 2;
   font-size: 15px;
   line-height: 1.66;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(var(--surface-tint), 0.82);
 }
 
 .about__copy p {
@@ -1095,7 +1166,7 @@ body.on-black {
   font-size: clamp(2.5rem, 5vw, 3.75rem);
   line-height: 1;
   letter-spacing: -0.03em;
-  color: #fff;
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1139,7 +1210,7 @@ body.on-black {
   border-top: 1px solid var(--about-rule);
   font-size: 20px;
   line-height: 1.45;
-  color: #fff;
+  color: var(--ink);
 }
 
 /* ------------------------------------------------------------------ narrow */
@@ -1195,8 +1266,8 @@ body.on-black {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  background: #000;
-  color: #fff;
+  background: var(--bg);
+  color: var(--ink);
   font-family: var(--hero-body);
   font-weight: 300;
   border-top: 1px solid var(--hero-line);
@@ -1255,7 +1326,7 @@ body.on-black {
 /* Only where there is something to open. A card that lit up and then did
  * nothing would be a worse answer than the flat one. */
 .tools__card[data-available='true']:hover {
-  border-color: rgba(255, 255, 255, 0.18);
+  border-color: rgba(var(--surface-tint), 0.18);
 }
 
 .tools__card[data-available='true']:hover .tools__name {
@@ -1275,7 +1346,7 @@ body.on-black {
   line-height: 1.1;
   letter-spacing: 0.01em;
   text-transform: uppercase;
-  color: #fff;
+  color: var(--ink);
 }
 
 .tools__question {

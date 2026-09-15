@@ -138,7 +138,7 @@
 
 /* An OPAQUE ground, not glass.
  *
- * --paper-sunk is rgba(255,255,255,0.03): over the page's black it reads as a
+ * --paper-sunk is rgba(var(--surface-tint), 0.03): over the page's black it reads as a
  * dark inset, and anywhere the browser reuses a control's colours for chrome it
  * resolves against whatever the OS puts behind it. That is how /bench's shape
  * picker ended up white-on-white. Over black these are visually identical to
@@ -231,7 +231,7 @@
 }
 
 .bbutton:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(var(--surface-tint), 0.06);
   border-color: var(--ink-faint);
 }
 

@@ -170,7 +170,7 @@
   text-align: center;
   font-size: var(--t-h2);
   line-height: 1.4;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(var(--surface-tint), 0.75);
 }
 
 /* The track: a hairline the sweep runs along, so the motion has an extent and
@@ -464,7 +464,7 @@
 }
 
 .nratio__held {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(var(--surface-tint), 0.14);
   border-right: 1px solid var(--rule-strong);
 }
 
@@ -542,7 +542,7 @@
 
 .nwatched__room {
   padding: 0.3rem 0.7rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(var(--surface-tint), 0.03);
   border: 1px solid var(--edge);
   border-radius: 999px;
   font-size: var(--t-small);
@@ -636,9 +636,9 @@
  * without it the corners cut through the fills. */
 .ntable {
   margin-top: var(--space);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(var(--surface-tint), 0.1);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(var(--surface-tint), 0.03);
   overflow: hidden;
 }
 
@@ -673,7 +673,7 @@
    * read straight through it, so the page's own ground goes underneath — two
    * layers rather than one hand-mixed literal that would drift from the tint. */
   background-color: var(--void);
-  background-image: linear-gradient(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05));
+  background-image: linear-gradient(rgba(var(--surface-tint), 0.05), rgba(var(--surface-tint), 0.05));
 }
 
 /* The way out, inside the panel and outside the scroll window. A control that
@@ -756,7 +756,7 @@
 
 .nholes th {
   padding: var(--space-half) var(--space);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--surface-tint), 0.05);
   border-bottom: 1px solid var(--rule);
   color: var(--ink-faint);
   font-family: var(--display);
@@ -782,11 +782,11 @@
  * another form, and the stripe is what lets an eye track one room across five
  * columns. */
 .nholes tbody tr:nth-child(even) {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(var(--surface-tint), 0.02);
 }
 
 .nholes tbody tr:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--surface-tint), 0.05);
 }
 
 .nholes td:first-child {
@@ -934,11 +934,11 @@
 
 /* The holes table's stripe and lift, on the same values. */
 .nanchor:nth-child(even) {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(var(--surface-tint), 0.02);
 }
 
 .nanchor:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--surface-tint), 0.05);
 }
 
 .nanchor__day {
@@ -1103,10 +1103,10 @@
     /* Over the page, under the nav at 45. */
     z-index: 30;
     padding: 0.8rem 1.35rem;
-    background: rgba(10, 10, 10, 0.85);
+    background: rgba(var(--bg-rgb), 0.85);
     backdrop-filter: blur(18px);
     -webkit-backdrop-filter: blur(18px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(var(--surface-tint), 0.1);
     border-radius: 999px;
     color: var(--ink);
     font-family: var(--body);

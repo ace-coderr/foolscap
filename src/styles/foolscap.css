@@ -34,20 +34,40 @@
    * reads as one sheet of glass over one ground. --paper-sunk and --paper-raised
    * keep their names because half the shell is written against them; they are
    * now the same glass the landing's cards are made of. */
-  --void: #000000;
-  --paper: #000000;
-  --paper-sunk: rgba(255, 255, 255, 0.03);
-  --paper-raised: rgba(255, 255, 255, 0.05);
+  /* A THEME IS TWO VALUES AND AN ACCENT. Everything below is expressed in terms
+   * of them, so a second palette is a second declaration block rather than a
+   * second stylesheet.
+   *
+   *   --bg            the ground
+   *   --surface-tint  the tint every surface and every ink is made of, held as
+   *                   a bare rgb triple so it can be spent at any alpha
+   *
+   * See [data-theme='flop'] below. A rule that hard-codes 255, 255, 255 is a
+   * rule that will be wrong in one of the two themes — which is why the change
+   * that introduced this replaced every literal in every stylesheet rather than
+   * most of them, and why a new one is a bug rather than a shortcut. */
+  /* The ground is held as a triple too, and --bg derived from it, so the one
+   * place that needs it at an alpha — the floating nav pill, which is the
+   * ground at 0.85 over whatever it is passing — cannot drift from the ground
+   * itself. It was a literal rgba(var(--bg-rgb), 0.85) in three stylesheets. */
+  --bg-rgb: 0, 0, 0;
+  --bg: rgb(var(--bg-rgb));
+  --surface-tint: 255, 255, 255;
 
-  --glass: rgba(255, 255, 255, 0.04);
-  --edge: rgba(255, 255, 255, 0.1);
+  --void: var(--bg);
+  --paper: var(--bg);
+  --paper-sunk: rgba(var(--surface-tint), 0.03);
+  --paper-raised: rgba(var(--surface-tint), 0.05);
+
+  --glass: rgba(var(--surface-tint), 0.04);
+  --edge: rgba(var(--surface-tint), 0.1);
 
   /* text — white at an opacity, so it sits on the black ground predictably and
    * needs no per-surface adjustment. These are the landing's greys exactly. */
-  --ink: #ffffff;
-  --ink-mid: rgba(255, 255, 255, 0.75);
-  --ink-faint: rgba(255, 255, 255, 0.52);
-  --grey-dim: rgba(255, 255, 255, 0.52);
+  --ink: rgb(var(--surface-tint));
+  --ink-mid: rgba(var(--surface-tint), 0.75);
+  --ink-faint: rgba(var(--surface-tint), 0.52);
+  --grey-dim: rgba(var(--surface-tint), 0.52);
 
   /* surfaces — four levels, and nothing else.
    *
@@ -58,30 +78,49 @@
    * --s3 IS OPAQUE AND ALWAYS OPAQUE. A translucent surface floating over
    * content is how /bench's listbox became white-on-white, and it is how every
    * such bug starts: glass resolves against whatever is behind it, and what is
-   * behind a popover is not the page. */
+   * behind a popover is not the page.
+   *
+   * --s1 AND --s-border WERE QUIETER, at 0.025 and 0.09, and the panels built on
+   * them read as barely there: the amendment's "the panels are too quiet" is
+   * exactly right, and a container you have to look for is not doing the job a
+   * container exists to do. Raised to 0.04 and 0.12, which is the smallest step
+   * that makes a panel's edge legible across the whole page rather than only
+   * where it happens to sit over the grid. */
+   * AND --s2 HAD TO MOVE WITH IT, which the amendment does not say and the
+   * screen does. Raising --s1 to 0.04 left one hundredth of an opacity step
+   * between it and --s2 at 0.05, so a header on a panel, a selected row in a
+   * list and a visual block inside a card were all separated from their own
+   * container by a difference no eye can see — three levels collapsed into two.
+   * At 0.08 the gap between the levels is the same size as the gap from the
+   * ground to the first one, which is what makes the set read as a set. Text on
+   * it is still 5.0:1 at --ink-faint, the tightest pairing on the site. */
   --s0: transparent;
-  --s1: rgba(255, 255, 255, 0.025);
-  --s2: rgba(255, 255, 255, 0.05);
+  --s1: rgba(var(--surface-tint), 0.04);
+  --s2: rgba(var(--surface-tint), 0.08);
+  /* Opaque, and per theme: a popover's job is to hide what is under it. */
   --s3: #14181f;
 
   /* One border, never darker, never doubled. Nothing has a shadow: on
    * near-black a shadow reads as a smudge, so elevation is surface and edge. */
-  --s-border: rgba(255, 255, 255, 0.09);
-  /* Internal structure is quieter than the container's own edge. */
-  --s-divider: rgba(255, 255, 255, 0.06);
+  --s-border: rgba(var(--surface-tint), 0.12);
+  /* Internal structure is quieter than the container's own edge — half of it,
+   * now that the edge has been raised. */
+  --s-divider: rgba(var(--surface-tint), 0.06);
 
-  --r-panel: 12px;
+  --r-panel: 16px;
   --r-inner: 8px;
+  /* The header row of a panel. */
+  --panel-head: 52px;
 
   /* Cramped padding is the most reliable tell of an unfinished interface, so
    * this is a floor rather than a suggestion. 16px at 375, below. */
   --pad-panel: 20px;
 
   /* structure */
-  --rule: rgba(255, 255, 255, 0.1);
-  --rule-strong: rgba(255, 255, 255, 0.18);
+  --rule: rgba(var(--surface-tint), 0.1);
+  --rule-strong: rgba(var(--surface-tint), 0.18);
   /* The wallpaper grid. Half the weight of a rule, so a divider still divides. */
-  --grid-line: rgba(255, 255, 255, 0.06);
+  --grid-line: rgba(var(--surface-tint), 0.06);
 
   /* state — never decoration.
    *
@@ -158,7 +197,7 @@
   --hero-line: var(--grid-line);
   --hero-text: var(--ink-mid);
   --hero-mid: var(--ink-faint);
-  --hero-faint: rgba(255, 255, 255, 0.34);
+  --hero-faint: rgba(var(--surface-tint), 0.34);
   --hero-glass: var(--glass);
   --hero-edge: var(--edge);
   --hero-live: var(--accent);
@@ -179,6 +218,67 @@
   color-scheme: dark;
 }
 
+/* ==========================================================================
+   THE SECOND THEME
+   ========================================================================== */
+
+/* "flop" — FLOP Labs' own palette, in the same design.
+ *
+ * NOTHING ELSE CHANGES. Same type, same spacing, same layout, same rules about
+ * what a colour is allowed to mean. A theme here is a ground, a tint and an
+ * accent, and if a theme ever needs more than that it is not a theme, it is a
+ * second design.
+ *
+ * --s3 is the one surface that cannot be derived, because it is opaque by
+ * definition — a popover's job is to hide what is behind it, and a value mixed
+ * from the tint at an alpha would not. It is the flop ground raised by about a
+ * tenth of the tint, which is what #14181F is to black.
+ *
+ * THE ACCENT IS BRIGHTER AND WAS RE-CHECKED, as the amendment asks. #00B4D8 on
+ * #0A1128 is 7.6:1, and 6.7:1 on a --s2 surface over that ground; the default
+ * theme's #3FB3C4 on black is 8.4:1. Both clear AA everywhere the accent is
+ * spent, which is text and 2px edges and nothing else. --warn and --alarm were
+ * measured on the navy too: 8.4:1 and 5.6:1. The token that loses most is
+ * --ink-faint, 8.9:1 on black and 5.4:1 here — still AA, and the reason the
+ * flop ground is #0A1128 rather than anything lighter. */
+:root[data-theme='flop'] {
+  --bg-rgb: 10, 17, 40;
+  --surface-tint: 245, 247, 250;
+  --s3: #1f263b;
+  --accent: #00b4d8;
+}
+
+/* The switch itself, for as long as it is switching.
+ *
+ * A theme change repaints every surface, edge and ink on the page at once, and
+ * with no transition that is a flash. The transition cannot simply live on the
+ * elements, though: a permanent `transition: background-color` on every row
+ * would also slow down every hover on the site, which is a real cost paid all
+ * day for a two-second event.
+ *
+ * So the transition is switched on for the length of the switch and taken away
+ * again — see useTheme in App.tsx. !important because it has to beat the
+ * component's own transition declaration for those 200ms, and because it is
+ * gone immediately afterwards. */
+:root[data-theme-shift] *,
+:root[data-theme-shift] *::before,
+:root[data-theme-shift] *::after {
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease,
+    fill 200ms ease,
+    outline-color 200ms ease !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme-shift] *,
+  :root[data-theme-shift] *::before,
+  :root[data-theme-shift] *::after {
+    transition: none !important;
+  }
+}
+
 /* Under 56rem the nav wraps to two rows — the wordmark and the action, then
  * the six links — so the estimate has to carry both. Mirrors the row-gap in
  * hero.css's own breakpoint. Narrower still they wrap again, which is exactly
@@ -193,11 +293,17 @@
 }
 
 /* Contrast got better, not worse, when the ground went black: every text token
- * is white at an opacity over #000, so --ink-faint at 0.52 is 8.9:1 and --ink-mid
- * at 0.75 is 15.9:1. The state colours gained too — they were sized against
- * #0e1420 and are now on something darker. Glass surfaces are translucent white
- * over black, so text on them sits on a LIGHTER ground than the page; at 0.05
- * the shift is under a tenth of a stop and nothing drops below AA. */
+ * is the tint at an opacity over the ground, so on black --ink-faint at 0.52 is
+ * 8.9:1 and --ink-mid at 0.75 is 15.9:1. The state colours gained too — they
+ * were sized against #0e1420 and are now on something darker. Glass surfaces
+ * are translucent tint over the ground, so text on them sits on a LIGHTER
+ * ground than the page; at 0.05 the shift is under a tenth of a stop and
+ * nothing drops below AA.
+ *
+ * The flop theme's ground is lighter than black, so every one of those figures
+ * is lower there. They were re-measured rather than assumed, and the numbers
+ * are written down beside that theme's declaration above. --ink-faint is the
+ * one that comes closest to the floor. */
 
 *,
 *::before,
@@ -308,18 +414,18 @@ a:focus-visible {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.085) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.085) 1px, transparent 1px);
+    linear-gradient(to right, rgba(var(--surface-tint), 0.085) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(var(--surface-tint), 0.085) 1px, transparent 1px);
   background-size: inherit;
   -webkit-mask-image: radial-gradient(
     circle 210px at var(--lx, -9999px) var(--ly, -9999px),
-    #000 0%,
+    rgba(0, 0, 0, 1) 0%,
     rgba(0, 0, 0, 0.55) 45%,
     transparent 78%
   );
   mask-image: radial-gradient(
     circle 210px at var(--lx, -9999px) var(--ly, -9999px),
-    #000 0%,
+    rgba(0, 0, 0, 1) 0%,
     rgba(0, 0, 0, 0.55) 45%,
     transparent 78%
   );
@@ -1006,9 +1112,9 @@ main .section:not([data-in]) {
   --footer-display: var(--display);
   --footer-body: "Chakra Petch", ui-monospace, "SF Mono", Menlo, system-ui, sans-serif;
   --footer-gutter: clamp(1.15rem, 2.4vw, 2.25rem);
-  --footer-edge: rgba(255, 255, 255, 0.1);
-  --footer-text: rgba(255, 255, 255, 0.62);
-  --footer-faint: rgba(255, 255, 255, 0.38);
+  --footer-edge: rgba(var(--surface-tint), 0.1);
+  --footer-text: rgba(var(--surface-tint), 0.62);
+  --footer-faint: rgba(var(--surface-tint), 0.38);
   --footer-quiet: var(--grey-dim);
   /* The wordmark's size, kept as a variable so the rules that reach past its
    * edge can be written in the same unit. Tuned so eight capitals of Saira at
@@ -1044,7 +1150,7 @@ main .section:not([data-in]) {
   margin-top: var(--space-4);
   border-top: 1px solid var(--footer-edge);
   background: var(--void);
-  color: #fff;
+  color: var(--ink);
   font-family: var(--footer-body);
   font-weight: 300;
 }
@@ -1079,7 +1185,7 @@ body:not(.on-black) .footer {
   font-size: clamp(1.5rem, 3vw, 2.25rem);
   line-height: 1.12;
   letter-spacing: -0.02em;
-  color: #fff;
+  color: var(--ink);
 }
 
 .footer__sub {
@@ -1092,7 +1198,7 @@ body:not(.on-black) .footer {
 
 .footer__mono {
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(var(--surface-tint), 0.8);
   white-space: nowrap;
 }
 
@@ -1101,9 +1207,9 @@ body:not(.on-black) .footer {
   transform: translate3d(var(--mx, 0), var(--my, 0), 0);
   border-radius: 999px;
   padding: 0.62rem 1.25rem;
-  background: #fff;
-  border: 1px solid #fff;
-  color: #000;
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  color: var(--bg);
   font-family: var(--footer-body);
   font-weight: 500;
   font-size: 12.5px;
@@ -1123,13 +1229,13 @@ body:not(.on-black) .footer {
 /* Inverted, not dimmed: the same pill with its two colours swapped. */
 .footer__cta:hover {
   text-decoration: none;
-  color: #fff;
+  color: var(--ink);
   background: var(--void);
-  border-color: #fff;
+  border-color: var(--ink);
 }
 
 .footer__cta:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--ink);
   outline-offset: 3px;
 }
 
@@ -1159,7 +1265,7 @@ body:not(.on-black) .footer {
 }
 
 .footer__link:hover {
-  color: #fff;
+  color: var(--ink);
   text-decoration: none;
 }
 
@@ -1189,7 +1295,7 @@ body:not(.on-black) .footer {
 /* Grey and unlinked, the same rule the landing's tool cards follow: nothing
  * should look clickable that cannot answer a click. */
 .footer__link--soon {
-  color: rgba(255, 255, 255, 0.26);
+  color: rgba(var(--surface-tint), 0.26);
   cursor: default;
 }
 
@@ -1221,7 +1327,7 @@ body:not(.on-black) .footer {
   line-height: 1;
   letter-spacing: -0.035em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.07);
+  color: rgba(var(--surface-tint), 0.07);
   white-space: nowrap;
   user-select: none;
   pointer-events: none;
@@ -1256,7 +1362,7 @@ body:not(.on-black) .footer {
 
 .footer__lockup {
   margin-bottom: 0.5rem;
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(var(--surface-tint), 0.92);
 }
 
 .footer__by {
@@ -1292,7 +1398,7 @@ body:not(.on-black) .footer {
 
 .footer__sep {
   padding: 0 0.45em;
-  color: rgba(255, 255, 255, 0.22);
+  color: rgba(var(--surface-tint), 0.22);
 }
 
 .footer__did {
@@ -1306,7 +1412,7 @@ body:not(.on-black) .footer {
   font-size: 10px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.28);
+  color: rgba(var(--surface-tint), 0.28);
 }
 
 /* The one key this product pins rather than infers, written out in full so it
@@ -1322,13 +1428,13 @@ body:not(.on-black) .footer {
  * .footer__link on specificity, which paints the pill white on white and
  * underlines six nav items that are not prose. */
 .footer__links a {
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(var(--surface-tint), 0.82);
   text-decoration: underline;
   text-underline-offset: 0.16em;
 }
 
 .footer__links a:hover {
-  color: #fff;
+  color: var(--ink);
 }
 
 /* ------------------------------------------------------------------ byline */
@@ -1348,9 +1454,9 @@ body:not(.on-black) .footer {
   align-items: center;
   border-radius: 999px;
   padding: 3px 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: #fff;
+  background: rgba(var(--surface-tint), 0.04);
+  border: 1px solid rgba(var(--surface-tint), 0.14);
+  color: var(--ink);
   font-size: 13px;
   line-height: 1.5;
   text-decoration: none;
@@ -1360,14 +1466,14 @@ body:not(.on-black) .footer {
 }
 
 .byline:hover {
-  color: #fff;
+  color: var(--ink);
   text-decoration: none;
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(var(--surface-tint), 0.07);
+  border-color: rgba(var(--surface-tint), 0.28);
 }
 
 .footer a:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
@@ -1480,7 +1586,7 @@ body:not(.on-black) .footer {
    * would be read against whatever building happened to be behind them. It
    * takes the floating nav's treatment instead — the same fill and blur, since
    * that is the other surface on this site that has to cover something. */
-  background: rgba(10, 10, 10, 0.85);
+  background: rgba(var(--bg-rgb), 0.85);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   border-left: 1px solid var(--rule);
@@ -2085,13 +2191,17 @@ body:not(.on-black) .footer {
   max-height: 18rem;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border: 1px solid var(--rule);
-  border-radius: 8px;
+  /* A stronger edge than a panel's, and NO SHADOW — DESIGN.md: "nothing has a
+   * shadow: on near-black a shadow reads as smudge. Elevation is carried by
+   * surface value and border alone." This had a 32px drop shadow, which is the
+   * rule being broken in the one place the temptation is strongest. An opaque
+   * ground and a visible edge are what separate a popover from the page. */
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-inner);
   /* --s3, the opaque level. A translucent panel over a scrolling page is
    * unreadable, and the whole reason this component exists is a surface that
    * assumed what was behind it. */
   background: var(--s3);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
 }
 
 .listbox__option {
@@ -2108,7 +2218,7 @@ body:not(.on-black) .footer {
 /* Hover and keyboard focus are the same state, because they are: the active
  * option is the one Enter would take, however it got to be active. */
 .listbox__option[data-active='true'] {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(var(--surface-tint), 0.06);
 }
 
 /* The accent on the NAME only, and only on the selected row. It means what it
@@ -2158,7 +2268,7 @@ body:not(.on-black) .footer {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-half);
-  min-height: 44px;
+  min-height: var(--panel-head);
   padding: 0 var(--pad-panel);
   background: var(--s2);
   border-bottom: 1px solid var(--s-border);
@@ -2218,7 +2328,7 @@ body:not(.on-black) .footer {
   margin: 0;
   font-size: var(--t-h2);
   line-height: 1.4;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(var(--surface-tint), 0.75);
 }
 
 .pstate__rule {
@@ -2322,7 +2432,7 @@ body:not(.on-black) .footer {
 }
 
 .qa__q:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(var(--surface-tint), 0.03);
 }
 
 .qa__q:focus-visible {
@@ -2423,9 +2533,9 @@ body:not(.on-black) .footer {
   mix-blend-mode: screen;
   background: radial-gradient(
     circle closest-side,
-    rgba(255, 255, 255, 0.06),
-    rgba(255, 255, 255, 0.035) 45%,
-    rgba(255, 255, 255, 0) 100%
+    rgba(var(--surface-tint), 0.06),
+    rgba(var(--surface-tint), 0.035) 45%,
+    rgba(var(--surface-tint), 0) 100%
   );
   opacity: var(--glow-on, 0);
   transition: opacity 220ms ease;
@@ -2439,3 +2549,252 @@ body:not(.on-black) .footer {
   }
 }
 
+
+/* ========================================================================== */
+/* GLYPH                                                                      */
+/* ========================================================================== */
+
+/* See components/Glyph.tsx and lib/glyph.ts. Monochrome, at four weights, and
+ * never a state colour: a glyph is identity, and identity is not state. */
+
+.glyph {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.glyph__ground {
+  fill: var(--s2);
+}
+
+.glyph__cells {
+  fill: var(--ink);
+}
+
+/* ========================================================================== */
+/* CARD                                                                       */
+/* ========================================================================== */
+
+/* See components/Card.tsx. A thing being offered, as opposed to a row, which is
+ * a thing being tabulated.
+ *
+ * .card2 rather than .card because the landing already has a .card — the status
+ * cards on the hero — and renaming those would churn a page this change has not
+ * reached yet. Same reason .panel2 is .panel2. */
+
+.card2 {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  min-width: 0;
+  background: var(--s1);
+  border: 1px solid var(--s-border);
+  border-radius: var(--r-panel);
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.card2:hover {
+  border-color: var(--rule-strong);
+}
+
+/* REQUIRED, and the component enforces it. A card without a visual is a row. */
+.card2__visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 88px;
+  padding: 12px;
+  background: var(--s2);
+  border-radius: var(--r-inner);
+  overflow: hidden;
+}
+
+.card2__text {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.card2__title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: var(--t-h2);
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.card2__detail {
+  margin: 0;
+  font-size: var(--t-small);
+  line-height: 1.55;
+  color: var(--ink-mid);
+}
+
+.card2__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem var(--space);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--display);
+  font-size: var(--t-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
+
+.card2__fact {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+/* The mark from the sketch: a 5px ring, drawn rather than set in an icon font,
+ * so it takes the colour and the weight of the text beside it. */
+.card2__fact::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+
+.card2__open {
+  display: block;
+  width: 100%;
+  margin-top: auto;
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-family: var(--display);
+  font-size: var(--t-small);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* Inverted, not dimmed — the same pill with its two colours swapped, which is
+ * what the hero's solid pill already does. */
+.card2__open:hover {
+  background: transparent;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.card2__open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.card2__open--off {
+  background: none;
+  border-color: var(--rule);
+  color: var(--ink-faint);
+  cursor: default;
+}
+
+/* --------------------------------------------------- visuals for the block */
+
+/* A distribution, drawn from the thing's own numbers. Grey is the common case:
+ * the state colours appear only where something is degrading or has failed, so
+ * a column that is all grey is a room where everything verified. */
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  width: 100%;
+  height: 100%;
+}
+
+.bars__bar {
+  flex: 1 1 0;
+  min-width: 2px;
+  border-radius: 1px;
+  background: var(--rule-strong);
+}
+
+.bars__bar--warn {
+  background: var(--warn);
+}
+
+.bars__bar--bad {
+  background: var(--alarm);
+}
+
+/* One cell per sampled key, set where the key is still there. Same geometry as
+ * a glyph, deliberately not mirrored. */
+.mfield {
+  display: grid;
+  grid-template-columns: repeat(5, 8px);
+  grid-auto-rows: 8px;
+  gap: 3px;
+}
+
+.mfield__cell {
+  border-radius: 1px;
+  background: var(--rule);
+}
+
+.mfield__cell[data-on='true'] {
+  background: var(--ink);
+}
+
+/* ========================================================================== */
+/* THEME SWITCH                                                               */
+/* ========================================================================== */
+
+/* Two states, one pill, in the nav. See components/ThemeSwitch.tsx.
+ *
+ * A segmented control rather than a toggle or an icon: a toggle with a moon on
+ * it says "dark mode", and neither of these themes is a light mode. Both names
+ * are always visible and the one you are in is the one that is lit, so the
+ * control says what it does without a tooltip. */
+
+.tswitch {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--glass);
+}
+
+.tswitch__opt {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 0.66rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  font-family: var(--display);
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.tswitch__opt:hover {
+  color: var(--ink);
+}
+
+.tswitch__opt[aria-pressed='true'] {
+  background: var(--s2);
+  color: var(--ink);
+}
+
+.tswitch__opt:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

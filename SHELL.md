@@ -157,7 +157,11 @@ stopped, the page still works for recent activity.
   defaults to paste-your-signature.
 - Poll with `limit=200`, detect holes from `first_seq`, recover by re-export. The read
   endpoint skips rather than queues — this is not optional.
-- No localStorage or sessionStorage, with one stated exception: `/vault` keeps the namespaces
+- No localStorage or sessionStorage, with two stated exceptions. The second is the theme: one
+  key holding one of two words, written only when the reader clicks the switch in the nav, in
+  `src/theme.ts`. A theme that forgot itself on every navigation is a theme nobody uses twice.
+  `prefers-color-scheme` decides the first visit only; after that the stored choice wins, even
+  where it agrees with the system. The first exception is larger: `/vault` keeps the namespaces
   a reader chose to watch, plus the keys present at the last look and when that look happened.
   It has to. The seven-day note decay is invisible — the server publishes no written-at, no
   expires-at and no age — so the only way anyone learns a note has gone is to have looked before

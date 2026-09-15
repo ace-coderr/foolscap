@@ -197,3 +197,134 @@ did not look at is not done.
 
 **Then critique:** one element on the page should be memorable, everything else quiet. Cut
 one thing before committing.
+
+
+---
+
+# Amendment — richness, identity, and a second theme
+
+The split layout is structurally right and visually bare. Three additions fix that, and
+they apply to every page, not one.
+
+## 1. The DID glyph — identity you can see
+
+Every DID on this network is 32 bytes. Those bytes can draw themselves, deterministically,
+and that gives every row and card a visual anchor that means something rather than filling
+space.
+
+`components/Glyph.tsx`. Decode the did:key to its 32-byte public key. Take the first 9
+bytes; map each to a cell in a 5x5 grid, mirrored on the vertical axis so only 15 cells are
+decided and the result is symmetric. A set cell draws a filled square; unset draws nothing.
+Derive one hue-free intensity from byte 10 so some glyphs read heavier than others.
+
+Rendered as inline SVG at 20px in rows, 32px in cards, 56px on a detail pane. Monochrome —
+`--ink` on `--s2`, never accent, because a glyph is identity and identity is not state.
+
+Two DIDs that differ produce different glyphs; the same DID always produces the same one.
+Pin that in a test. A reader scanning a room learns to recognise a participant by shape
+before they read a single character of base58 — which is the actual problem with a column
+of `z6Mk...` truncations.
+
+This replaces the coloured circular avatars in the reference. Same job, no colour, and it
+is derived from the thing it identifies rather than assigned.
+
+## 2. The card
+
+`components/Card.tsx`. Used on the landing tools grid, the Lens room list, the Vault
+namespace list, the Notary anchor entries, and anywhere else a thing is being offered
+rather than tabulated.
+
+```
+┌──────────────────────────────┐   --s1, 1px border, 12px radius
+│ ┌──────────────────────────┐ │   visual block: --s2, 8px radius,
+│ │      [ visual ]          │ │   88px tall, the glyph or a sparkline
+│ └──────────────────────────┘ │   or a mini state-rule column, centred
+│                              │
+│ Room name                    │   --t-h2, white
+│ what it is                   │   --t-small, --ink-mid
+│                              │
+│ ◦ 8.1 MiB   ◦ 1,204 msgs     │   meta row: --t-micro, --ink-faint,
+│                              │   small marks not icon-font icons
+│ ┌──────────────────────────┐ │
+│ │        Open              │ │   full-width pill, white on black,
+│ └──────────────────────────┘ │   inverts on hover
+└──────────────────────────────┘
+```
+
+Interior padding 16px, 12px gap between blocks. The visual block is required — a card
+without one is a row, and should be a row instead.
+
+What goes in the visual block, per page:
+- Lens room card: a 12-bar column of the room's recent verified/unsigned/failed mix.
+- Vault namespace card: a 5x5 field of marks, one per sampled key, set where the key exists.
+- Notary anchor card: the root rendered as 16 marks from its first bytes.
+- Landing tool card: the tool's own mark, drawn once per tool.
+
+Never a stock icon. Every visual on this site is derived from its own data.
+
+## 3. Stop pinning content left
+
+Every page's content column is centred with `margin-inline: auto`, capped at 72rem for
+split layouts and 62rem for console layouts. A 45% column against 55% of empty black is the
+single most common complaint about this site and it is one CSS line per page.
+
+Where a page genuinely has a left-weighted composition — the landing hero, Notary's
+question — it must be *balanced* by something on the right, not left as a half-empty band.
+
+## 4. Panel presence
+
+The panels are too quiet. Raise them to match the second reference:
+
+```css
+--s1: rgba(255,255,255,0.04);            /* was 0.025 */
+--panel-border: rgba(255,255,255,0.12);  /* was 0.09 */
+--panel-radius: 16px;                    /* was 12px */
+```
+
+Panel headers get 52px height and sit on `--s2`. The outer container of a split layout is
+itself a panel — in the reference both panes sit inside rounded, bordered surfaces with a
+visible gap between them, and that is most of why it reads as designed.
+
+## 5. Message rows
+
+Follow the second reference's shape, in this site's palette:
+
+Glyph at 20px on the left, then the DID in mono and the timestamp on one line, then the
+message text in a bubble on `--s2` with 12px padding and a 10px radius — but with the
+existing 2px state rule on the bubble's left edge, so verification stays legible at a
+glance. Failed rows take `--alarm` on the rule and the border.
+
+Rows alternate alignment? No. Everything left-aligned — this is a log, not a conversation.
+
+## 6. Theme switch
+
+Two themes, toggled from the nav. Default stays as it is.
+
+```css
+/* default — "ink" */
+--bg: #000000;  --surface-tint: 255,255,255;  --accent: #3FB3C4;
+
+/* "flop" — FLOP Labs' own palette */
+--bg: #0A1128;  --surface-tint: 245,247,250;  --accent: #00B4D8;
+```
+
+Every surface token is expressed as `rgba(var(--surface-tint), <alpha>)` so both themes
+work from one set of rules. Nothing else changes: same type, same spacing, same layout.
+
+Control: a two-state segmented pill in the nav, 28px tall, the inactive half at
+`--ink-faint`. Persist the choice in localStorage; honour `prefers-color-scheme` only for
+the first visit. Transition `background-color` and `border-color` over 200ms on `:root` so
+the switch reads as deliberate rather than a flash.
+
+Check every accent use in both themes — `#00B4D8` is brighter than `#3FB3C4` and will need
+its contrast re-verified against the navy ground.
+
+## Order of work
+
+1. `Glyph.tsx` with its test, `Card.tsx`, the token changes, the theme switch. All four
+   before any page changes.
+2. Then per page, one commit each: `/lens`, `/vault`, `/track`, `/bench`, `/notary`, `/`.
+3. Each page: centred, panels raised, cards where things are offered, glyphs wherever a DID
+   appears, all six states rendered and checked at 1440 and 375, in both themes.
+
+A page is not done until it has been looked at in both themes.

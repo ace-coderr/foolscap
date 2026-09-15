@@ -13,6 +13,11 @@
 // fails this test until someone adds it to the list, and adding it to the list
 // means writing down why that thing is state. That is the whole mechanism.
 //
+// TWO THEMES, ONE RULE. The flop theme's accent is #00B4D8, and it is enforced
+// exactly as hard as the default's: a theme is a change of palette, not a change
+// of what a colour is allowed to mean. Both hexes are matched below, so painting
+// something teal in one theme and not the other fails here too.
+//
 // WHAT IT LOOKS FOR, and why more than the hex. The second drift was
 // `rgba(63, 179, 196, 0.5)` — no hex anywhere in it. A test matching only
 // #3FB3C4 would have passed it without comment. It therefore matches the hex,
@@ -36,7 +41,7 @@ const src = join(here, '..', 'src');
 const ACCENT_TOKENS = ['--accent', '--hero-live'];
 
 const ACCENT =
-  /#3fb3c4\b|(?<![\d.])63\s*[,\s]\s*179\s*[,\s]\s*196(?![\d.])|var\(\s*--(?:accent|hero-live)\b|0x3fb3c4\b/i;
+  /#(?:3fb3c4|00b4d8)\b|(?<![\d.])(?:63\s*[,\s]\s*179\s*[,\s]\s*196|0\s*[,\s]\s*180\s*[,\s]\s*216)(?![\d.])|var\(\s*--(?:accent|hero-live)\b|0x(?:3fb3c4|00b4d8)\b/i;
 
 // ---------------------------------------------------------------------------
 // Who is allowed to be teal
@@ -146,6 +151,8 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
     why: 'the option currently chosen',
   },
   { selector: '.bbutton:focus-visible', why: 'the button keyboard focus is on, on the bench' },
+  { selector: '.card2__open:focus-visible', why: "the card's action keyboard focus is on" },
+  { selector: '.tswitch__opt:focus-visible', why: 'the theme control keyboard focus is on' },
 ];
 
 /**
@@ -323,6 +330,8 @@ describe('the accent is state-only', () => {
       'border-color: rgba(63,179,196,0.5)',
       'color: #3FB3C4',
       'color: #3fb3c4',
+      'color: #00B4D8',
+      'border-color: rgba(0, 180, 216, 0.4)',
       'background: var(--accent)',
       'outline: 1px solid var(--hero-live)',
       'live: 0x3fb3c4',
