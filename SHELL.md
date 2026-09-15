@@ -21,8 +21,7 @@ question, one of them is wrong.
 | **Lens** (`/lens`) | Who actually said what in this room? |
 | **Vault** (`/vault`) | What notes exist, who owns them, and when do they expire? |
 
-Holdfast — the territory game — comes later and gets its own page plus a leaderboard. The
-shell must not assume six is final.
+The shell must not assume six is final.
 
 Shared plumbing lives in `js/`: `did.js`, `technocore.js`, `contest.js`. Pages own their own
 view logic and nothing else. If two pages need the same logic, it moves into `js/`, it does
