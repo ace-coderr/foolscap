@@ -48,6 +48,9 @@ import {
   type ReactNode,
 } from 'react';
 import { Shell } from '../components/Shell';
+import { Panel } from '../components/Panel';
+import { Questions } from '../components/Questions';
+import { Glyph } from '../components/Glyph';
 import { pageById } from '../pages.ts';
 import { num, plural, formatAge } from '../format.ts';
 import { IDENTITY_CUTOFF } from '../lib/contest.ts';
@@ -180,6 +183,90 @@ export default function Notary() {
       {asked && <Sources archive={archive.state} live={live.state} />}
 
       <AnchorBand state={anchorLog} />
+
+      <section className="section band">
+        <div className="band__inner">
+          <Questions
+            title="When was this DID active, and can I prove it?"
+            items={[
+              {
+                q: 'What does a “yes” here actually prove?',
+                a: (
+                  <p>
+                    That Notary holds a message from that key, with a signature that verified,
+                    captured before the moment you asked about. The record is kept whole, so
+                    anybody can fetch it from the API and re-check the arithmetic without taking
+                    Notary&rsquo;s word for any of it. What it does not prove is who was holding
+                    the key.
+                  </p>
+                ),
+              },
+              {
+                q: 'And what does “nothing on record” prove?',
+                a: (
+                  <p>
+                    Almost nothing, and the page will not let it stand as an answer on its own.
+                    Notary sweeps some rooms and not others, it began capturing on a particular
+                    day, and it has written down every stretch it knows it missed. A key could
+                    have been busy in a room nobody watches, or before capture started, or inside
+                    one of the holes listed above. Absence is evidence only where coverage is
+                    complete, and this page tells you where it is not.
+                  </p>
+                ),
+              },
+              {
+                q: 'Why should I believe the timestamps?',
+                a: (
+                  <p>
+                    For the ones Notary watched arrive, because of the anchors: once a day it
+                    builds a Merkle tree over everything captured that day and publishes the root
+                    into a Technocore room, signed by the key pinned above. Fetch a record, fold it
+                    into its leaf, and you either reach a published root or Notary has moved
+                    something. A root that has not been published yet constrains nothing, and the
+                    log says which is which.
+                  </p>
+                ),
+              },
+              {
+                q: 'Is the timestamp the room’s or Notary’s?',
+                a: (
+                  <p>
+                    Both are shown and they are never merged. Notary&rsquo;s capture time is when
+                    it read the message; the room&rsquo;s is what the sender claimed. The first
+                    sweep read whatever the rings still held, so the oldest message here is older
+                    than the capture window — and every one of those carries a room&rsquo;s claim
+                    rather than something Notary saw happen.
+                  </p>
+                ),
+              },
+              {
+                q: 'What happens when the archive fills up?',
+                a: (
+                  <p>
+                    Full records are kept for a window and pruned behind it, and what is left for
+                    the pruned period is the summary tier: one row per key per room, with first and
+                    last seen and a count, anchored the same way. It answers “was this key active”
+                    and cannot answer “show me the message”. The page says which tier an answer
+                    came from rather than presenting the two as one archive.
+                  </p>
+                ),
+              },
+              {
+                q: 'Is any of this Foolscap’s word for it?',
+                a: (
+                  <p>
+                    The live half is not: when you ask about a key, this page also reads the rooms
+                    directly and verifies those signatures in your browser. The archive half is
+                    Notary&rsquo;s word, backed by published roots you can check against the room
+                    yourself. The two are shown side by side, and where they disagree the page
+                    shows the disagreement rather than picking a winner.
+                  </p>
+                ),
+              },
+            ]}
+          />
+        </div>
+      </section>
     </Shell>
   );
 }
@@ -599,9 +686,11 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
             </p>
           )}
 
-          {/* The anchor ledger's treatment, for the same reason: these are the
-              archive's own numbers and a reader checks them one line at a time,
-              which a 45% column full of wrapped prose does not let them do. */}
+          {/* The coverage ledger, in a panel — the second of the three data
+              bands DESIGN.md names. These are the archive's own numbers and a
+              reader checks them one line at a time, which a 45% column full of
+              wrapped prose does not let them do. */}
+          <Panel flush title="The archive's own numbers" className="nledger">
           <dl className="nfacts">
             <dt>Swept</dt>
             <dd className="mono">
@@ -636,12 +725,16 @@ function CoverageBands({ state }: { state: Async<Coverage> }) {
               </>
             )}
           </dl>
+          </Panel>
 
-          <p className="notary__note band__prose">
-            The oldest message held is older than the capture window because the first sweep read
-            whatever the rings still contained. Its timestamp is the room’s claim, not something
-            Notary watched happen — the distinction is kept everywhere below.
-          </p>
+          {/* CUT AT THE CRITIQUE STEP: three lines stood here explaining why the
+              "oldest message held" row is older than the capture window — that
+              the first sweep read whatever the rings still contained, and that
+              its timestamp is the room's claim rather than something Notary
+              watched happen. The questions block did not exist on this page
+              when that was written. It says the same thing now, under "Is the
+              timestamp the room's or Notary's?", where a reader who has just
+              read that row and frowned at it will go looking. */}
         </div>
       </section>
 
@@ -976,16 +1069,18 @@ function Holes({ gaps, total }: { gaps: Coverage['gaps']; total: number }) {
             ` The archive holds ${num.format(total)}; the largest ${num.format(sorted.length)} are here.`}
         </p>
 
-        {/* A panel, not rows on black — the same glass the tool cards and the
-            source panes are made of, so the two tables on this page read as
-            objects rather than as loose text that happens to line up.
+        {/* THE SHARED PANEL, not a second one drawn here. .ntable was this
+            page's own container — a border, a radius and a glass fill,
+            invented before Panel existed and a quarter-step off it ever since.
+            DESIGN.md: wrap the data bands in panels. This is one of the three
+            it names.
 
             Wider than the page inside itself, because four columns of room
             names, seven-digit figures and timestamps do not fit 343px however
             they are sized, and reflowing them into stacked cards would throw
             away the only reason this is a table: that 6,290,114 and 4,210 line
             up on their last digit. */}
-        <div className="ntable">
+        <Panel flush className="ntable">
           <div className="ntable__scroll" data-expanded={all ? 'true' : 'false'}>
             <table className="nholes">
             <thead>
@@ -1057,7 +1152,7 @@ function Holes({ gaps, total }: { gaps: Coverage['gaps']; total: number }) {
               </button>
             </div>
           )}
-        </div>
+        </Panel>
 
         {/* THE WAY OUT ON A PHONE, and only there.
             Desktop keeps the open list in an 18rem window, so the panel's own
@@ -1433,7 +1528,10 @@ function AnchorBand({
 
         <div className="band__right">
           <p className="pinned__label">Notary’s key, pinned</p>
-          <p className="pinned__did mono">{log.pinned}</p>
+          <p className="pinned__did">
+            <Glyph did={log.pinned} size={32} title="Notary’s own key, drawn from its bytes" />
+            <span className="mono">{log.pinned}</span>
+          </p>
           <p className="notary__note">
             This is the service’s own key, not its author’s, and it signs nothing but anchors.
             Foolscap never infers it from who posts in a room.
@@ -1468,13 +1566,13 @@ function AnchorBand({
           // The holes table's panel, so the page's two tables are one object
           // seen twice. No scroll window and no footer: the anchor log is one
           // row per day and bounded by how long Notary has been running.
-          <div className="ntable">
+          <Panel flush className="ntable">
             <ul className="nanchors">
               {log.anchors.map((anchor) => (
                 <AnchorRow anchor={anchor} room={log.anchor_room} key={anchor.day} />
               ))}
             </ul>
-          </div>
+          </Panel>
         )}
       </div>
 
@@ -1507,7 +1605,7 @@ function SummaryAnchors({ rows, room }: { rows: SummaryAnchor[]; room: string })
       <p className="notary__rooms-title nsummary-anchors__title">
         The summary tier <span className="nsource__tag">roots over what outlives the window</span>
       </p>
-      <div className="ntable">
+      <Panel flush className="ntable">
         <ul className="nanchors">
           {rows.map((row) => (
             <li className="nanchor" key={row.id}>
@@ -1526,7 +1624,7 @@ function SummaryAnchors({ rows, room }: { rows: SummaryAnchor[]; room: string })
             </li>
           ))}
         </ul>
-      </div>
+      </Panel>
       <p className="notary__note band__prose">
         Each of these commits to the whole tier as it stood at that moment — every key, every room,
         first and last seen, how many times — rather than to one day&rsquo;s messages. They are

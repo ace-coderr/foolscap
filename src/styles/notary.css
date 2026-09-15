@@ -634,12 +634,17 @@
  *
  * overflow: hidden is what lets the radius clip the header and the striped rows;
  * without it the corners cut through the fills. */
+/* .ntable IS A PANEL NOW — see components/Panel.tsx. It used to draw its own
+ * border, radius and fill, which is the container system this page invented
+ * before there was one; what is left here is the spacing above it and the
+ * clipping the scroll window needs. */
 .ntable {
   margin-top: var(--space);
-  border: 1px solid rgba(var(--surface-tint), 0.1);
-  border-radius: 16px;
-  background: rgba(var(--surface-tint), 0.03);
-  overflow: hidden;
+}
+
+/* The ledger, likewise: the panel is the box, and this only spaces it. */
+.nledger {
+  margin-top: var(--space);
 }
 
 /* Sideways at any width, because four columns of room names, figures and
@@ -1335,4 +1340,34 @@
     flex-direction: column;
     gap: 0.2rem;
   }
+}
+
+/* The ledger inside its panel.
+ *
+ * .nfacts was written for a band, where the page gutter did the insetting and a
+ * rule across the top was what said "a table starts here". In a flush panel the
+ * panel says that, and the rows have to find their own padding — at 2px from
+ * the edge they read as text that had fallen out of the box. */
+.nledger .nfacts {
+  margin: 0;
+  border-top: 0;
+}
+
+.nledger .nfacts dt {
+  padding-left: var(--pad-panel);
+}
+
+.nledger .nfacts dd {
+  padding-right: var(--pad-panel);
+}
+
+.nledger .nfacts dt,
+.nledger .nfacts dd {
+  padding-block: 12px;
+  border-bottom-color: var(--s-divider);
+}
+
+/* Nothing under the last row: the panel's own edge closes it. */
+.nledger .nfacts > :nth-last-child(-n + 2) {
+  border-bottom: 0;
 }
