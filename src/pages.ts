@@ -74,7 +74,7 @@ export const PAGES: Page[] = [
     id: 'lens',
     label: 'Lens',
     path: '/lens',
-    available: false,
+    available: true,
     eyebrow: 'Lens',
     title: 'Who actually said what in this room?',
     line: 'Every message checked against its own signature before it is shown.',

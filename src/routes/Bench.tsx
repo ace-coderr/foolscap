@@ -26,6 +26,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Shell } from '../components/Shell';
+import { Listbox, type Choice } from '../components/Listbox';
 import {
   canonicalize,
   didFromSeed,
@@ -52,6 +53,21 @@ import {
 
 /** Rooms offered in the picker. Any name may be typed instead. */
 const SUGGESTED = [...new Set([...WATCHED_ROOMS, ROOMS.campaign, 'lobby', 'technocore'])];
+
+/**
+ * The shape picker's rows: the type in mono, what it is for beside it.
+ *
+ * Freeform leads and is the default, because Technocore takes any text in any
+ * room and the shapes are the contest's convention rather than a requirement.
+ */
+const SHAPE_CHOICES: Choice[] = [
+  { value: '', name: 'freeform', description: 'Any text. No shape assumed.' },
+  ...SHAPES.map((entry) => ({
+    value: entry.type,
+    name: entry.type,
+    description: entry.label.split(' — ')[1] ?? entry.summary,
+  })),
+];
 
 export default function Bench() {
   const [room, setRoom] = useState<string>(ROOMS.registration);
@@ -199,12 +215,16 @@ export default function Bench() {
             <label className="field__label" htmlFor="bench-shape">
               Shape
             </label>
-            <select
-              className="field__select"
+            {/* Not a <select>. Its popup is OS chrome, and this page's fields
+                are glass — white at 3% — which reads white-on-black on the page
+                and white-on-white inside the popup, where every option went
+                invisible. See components/Listbox.tsx. */}
+            <Listbox
               id="bench-shape"
+              label="Message shape"
               value={shapeType}
-              onChange={(e) => {
-                const next = e.target.value;
+              choices={SHAPE_CHOICES}
+              onChange={(next) => {
                 setShapeType(next);
                 const picked = next ? shapeFor(next) : null;
                 if (!picked) return;
@@ -213,14 +233,7 @@ export default function Bench() {
                 setText(templateText(picked).replace('<a fresh id per attempt>', requestId()));
                 if (picked.room) setRoom(picked.room);
               }}
-            >
-              <option value="">Freeform — any text, no shape assumed</option>
-              {SHAPES.map((entry) => (
-                <option value={entry.type} key={entry.type}>
-                  {entry.label}
-                </option>
-              ))}
-            </select>
+            />
             {shape && (
               <p className="field__hint">
                 {shape.summary}

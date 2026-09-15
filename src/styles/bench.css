@@ -136,23 +136,26 @@
   color: var(--ink-faint);
 }
 
+/* An OPAQUE ground, not glass.
+ *
+ * --paper-sunk is rgba(255,255,255,0.03): over the page's black it reads as a
+ * dark inset, and anywhere the browser reuses a control's colours for chrome it
+ * resolves against whatever the OS puts behind it. That is how /bench's shape
+ * picker ended up white-on-white. Over black these are visually identical to
+ * the glass they replace; what they do not do is assume the ground. Any control
+ * that can spawn a popup — a datalist, a picker, a suggestion list — takes one
+ * of these. */
 .field__input,
-.field__area,
-.field__select {
+.field__area {
   width: 100%;
   padding: 0.55rem var(--space-half);
   border: 1px solid var(--rule);
   border-radius: 4px;
-  background: var(--paper-sunk);
+  background-color: #14161b;
   font-family: var(--mono);
   font-size: var(--mono-optical);
   line-height: 1.5;
   color: var(--ink);
-}
-
-.field__select {
-  font-family: var(--body);
-  font-size: var(--t-small);
 }
 
 .field__area {
@@ -161,8 +164,7 @@
 }
 
 .field__input:focus-visible,
-.field__area:focus-visible,
-.field__select:focus-visible {
+.field__area:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
 }

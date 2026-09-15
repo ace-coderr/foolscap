@@ -1,0 +1,364 @@
+/* lens.css — reading a room with every signature checked.
+ *
+ * TWO PANES, and the weight is all on the right one. The room list is a means
+ * of getting to a room; the messages are what the page is for.
+ *
+ * THE VERDICT IS A MARGIN, NOT A BADGE. Each message carries a 2px rule down
+ * its left edge and nothing else: --rule-strong for verified, --rule for
+ * unsigned, --alarm for failed. A column of quiet grey rules with one red one
+ * in it is legible at a glance and at arm's length, which a row of little
+ * coloured pills is not — and it keeps the common case (unsigned) from looking
+ * like a warning, which is the mistake this page most has to avoid.
+ *
+ * ONE ACCENT, on the verified count in the header. Live, climbing, and it means
+ * what it means everywhere else on this site. Individual verified messages get
+ * NO colour: making the normal case teal would make the other two read as
+ * exceptions, and most Technocore traffic is unsigned.
+ *
+ * DIDs are mono and truncated in the list with the whole value on hover — and
+ * never truncated where the value is doing the work, which is the detail line
+ * under a message that failed. */
+
+/* --------------------------------------------------------------------- page */
+
+.lens {
+  max-width: var(--shell);
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 17rem) minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: start;
+}
+
+/* ---------------------------------------------------------------- room list */
+
+.rooms {
+  position: sticky;
+  top: calc(var(--nav-height) + var(--space));
+  display: grid;
+  gap: var(--space-half);
+  max-height: calc(100dvh - var(--nav-height) - var(--space-2));
+  min-height: 0;
+}
+
+/* Opaque, not glass — a search input carries a clear control and, on some
+ * platforms, a suggestion list. See the note in bench.css. */
+.rooms__search {
+  width: 100%;
+  padding: 0.5rem var(--space-half);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background-color: #14161b;
+  font-family: var(--mono);
+  font-size: var(--mono-optical);
+  color: var(--ink);
+}
+
+.rooms__search:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.rooms__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+}
+
+.rooms__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-half);
+  width: 100%;
+  padding: 0.4rem var(--space-half);
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  font-size: var(--t-small);
+  color: var(--ink-mid);
+  text-align: left;
+  cursor: pointer;
+}
+
+.rooms__row:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+}
+
+.rooms__row[aria-current='true'] {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink);
+}
+
+.rooms__row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.rooms__name {
+  font-family: var(--mono);
+  font-size: var(--mono-optical);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.rooms__size {
+  flex: 0 0 auto;
+  font-family: var(--display);
+  font-size: var(--t-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
+
+/* The City's wording about what /rooms is. Same caveat, same page furniture. */
+.rooms__caveat {
+  margin: 0;
+  font-size: var(--t-micro);
+  line-height: 1.55;
+  color: var(--ink-faint);
+}
+
+/* ------------------------------------------------------------------- header */
+
+.reading__head {
+  position: sticky;
+  top: var(--nav-height);
+  z-index: 1;
+  padding-block: var(--space-half);
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+}
+
+.reading__room {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--t-h2);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.reading__facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-half) var(--space);
+  margin-top: 0.35rem;
+  font-family: var(--display);
+  font-size: var(--t-micro);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* The one accent on the page: how many of N verified, climbing as it checks. */
+.reading__verified {
+  color: var(--accent);
+}
+
+.reading__failed {
+  color: var(--alarm);
+}
+
+.reading__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-half);
+  margin-top: var(--space-half);
+}
+
+/* ----------------------------------------------------------------- messages */
+
+.reading__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The margin rule IS the verdict. Nothing else carries it. */
+.msg {
+  padding: var(--space-half) 0 var(--space-half) var(--space);
+  border-left: 2px solid var(--rule);
+  margin-top: var(--space-half);
+}
+
+.msg[data-verdict='verified'] {
+  border-left-color: var(--rule-strong);
+}
+
+.msg[data-verdict='failed'] {
+  border-left-color: var(--alarm);
+}
+
+.msg[data-verdict='checking'] {
+  border-left-color: var(--rule);
+  opacity: 0.6;
+}
+
+.msg__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-half);
+  font-size: var(--t-micro);
+  color: var(--ink-faint);
+}
+
+.msg__from {
+  font-family: var(--mono);
+  color: var(--ink-mid);
+  /* Truncated in the head; the whole value is in the title and, where it is
+   * being used as proof, printed in full below. */
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.msg__from--key {
+  color: var(--ink);
+}
+
+.msg__seq,
+.msg__time {
+  font-family: var(--display);
+  font-variant-numeric: tabular-nums;
+}
+
+.msg__state {
+  margin-left: auto;
+  font-family: var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.msg[data-verdict='failed'] .msg__state {
+  color: var(--alarm);
+}
+
+.msg__text {
+  margin: 0.3rem 0 0;
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* A qualifier under an unsigned message, or the reason a check failed. */
+.msg__note {
+  margin: 0.35rem 0 0;
+  max-width: var(--measure);
+  font-size: var(--t-micro);
+  line-height: 1.6;
+  color: var(--ink-faint);
+}
+
+.msg[data-verdict='failed'] .msg__note {
+  color: var(--ink-mid);
+}
+
+/* WHERE THE DID IS THE EVIDENCE it is never truncated. A failed check is about
+ * a specific key, and a reader who has to hover to see which one cannot check
+ * anything. Same for the signature it did not match. */
+.msg__proof {
+  display: grid;
+  gap: 0.15rem;
+  margin-top: 0.35rem;
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  line-height: 1.55;
+  color: var(--ink-mid);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+/* ------------------------------------------------------------------ chrome */
+
+.lbutton {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  font-size: var(--t-micro);
+  color: var(--ink-mid);
+  cursor: pointer;
+}
+
+.lbutton:hover {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+}
+
+.lbutton[aria-pressed='true'] {
+  border-color: var(--alarm);
+  color: var(--alarm);
+}
+
+.lbutton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.lnote {
+  margin: var(--space) 0 0;
+  max-width: var(--measure);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-faint);
+}
+
+.lgap {
+  margin: var(--space) 0;
+  max-width: var(--measure);
+  padding-left: var(--space);
+  border-left: 2px solid var(--warn);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-mid);
+}
+
+.lempty {
+  margin: var(--space-2) 0;
+  max-width: var(--measure);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-mid);
+}
+
+/* ------------------------------------------------------------------ narrow */
+
+@media (max-width: 62rem) {
+  /* One column: the room list on top, then the messages. Neither pane is
+   * sticky at this width — a sticky header over a scrolling page on a phone
+   * eats a third of the screen. */
+  .lens {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space);
+  }
+
+  .rooms {
+    position: static;
+    max-height: none;
+  }
+
+  .rooms__list {
+    max-height: 13rem;
+  }
+
+  .reading__head {
+    position: static;
+  }
+
+  .msg__from {
+    max-width: 16ch;
+  }
+}

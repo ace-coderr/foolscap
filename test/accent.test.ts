@@ -108,10 +108,18 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
   { selector: '.rooms__row:focus-visible', why: 'the room keyboard focus is on' },
   { selector: '.hero__pill:focus-visible', why: 'the pill keyboard focus is on' },
   {
-    selector:
-      '.field__input:focus-visible, .field__area:focus-visible, .field__select:focus-visible',
+    selector: '.field__input:focus-visible, .field__area:focus-visible',
     why: 'the field keyboard focus is on, on the bench',
   },
+  { selector: '.listbox__control:focus-visible', why: 'the picker keyboard focus is on' },
+  { selector: '.rooms__search:focus-visible', why: 'the room search keyboard focus is on' },
+  { selector: '.rooms__row:focus-visible', why: 'the room in the list keyboard focus is on' },
+  { selector: '.lbutton:focus-visible', why: 'the filter keyboard focus is on' },
+  {
+    selector: ".listbox__option[aria-selected='true'] .listbox__name",
+    why: 'the option currently chosen',
+  },
+  { selector: '.reading__verified', why: 'signatures that verified, counted live as they check' },
   { selector: '.bbutton:focus-visible', why: 'the button keyboard focus is on, on the bench' },
 ];
 

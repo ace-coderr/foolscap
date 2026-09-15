@@ -1978,6 +1978,135 @@ body:not(.on-black) .footer {
   }
 }
 
+/* ========================================================================== */
+/* LISTBOX                                                                    */
+/* ========================================================================== */
+
+/* A select Foolscap draws itself. See components/Listbox.tsx for why it exists:
+ * a native <select> paints its popup as OS chrome, and this site's field
+ * backgrounds are glass — white at 3% — which resolves against black on the
+ * page and against white inside the popup, where the white text then vanishes.
+ *
+ * Every surface here is OPAQUE for that reason. --paper-raised is glass too, so
+ * the panel takes a solid ground of the same value over black, and nothing in
+ * this component depends on what is behind it. */
+
+.listbox {
+  position: relative;
+}
+
+/* Closed, it keeps whatever the field styling around it is: it sits in a form
+ * beside real inputs and should not announce itself as a different species. */
+.listbox__control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-half);
+  width: 100%;
+  padding: 0.55rem var(--space-half);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background-color: #14161b;
+  font: inherit;
+  font-size: var(--t-small);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.listbox__control:hover {
+  border-color: var(--rule-strong);
+}
+
+.listbox__control:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.listbox__value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-half);
+  min-width: 0;
+}
+
+.listbox__caret {
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--ink-faint);
+}
+
+.listbox__control[aria-expanded='true'] .listbox__caret {
+  transform: rotate(180deg);
+}
+
+/* The panel. Opaque ground, hairline, 8px. */
+.listbox__panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  max-height: 18rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  /* --paper-raised over an opaque ground of its own. A translucent panel over
+   * a scrolling page is unreadable, and the whole reason this component exists
+   * is a surface that assumed what was behind it. */
+  background: #14161b;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+
+.listbox__option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-half);
+  padding: 0.45rem var(--space-half);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--ink-mid);
+}
+
+/* Hover and keyboard focus are the same state, because they are: the active
+ * option is the one Enter would take, however it got to be active. */
+.listbox__option[data-active='true'] {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* The accent on the NAME only, and only on the selected row. It means what it
+ * means everywhere else — this is the current one — and confining it to the
+ * name keeps the description from competing with it. */
+.listbox__option[aria-selected='true'] .listbox__name {
+  color: var(--accent);
+}
+
+.listbox__name {
+  font-family: var(--mono);
+  font-size: var(--mono-optical);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.listbox__desc {
+  font-size: var(--t-small);
+  color: var(--ink-mid);
+  min-width: 0;
+}
+
+.listbox__option[data-active='true'] .listbox__desc {
+  color: var(--ink);
+}
+
 /* ------------------------------------------------------------- cursor glow */
 
 /* A light rather than a layer.

@@ -10,6 +10,7 @@ import './styles/hero.css';
 // built from lives in foolscap.css.
 import './styles/notary.css';
 import './styles/bench.css';
+import './styles/lens.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('No #root element to mount into.');
