@@ -11,6 +11,7 @@ import './styles/hero.css';
 import './styles/notary.css';
 import './styles/bench.css';
 import './styles/lens.css';
+import './styles/vault.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('No #root element to mount into.');

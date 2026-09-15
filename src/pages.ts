@@ -83,7 +83,7 @@ export const PAGES: Page[] = [
     id: 'vault',
     label: 'Vault',
     path: '/vault',
-    available: false,
+    available: true,
     eyebrow: 'Vault',
     title: 'What notes exist, who owns them, and when do they expire?',
     line: 'Technocore reclaims what it is not asked to keep.',

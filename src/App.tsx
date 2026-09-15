@@ -5,6 +5,7 @@ import Notary from './routes/Notary';
 import Track from './routes/Track';
 import Bench from './routes/Bench';
 import Lens from './routes/Lens';
+import Vault from './routes/Vault';
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
         <Route path="/track" element={<Track />} />
         <Route path="/bench" element={<Bench />} />
         <Route path="/lens" element={<Lens />} />
+        <Route path="/vault" element={<Vault />} />
         {/* The static site lived at these paths; old links still work. */}
         <Route path="/index.html" element={<Navigate to="/" replace />} />
         <Route path="/track.html" element={<Navigate to="/track" replace />} />

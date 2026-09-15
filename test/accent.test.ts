@@ -115,6 +115,14 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
   { selector: '.rooms__search:focus-visible', why: 'the room search keyboard focus is on' },
   { selector: '.rooms__row:focus-visible', why: 'the room in the list keyboard focus is on' },
   { selector: '.lbutton:focus-visible', why: 'the filter keyboard focus is on' },
+  { selector: '.vpick__input:focus-visible', why: 'the namespace field keyboard focus is on' },
+  { selector: '.vbutton:focus-visible', why: 'the vault button keyboard focus is on' },
+  { selector: '.vsuggest__item:focus-visible', why: 'the namespace chip keyboard focus is on' },
+  { selector: '.vkeys__row:focus-visible', why: 'the note key keyboard focus is on' },
+  {
+    selector: '.vdel__verdict--yes',
+    why: 'a delegate record whose signature verified against the note it sits in',
+  },
   {
     selector: ".listbox__option[aria-selected='true'] .listbox__name",
     why: 'the option currently chosen',

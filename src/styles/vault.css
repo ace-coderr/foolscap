@@ -1,0 +1,495 @@
+/* vault.css — the notes, and what cannot be known about when they go.
+ *
+ * THE BAND AT THE TOP IS THE PAGE. Everything else is a browser over /kv, which
+ * is useful; the thing only this page does is say plainly that the seven-day
+ * clock is invisible and that what follows is a record of looks rather than a
+ * forecast. So the caveat is not a footnote in --ink-faint at the bottom — it
+ * is the first thing under the header, on a --warn rule, at reading size.
+ *
+ * NO COUNTDOWNS. There is no ring, no bar, no "expires in". The server does not
+ * publish the clock and the single worst thing this page could do is invent it.
+ * What replaces them is a list of observations with dates on them.
+ *
+ * ONE ACCENT: a signature that verified. --warn on the expiry band and on a key
+ * that has gone since the last look; --alarm on a signature that failed. */
+
+.vault {
+  max-width: var(--shell);
+  margin-inline: auto;
+}
+
+/* ------------------------------------------------------------- the caveat */
+
+.cannot {
+  margin: 0 0 var(--space-2);
+  max-width: var(--measure);
+  padding-left: var(--space);
+  border-left: 2px solid var(--warn);
+  font-size: var(--t-small);
+  line-height: 1.65;
+  color: var(--ink-mid);
+}
+
+.cannot strong {
+  display: block;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------ the picker */
+
+.vpick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-half);
+  margin-bottom: var(--space);
+}
+
+.vpick__field {
+  display: grid;
+  gap: 0.35rem;
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.vpick__label {
+  font-family: var(--display);
+  font-size: var(--t-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* Opaque, never glass: a search input can spawn a suggestion list, and a
+ * control that hands its colours to system chrome must not assume the ground
+ * under it. Same rule as the listbox — see foolscap.css. */
+.vpick__input {
+  width: 100%;
+  padding: 0.5rem var(--space-half);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background-color: #14161b;
+  font-family: var(--mono);
+  font-size: var(--mono-optical);
+  color: var(--ink);
+}
+
+.vpick__input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.vbutton {
+  padding: 0.5rem var(--space);
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  font-size: var(--t-small);
+  white-space: nowrap;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.vbutton:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.vbutton:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.vbutton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.vbutton--quiet {
+  padding: 0.3rem 0.75rem;
+  border-color: var(--rule);
+  font-size: var(--t-micro);
+  color: var(--ink-mid);
+}
+
+/* --------------------------------------------------------------- suggests */
+
+.vsuggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: var(--space-2);
+}
+
+.vsuggest__item {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: none;
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  color: var(--ink-mid);
+  cursor: pointer;
+}
+
+.vsuggest__item:hover {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+}
+
+.vsuggest__item[aria-current='true'] {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.vsuggest__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------- two panes */
+
+.vpanes {
+  display: grid;
+  grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: start;
+}
+
+.vkeys {
+  display: grid;
+  gap: var(--space-half);
+  min-width: 0;
+}
+
+.vkeys__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-half);
+  font-family: var(--display);
+  font-size: var(--t-micro);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.vkeys__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 32rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.vkeys__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-half);
+  width: 100%;
+  padding: 0.35rem var(--space-half);
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font-family: var(--mono);
+  font-size: var(--mono-optical);
+  color: var(--ink-mid);
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.vkeys__row:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+}
+
+.vkeys__row[aria-current='true'] {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink);
+}
+
+.vkeys__row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* A key that was in the last listing and is not in this one. --warn, because
+ * it is a thing that has changed and may need acting on — never --alarm, which
+ * would call an ordinary expiry a failure. */
+.vkeys__row[data-gone='true'] {
+  color: var(--warn);
+  text-decoration: line-through;
+  cursor: default;
+}
+
+/* ---------------------------------------------------------------- the note */
+
+.vnote {
+  min-width: 0;
+}
+
+.vnote__key {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--t-h2);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.vnote__url {
+  margin: 0.2rem 0 var(--space);
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  color: var(--ink-faint);
+  overflow-wrap: anywhere;
+}
+
+.vnote__url a {
+  color: inherit;
+}
+
+.vsection {
+  margin-top: var(--space);
+  padding-top: var(--space-half);
+  border-top: 1px solid var(--rule);
+}
+
+.vsection__label {
+  margin: 0 0 var(--space-half);
+  font-family: var(--display);
+  font-size: var(--t-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* THE RAW LINE IS ALWAYS THERE and always first. A reading is offered beside
+ * it, never instead of it: everything below the raw line is this page's guess
+ * at a convention, and the bytes are the only thing that is actually true. */
+.vraw {
+  margin: 0;
+  padding: var(--space-half) var(--space);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper-sunk);
+  font-family: var(--mono);
+  font-size: var(--mono-optical);
+  line-height: 1.6;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  user-select: all;
+}
+
+.vfields {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.3rem var(--space);
+  font-size: var(--t-small);
+}
+
+.vfields dt {
+  font-family: var(--display);
+  font-size: var(--t-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.vfields dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--mono-optical);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.vjson {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--mono-optical);
+  line-height: 1.55;
+  color: var(--ink-mid);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------- delegates */
+
+.vdel {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: var(--space-half);
+  padding-left: var(--space);
+  border-left: 2px solid var(--rule);
+  font-size: var(--t-small);
+  line-height: 1.55;
+  color: var(--ink-mid);
+}
+
+.vdel[data-ok='true'] {
+  border-left-color: var(--rule-strong);
+}
+
+.vdel[data-ok='false'] {
+  border-left-color: var(--alarm);
+}
+
+.vdel__line {
+  font-family: var(--mono);
+  font-size: var(--mono-optical);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.vdel__verdict {
+  font-family: var(--display);
+  font-size: var(--t-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The one accent: a signature that checked out, here, in this browser. */
+.vdel__verdict--yes {
+  color: var(--accent);
+}
+
+.vdel__verdict--no {
+  color: var(--alarm);
+}
+
+.vdel__verdict--expired {
+  color: var(--warn);
+}
+
+/* ------------------------------------------------------------- authority */
+
+.vauth {
+  margin: var(--space) 0 0;
+  max-width: var(--measure);
+  padding-left: var(--space);
+  border-left: 2px solid var(--rule);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-faint);
+}
+
+.vauth[data-signed='true'] {
+  border-left-color: var(--rule-strong);
+  color: var(--ink-mid);
+}
+
+/* --------------------------------------------------------- what was seen */
+
+.vwatch {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--rule);
+}
+
+.vwatch__title {
+  margin: 0 0 var(--space-half);
+  font-family: var(--display);
+  font-size: var(--t-h2);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.vwatch__list {
+  margin: var(--space) 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space);
+}
+
+.vwatch__row {
+  display: grid;
+  gap: 0.2rem;
+  padding-left: var(--space);
+  border-left: 2px solid var(--rule);
+  font-size: var(--t-small);
+  line-height: 1.55;
+  color: var(--ink-mid);
+}
+
+.vwatch__row[data-changed='true'] {
+  border-left-color: var(--warn);
+}
+
+.vwatch__ns {
+  font-family: var(--mono);
+  font-size: var(--mono-optical);
+  color: var(--ink);
+}
+
+.vwatch__when {
+  font-family: var(--display);
+  font-size: var(--t-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
+
+.vwatch__gone {
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  color: var(--warn);
+  overflow-wrap: anywhere;
+}
+
+.vnote-quiet {
+  margin: var(--space-half) 0 0;
+  max-width: var(--measure);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-faint);
+}
+
+.vempty {
+  margin: var(--space-2) 0;
+  max-width: var(--measure);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-mid);
+}
+
+.vproblem {
+  margin: var(--space) 0;
+  max-width: var(--measure);
+  padding-left: var(--space);
+  border-left: 2px solid var(--alarm);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-mid);
+}
+
+/* ------------------------------------------------------------------ narrow */
+
+@media (max-width: 62rem) {
+  .vpanes {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space);
+  }
+
+  .vkeys__list {
+    max-height: 14rem;
+  }
+
+  .vfields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.1rem;
+  }
+
+  .vfields dd {
+    margin-bottom: var(--space-half);
+  }
+}
