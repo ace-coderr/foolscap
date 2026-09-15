@@ -364,7 +364,7 @@ export function Footer() {
  * The variant changes the frame the page sits in and nothing else; the nav and
  * the footer are the same parts from the same source in all three.
  */
-export type ShellVariant = 'column' | 'bleed' | 'bands';
+export type ShellVariant = 'column' | 'bleed' | 'bands' | 'console';
 
 /**
  * Wrap a route in the shell.
@@ -397,6 +397,9 @@ export function Shell({
 
   const bleed = variant === 'bleed';
   const bands = variant === 'bands';
+  // Pattern B caps its content at 62rem and centres it, and the page header has
+  // to be capped and centred with it or the page has two left edges.
+  const console_ = variant === 'console';
 
   // The same pointer field the landing runs: one listener, one rAF loop, the
   // glow following the cursor and the grid brightening under it. Queried rather
@@ -424,7 +427,11 @@ export function Shell({
 
       <HeroNav action={navAction(current.id)} currentId={current.id} />
 
-      <main className={`shell${bleed ? ' shell--bleed' : ''}${bands ? ' shell--bands' : ''}`}>
+      <main
+        className={`shell${bleed ? ' shell--bleed' : ''}${bands ? ' shell--bands' : ''}${
+          console_ ? ' shell--console' : ''
+        }`}
+      >
         {/* A banded page opens with a hero that carries this header's three
             parts at its own scale, so rendering the header here as well would
             put the eyebrow and the title on the page twice. It reads the same

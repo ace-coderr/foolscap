@@ -67,7 +67,10 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
   { selector: '.detail__state--live', why: 'one room, read directly, active' },
 
   // --- something needing an answer ----------------------------------------
-  { selector: '.card--attention', why: 'a status the reader has to act on' },
+  {
+    selector: '.panel2--attention',
+    why: 'the panel holding a status the reader has to act on',
+  },
   { selector: '.card--attention .card__status', why: 'the word of that status' },
   { selector: '.row__status--attention', why: 'the same, in a list' },
 

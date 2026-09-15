@@ -624,35 +624,6 @@ main .section:not([data-in]) {
   color: var(--ink-mid);
 }
 
-/* ------------------------------------------------------- verifying the tail */
-
-/* Deliberately quiet: a line of text and a hairline. The page is usable while
- * this runs, so it must not behave like a blocking spinner. */
-.progress {
-  padding: var(--space-half) 0 0;
-}
-
-.progress__text {
-  margin: 0 0 var(--space-half);
-  font-size: var(--t-small);
-  color: var(--ink-faint);
-  font-variant-numeric: tabular-nums;
-}
-
-.progress__track {
-  height: 1px;
-  background: var(--rule);
-}
-
-.progress__fill {
-  height: 1px;
-  width: 0;
-  background: var(--rule-strong);
-  transition: width 0.25s linear;
-}
-
-/* ---------------------------------------------------------------- sections */
-
 .section {
   margin-top: var(--space-2);
 }
@@ -678,10 +649,15 @@ main .section:not([data-in]) {
   margin-bottom: var(--space-half);
 }
 
+/* CAPPED AT THE LONGEST THING ANYONE TYPES INTO IT, which is a did:key at 56
+ * mono characters. Unbounded it took the console's full 62rem — nine hundred
+ * pixels of field for a twenty-character request_id, with its button stranded
+ * at the far end. */
 .lookup__row {
   display: flex;
   gap: var(--space-half);
   align-items: stretch;
+  max-width: 38rem;
 }
 
 /* At --t-body (17px) this clears the 16px threshold below which iOS zooms the
@@ -690,9 +666,11 @@ main .section:not([data-in]) {
   flex: 1 1 auto;
   min-width: 0;
   padding: var(--space-half);
-  border: 1px solid var(--rule-strong);
-  border-radius: 0;
-  background: var(--paper);
+  border: 1px solid var(--s-border);
+  border-radius: var(--r-inner);
+  /* Opaque, not glass: this is a field over a panel over a grid, and a
+   * translucent input takes the wallpaper through three layers. */
+  background: var(--s3);
   color: var(--ink);
   font-family: var(--mono);
   font-size: var(--t-body);
@@ -707,23 +685,31 @@ main .section:not([data-in]) {
   flex: 0 0 auto;
   padding: var(--space-half) var(--space);
   border: 1px solid var(--ink);
-  border-radius: 0;
+  border-radius: 999px;
   background: var(--ink);
-  color: var(--paper);
-  font-family: var(--body);
-  font-size: var(--t-body);
+  color: var(--bg);
+  font-family: var(--display);
+  font-size: var(--t-small);
+  font-weight: 500;
+  letter-spacing: 0.04em;
   cursor: pointer;
+  white-space: nowrap;
 }
 
+/* Inverted, not dimmed — the same pill with its two colours swapped, which is
+ * what every other solid pill on this site does. */
 .lookup__submit:hover {
-  background: var(--ink-mid);
-  border-color: var(--ink-mid);
+  background: transparent;
+  color: var(--ink);
 }
 
 /* ------------------------------------------------------------ status cards */
 
+/* The answer and, when there is one, the list of the DID's other requests —
+ * two panels with the console's own gap between them. */
 .result {
-  margin-top: var(--space);
+  display: grid;
+  gap: 20px;
 }
 
 /* A status card is glass now, the same glass the landing's tool cards are made
@@ -732,20 +718,19 @@ main .section:not([data-in]) {
  * The left rule survives as the state marker rather than as the card: it is the
  * one part that carries meaning, and --accent on it is what says "this needs
  * you". Glass plus a coloured edge is the same idea the hero's card already had. */
+/* THE CARD NO LONGER DRAWS ITS OWN BOX. It was glass with a blur, a 20px
+ * radius and its own border — a second container system, invented on this page
+ * before Panel existed, and a box inside a box once the answer moved into one.
+ * What is left is the arrangement of the answer; the panel around it is the
+ * container, and the state edge moved with it to .panel2--attention. */
 .card {
-  border-radius: 20px;
-  padding: clamp(1.2rem, 2vw, 1.6rem);
-  margin-bottom: var(--space-2);
-  background: var(--glass);
-  border: 1px solid var(--edge);
-  border-left: 2px solid var(--rule-strong);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  min-width: 0;
 }
 
-/* Accent marks the states that want something from the reader. */
+/* Accent marks the states that want something from the reader. Kept as a
+ * selector because the status WORD still takes it — see below. */
 .card--attention {
-  border-left-color: var(--accent);
+  color: inherit;
 }
 
 /* The answer to the question the visitor arrived with. It stands alone, at the
@@ -846,15 +831,9 @@ main .section:not([data-in]) {
 /* -------------------------------------------------------------- other rows */
 
 .others {
-  margin-top: var(--space);
-}
-
-.others__title {
-  font-size: var(--t-micro);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--ink-faint);
-  margin-bottom: var(--space-half);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .row {
@@ -862,9 +841,13 @@ main .section:not([data-in]) {
   flex-wrap: wrap;
   gap: 0 var(--space);
   align-items: baseline;
-  padding: var(--space-half) 0;
-  border-top: 1px solid var(--rule);
+  padding: 12px var(--pad-panel);
+  border-bottom: 1px solid var(--s-divider);
   font-size: var(--t-small);
+}
+
+.others li:last-child .row {
+  border-bottom: 0;
 }
 
 .row__status {
@@ -1920,10 +1903,6 @@ body:not(.on-black) .footer {
 /* -------------------------------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
-  .progress__fill {
-    transition: none;
-  }
-
   /* The canvas honours this itself — no entry animation, no transitions between
    * readings, no damping on the controls. Nothing here can reach into WebGL, so
    * this block is only the DOM half; see CityCanvas.tsx for the rest. */
@@ -1944,12 +1923,21 @@ body:not(.on-black) .footer {
   font-size: var(--t-small);
 }
 
+/* The key, with its own glyph beside it — the one place on this site where a
+ * DID stands alone rather than beside a message, so the mark is announced
+ * rather than decorative. Never truncated: this is the string a reader is meant
+ * to compare against LAUNCH.md by eye. */
 .pinned__did {
+  display: flex;
+  align-items: center;
+  gap: var(--space-half);
   margin: 0 0 var(--space);
-  padding: var(--space-half) var(--space);
-  background: var(--paper-sunk);
-  border-left: 2px solid var(--rule-strong);
+  padding: 12px;
+  border-radius: var(--r-inner);
+  background: var(--s2);
+  border-left: 2px solid var(--rule-bright);
   color: var(--ink);
+  overflow-wrap: anywhere;
 }
 
 .pinned__note {
@@ -2880,4 +2868,58 @@ body:not(.on-black) .footer {
   .split__aside {
     position: static;
   }
+}
+
+/* ========================================================================== */
+/* PATTERN B — THE CONSOLE                                                    */
+/* ========================================================================== */
+
+/* DESIGN.md: "A form or query at the top, results below, both in panels,
+ * content capped at 62rem and centred rather than pinned left. The
+ * 45%-column-with-empty-space problem is this pattern not being used."
+ *
+ * One rule, and it is the rule the amendment calls the single most common
+ * complaint about the site. */
+
+.console {
+  max-width: 62rem;
+  margin-inline: auto;
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
+
+/* AND THE PAGE HEADER COMES WITH IT. The shell caps its header at --measure
+ * inside a 72rem column, so on a console page the title sat 64px to the left of
+ * everything under it — two left edges, neither of them deliberate. A pattern
+ * is a pattern for the whole page or it is a box that happens to be centred. */
+.shell--console .page-header {
+  max-width: 62rem;
+  margin-inline: auto;
+}
+
+/* The state edge, on the panel rather than on the thing inside it.
+ * See .card in the tool styles above for what it replaced. */
+.panel2--attention {
+  border-left: 2px solid var(--accent);
+}
+
+/* PROSE KEEPS THE READING MEASURE INSIDE A CONSOLE PANEL. These paragraphs used
+ * to sit in a `.section.measure`, which capped them at 46rem; the panel that
+ * replaced it is 62rem wide, and a line of body copy 950px long is a line
+ * nobody's eye returns from correctly. The panel is 62rem. A paragraph is not.
+ *
+ * Named rather than swept with a descendant selector: a rule that capped every
+ * <p> in every panel would also cap the ones inside a table cell and a facts
+ * list, which are not prose and want the width they are given. */
+.card__copy,
+.card__note,
+.state__reasons,
+.frontier,
+.coverage,
+.verbatim,
+.forgeries__lede,
+.pinned__copy,
+.pinned__note {
+  max-width: var(--measure);
 }

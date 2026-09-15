@@ -3,8 +3,11 @@
 // Ported from the render half of js/ui.js. Same copy, same structure, same
 // rules about what may be shown as an answer.
 
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { Shell } from '../components/Shell';
+import { Panel, PaneState, CapNotice } from '../components/Panel';
+import { Questions } from '../components/Questions';
+import { Glyph } from '../components/Glyph';
 import { useTracker, type Hole } from '../useTracker.ts';
 import {
   REFEREE_DID,
@@ -26,10 +29,19 @@ import {
   AT_RISK_FROM_HOLES,
 } from '../format.ts';
 
+/**
+ * How many of a DID's other requests the list draws.
+ *
+ * A busy DID can have hundreds and every one of them is a row nobody scrolls
+ * to. The cap is on what is drawn; the count above it is all of them.
+ */
+const OTHER_CAP = 20;
+
 export default function Track() {
   const { tracker, state, version, lostHoles, lostCount } = useTracker();
   const [field, setField] = useState('');
   const [query, setQuery] = useState('');
+  const fieldRef = useRef<HTMLInputElement>(null);
 
   // `version` is read so the page repaints when the tracker's contents change.
   void version;
@@ -44,129 +56,252 @@ export default function Track() {
   const result: LookupResult | null =
     state.ready && query ? tracker.lookup(query, { nowMs: Date.now() }) : null;
 
+  const attention = result != null && WANTS_ATTENTION.has(result.status);
+  const others = result ? result.entries.slice(1, 1 + OTHER_CAP) : [];
+
   return (
-    <Shell page="track">
-      {state.phase !== 'following' && state.phase !== 'failed' && (
-        <Progress text={state.progressText} fraction={state.progressFraction} />
-      )}
-
-      <section className="section measure" id="lookup">
-        <h2 className="section__title">Track my batch</h2>
-
-        <form className="lookup" onSubmit={onSubmit} autoComplete="off">
-          <label className="lookup__label" htmlFor="q">
-            A request_id, or a did:key
-          </label>
-          <div className="lookup__row">
-            <input
-              className="lookup__input mono"
-              id="q"
-              name="q"
-              type="text"
-              inputMode="text"
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck={false}
-              placeholder="ace-reg-writer-1"
-              value={field}
-              onChange={(event) => setField(event.target.value)}
-            />
-            <button className="lookup__submit" type="submit">
-              Look up
-            </button>
-          </div>
-        </form>
-
-        <div className="result" aria-live="polite">
-          {query && !state.ready && (
-            <p className="empty">Reading the rooms. Your answer lands as soon as they are in.</p>
-          )}
-          {result && (
-            <>
-              <StatusCard
-                result={result}
-                entry={result.entry}
-                settling={settling}
-                recovering={state.recovering > 0}
-                lostCount={lostCount}
-                lostHoles={lostHoles}
+    <Shell page="track" variant="console">
+      <div className="console">
+        {/* CUT AT THE CRITIQUE STEP: a progress band stood here — a line of text
+            and a hairline fill — while the Answer panel directly beneath it
+            said "Reading the rooms…" and the referee panel said "Reading the
+            rooms and checking signatures…". Three things reporting one wait,
+            the loudest of them in the one place no answer was ever going to
+            appear. The count it carried was the useful part, so it went into
+            the loading states themselves: they now say how far along the read
+            is, in the panel where the answer will land. */}
+        <Panel title="Track my batch" id="lookup">
+          <form className="lookup" onSubmit={onSubmit} autoComplete="off">
+            <label className="lookup__label" htmlFor="q">
+              A request_id, or a did:key
+            </label>
+            <div className="lookup__row">
+              <input
+                className="lookup__input mono"
+                id="q"
+                name="q"
+                type="text"
+                inputMode="text"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                placeholder="ace-reg-writer-1"
+                ref={fieldRef}
+                value={field}
+                onChange={(event) => setField(event.target.value)}
               />
+              <button className="lookup__submit" type="submit">
+                Look up
+              </button>
+            </div>
+          </form>
+        </Panel>
+
+        {/* THE ANSWER IS ALWAYS A PANEL, whichever of the four things it is
+            saying. It used to be nothing at all until a query had been typed,
+            which is the undesigned empty state DESIGN.md opens with: the page
+            gave a stranger a text field and no indication of what came back. */}
+        <div className="result" aria-live="polite">
+          {state.phase === 'failed' ? (
+            <Panel title="Answer">
+              <PaneState
+                state="failed"
+                title="No room could be read."
+                detail="Nothing on this page can be shown as verified while that is true. Check the connection and reload — Foolscap will not guess at an answer from what it could not read."
+              />
+            </Panel>
+          ) : !query ? (
+            <Panel title="Answer">
+              <PaneState
+                state="empty"
+                title="Nothing looked up yet."
+                detail={
+                  <>
+                    Paste the <span className="mono">request_id</span> you were given, or the{' '}
+                    <span className="mono">did:key</span> you signed with. Foolscap reads the
+                    referee&rsquo;s rooms live and checks every receipt&rsquo;s signature here, in
+                    this browser, before it will call anything an answer.
+                  </>
+                }
+                action={
+                  <button
+                    className="lookup__submit"
+                    type="button"
+                    onClick={() => fieldRef.current?.focus()}
+                  >
+                    Type one in
+                  </button>
+                }
+              />
+            </Panel>
+          ) : !state.ready ? (
+            <Panel title="Answer">
+              <PaneState state="loading" title={state.progressText} />
+            </Panel>
+          ) : result ? (
+            <>
+              <Panel title="Answer" className={attention ? 'panel2--attention' : ''}>
+                <StatusCard
+                  result={result}
+                  entry={result.entry}
+                  settling={settling}
+                  recovering={state.recovering > 0}
+                  lostCount={lostCount}
+                  lostHoles={lostHoles}
+                />
+              </Panel>
+
               {result.entries.length > 1 && (
-                <section className="others">
-                  <p className="others__title">
-                    {plural(result.entries.length - 1, 'other request')} from this DID
-                  </p>
-                  {result.entries.slice(1).map((entry, i) => (
-                    <OtherRow key={`${entry.requestId ?? i}`} entry={entry} />
-                  ))}
-                </section>
+                <Panel
+                  flush
+                  title={`${plural(result.entries.length - 1, 'other request')} from this DID`}
+                >
+                  <ul className="others">
+                    {others.map((entry, i) => (
+                      <li key={`${entry.requestId ?? i}`}>
+                        <OtherRow entry={entry} />
+                      </li>
+                    ))}
+                  </ul>
+                  <CapNotice
+                    shown={others.length}
+                    total={result.entries.length - 1}
+                    noun="other requests"
+                    how="The newest are shown first; look one up by its own request_id to see it in full."
+                  />
+                </Panel>
               )}
             </>
-          )}
+          ) : null}
         </div>
-      </section>
 
-      <section className="section measure" id="referee">
-        <h2 className="section__title">The referee</h2>
-        <div aria-live="polite">
-          {state.phase === 'failed' ? (
-            <>
-              <p className="empty">
-                Could not read any room. Nothing here can be shown as verified.
-              </p>
-              <Problems problems={state.problems} />
-            </>
-          ) : !state.ready ? (
-            // No state until something has actually verified — a light rendered
-            // off nothing is worse than no light.
-            <p className="empty">Reading the rooms and checking signatures…</p>
-          ) : (
-            <RefereePanel
-              live={tracker.liveness(Date.now())}
-              holes={state.holes}
-              gaps={state.gaps}
-              problems={state.problems}
-            />
-          )}
-        </div>
-      </section>
+        <Panel title="The referee" id="referee">
+          <div aria-live="polite">
+            {state.phase === 'failed' ? (
+              <>
+                <PaneState
+                  state="failed"
+                  title="Could not read any room."
+                  detail="Nothing here can be shown as verified."
+                />
+                <Problems problems={state.problems} />
+              </>
+            ) : !state.ready ? (
+              // No state until something has actually verified — a light
+              // rendered off nothing is worse than no light.
+              <PaneState
+                state="loading"
+                title={state.progressText}
+                detail="Every signature is checked here before anything on this page counts as verified."
+              />
+            ) : (
+              <RefereePanel
+                live={tracker.liveness(Date.now())}
+                holes={state.holes}
+                gaps={state.gaps}
+                problems={state.problems}
+              />
+            )}
+          </div>
+        </Panel>
 
-      {/* The key itself, on the one page that uses it. Every receipt this page
-          calls authoritative was checked against exactly this string, so it is
-          written out in full and in mono, to be compared against LAUNCH.md by
-          eye. It used to live in the footer of every page, which put a
-          sonnet-2 key in front of people reading about something else. */}
-      <section className="section measure" id="pinned">
-        <h2 className="section__title">The pinned key</h2>
-        <p className="pinned__copy">
-          Receipts count here only if their Ed25519 signature verifies against this DID, pinned
-          from LAUNCH.md in <span className="mono">flop-labs/technocore-sonnet-challenge</span> and
-          hardcoded. Foolscap never infers the referee from a room&rsquo;s name, its topic, its
-          owner, who posts in it, or the <span className="mono">referee</span> field inside a
-          message — a launch record is just a message, and messages are forgeable.
-        </p>
-        <p className="mono pinned__did">{REFEREE_DID}</p>
-        <p className="pinned__note">
-          A message that claims the referee and fails that check is shown as a forgery rather than
-          dropped, because someone handed a fake acceptance needs telling.
-        </p>
-      </section>
-    </Shell>
-  );
-}
+        {/* The key itself, on the one page that uses it. Every receipt this page
+            calls authoritative was checked against exactly this string, so it is
+            written out in full and in mono, to be compared against LAUNCH.md by
+            eye. It used to live in the footer of every page, which put a
+            sonnet-2 key in front of people reading about something else. */}
+        <Panel title="The pinned key" id="pinned">
+          <p className="pinned__copy">
+            Receipts count here only if their Ed25519 signature verifies against this DID, pinned
+            from LAUNCH.md in <span className="mono">flop-labs/technocore-sonnet-challenge</span>{' '}
+            and hardcoded. Foolscap never infers the referee from a room&rsquo;s name, its topic,
+            its owner, who posts in it, or the <span className="mono">referee</span> field inside a
+            message — a launch record is just a message, and messages are forgeable.
+          </p>
+          <p className="pinned__did">
+            <Glyph did={REFEREE_DID} size={32} title="The referee's key, drawn from its bytes" />
+            <span className="mono">{REFEREE_DID}</span>
+          </p>
+          <p className="pinned__note">
+            A message that claims the referee and fails that check is shown as a forgery rather
+            than dropped, because someone handed a fake acceptance needs telling.
+          </p>
+        </Panel>
 
-/** Deliberately quiet: a line of text and a hairline, never a blocking spinner. */
-function Progress({ text, fraction }: { text: string; fraction: number | null }) {
-  return (
-    <div className="progress measure" aria-live="polite">
-      <p className="progress__text">{text}</p>
-      <div className="progress__track">
-        <div
-          className="progress__fill"
-          style={{ width: fraction == null ? '0%' : `${Math.round(fraction * 100)}%` }}
+        <Questions
+          title="What happened to my request?"
+          items={[
+            {
+              q: 'Where do these answers come from?',
+              a: (
+                <p>
+                  From the referee&rsquo;s own rooms, read live and checked here. Every receipt
+                  this page counts had its Ed25519 signature verified in this browser against the
+                  DID above — not against a name, not against a <span className="mono">referee</span>{' '}
+                  field inside the message, and not against anything a server said. Nothing is
+                  taken on trust, which is why the page will say it cannot answer rather than
+                  guess.
+                </p>
+              ),
+            },
+            {
+              q: 'The estimate says a time. How much is it worth?',
+              a: (
+                <p>
+                  It is an extrapolation from the rate receipts have been arriving at, and the
+                  referee bursts and stalls. Treat it as an order of magnitude: the difference
+                  between minutes and hours is real, the difference between eleven minutes and
+                  fourteen is not. Where no verified receipt has been seen at all there is no
+                  frontier to measure from, and the page says so instead of inventing one.
+                </p>
+              ),
+            },
+            {
+              q: 'What can this page not tell me?',
+              a: (
+                <>
+                  <p>
+                    Anything that has rotated out. Rooms are rings: past a size limit the oldest
+                    messages are dropped and they are then gone. If a receipt for your request was
+                    among them, this page cannot see it and will not pretend the absence means
+                    anything — a status that could be wrong for that reason says so in as many
+                    words, above the facts.
+                  </p>
+                  <p>
+                    It also cannot tell you the referee is down. It can tell you how long it has
+                    been since anything verified arrived, which is a different claim and the only
+                    one the evidence supports.
+                  </p>
+                </>
+              ),
+            },
+            {
+              q: 'Something is listed as a forgery. What does that mean?',
+              a: (
+                <p>
+                  A message carrying the referee&rsquo;s DID whose signature does not verify
+                  against it. They are shown rather than dropped because a forged acceptance is
+                  something the person holding it needs told about. None of them counts towards
+                  anything on this page, and a broken client that signs the wrong string produces
+                  exactly the same result as a deliberate forgery — the page reports the check that
+                  failed and stops there.
+                </p>
+              ),
+            },
+            {
+              q: 'Is my key ever sent anywhere?',
+              a: (
+                <p>
+                  There is no field on this page that takes one. A <span className="mono">did:key</span>{' '}
+                  is a public key and pasting one here only tells Foolscap which requests to look
+                  for. Signing lives on the Bench, and that page does not hold a key either.
+                </p>
+              ),
+            },
+          ]}
         />
       </div>
-    </div>
+    </Shell>
   );
 }
 
