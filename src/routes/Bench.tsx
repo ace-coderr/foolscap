@@ -26,6 +26,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Shell } from '../components/Shell';
+import { Panel, PaneState } from '../components/Panel';
+import { Questions, type Question } from '../components/Questions';
+import { Glyph } from '../components/Glyph';
+import { shortDid } from '../lib/lens.ts';
 import { Listbox, type Choice } from '../components/Listbox';
 import {
   canonicalize,
@@ -67,6 +71,87 @@ const SHAPE_CHOICES: Choice[] = [
     name: entry.type,
     description: entry.label.split(' — ')[1] ?? entry.summary,
   })),
+];
+
+/**
+ * The questions, kept out of the render so the page's shape stays readable.
+ *
+ * Two of them are the caveat band this page used to carry above the footer, put
+ * where a reader who has just been asked for a did:key actually wonders.
+ */
+const BENCH_QUESTIONS: Question[] = [
+  {
+    q: 'Does Foolscap ever see my private key?',
+    a: (
+      <p>
+        No, and there is no field on this page that takes one unless you switch the local-key
+        panel on yourself — it is off by default, it says which origin is about to hold the seed,
+        and it exists for testing rather than for a key that matters. The ordinary path is the one
+        above: Foolscap shows you the exact bytes, you sign them wherever your key already lives,
+        and you paste back the signature. A signature is not a key and cannot be turned into one.
+      </p>
+    ),
+  },
+  {
+    q: 'What leaves this browser?',
+    a: (
+      <p>
+        One request, and only if you ask for it: the nonce lookup, which sends your{' '}
+        <span className="mono">did:key</span> and the room name to technocore.chat to find the
+        highest nonce you have used there. Nothing else — not the text, not the signature, not the
+        request Foolscap builds. There is no server behind this page to send it to. Posting is
+        yours to do, with the URL at the bottom.
+      </p>
+    ),
+  },
+  {
+    q: 'Why does the string look like that?',
+    a: (
+      <p>
+        Because that is what the server hashes. The canonical string is{' '}
+        <span className="mono">room|nonce|text</span>, UTF-8, with the text already put through
+        the server&rsquo;s own single-line sweep — control characters, format characters and line
+        separators collapsed to spaces, then trimmed. Sign anything else and the server will
+        compute a different digest and reject it, which is why the string is the largest thing on
+        the page and why it updates as you type.
+      </p>
+    ),
+  },
+  {
+    q: 'What is the nonce for, and why does mine get refused?',
+    a: (
+      <p>
+        It stops a message being replayed: the server takes a message from a key only if its nonce
+        is strictly greater than the last one that key used in that room. A{' '}
+        <span className="mono">400 nonce … is not greater than …</span> nearly always means the
+        earlier attempt actually landed. That is not a failure to retry — read the room first,
+        because retrying will post the thing twice.
+      </p>
+    ),
+  },
+  {
+    q: 'What does “verified” mean here, exactly?',
+    a: (
+      <p>
+        That your signature folds to the DID above it over the exact bytes on screen, checked in
+        this browser with WebCrypto. It proves the holder of that key signed that string; it
+        proves nothing about whether the server will accept the message — a nonce that has already
+        been used verifies perfectly and is still refused.
+      </p>
+    ),
+  },
+  {
+    q: 'Will the message be answered?',
+    a: (
+      <p>
+        Only some shapes are. A receipted type gets a receipt from the referee and can then be
+        followed on the Tracker; everything else simply puts a message in a room, and nothing will
+        answer it. The shape picker says which is which, and so does the hint under the text — but
+        the server enforces none of this: the shapes are the contest&rsquo;s convention, and
+        Technocore takes any text in any room.
+      </p>
+    ),
+  },
 ];
 
 export default function Bench() {
@@ -149,12 +234,19 @@ export default function Bench() {
     : null;
 
   return (
-    <Shell page="bench">
-      <div className="bench">
-        <Slab built={built} roomOk={roomOk} />
+    <Shell page="bench" variant="console">
+      <div className="console bench">
+        {/* THE CANONICAL STRING IS STILL THE HERO and still above every input:
+            a user watches the thing they are about to sign being assembled
+            rather than meeting it at step three of a wizard. It is in a panel
+            now, which gives it the one thing it did not have — a name. */}
+        <Panel title="The exact string you are signing" flush>
+          <Slab built={built} roomOk={roomOk} />
+        </Panel>
 
         {/* --- 1. what to say, and where ------------------------------------ */}
-        <div className="bench__grid">
+        <Panel title="What to say, and where">
+          <div className="bench__grid">
           <div className="field">
             <label className="field__label" htmlFor="bench-room">
               Room
@@ -279,11 +371,11 @@ export default function Bench() {
               <span className="sweep__text">{built.text || '(nothing left after the sweep)'}</span>
             </p>
           )}
-        </div>
+          </div>
+        </Panel>
 
         {/* --- 2. sign it -------------------------------------------------- */}
-        <section className="bench__section">
-          <h2 className="bench__legend">Sign it wherever your key lives</h2>
+        <Panel title="Sign it wherever your key lives">
           <div className="bench__grid">
             <div className="field field--wide">
               <label className="field__label" htmlFor="bench-did">
@@ -303,6 +395,21 @@ export default function Bench() {
                 <p className="field__hint field__hint--warn">
                   That is not an Ed25519 did:key. They begin did:key:z6Mk and run about 56
                   characters.
+                </p>
+              )}
+              {/* THE KEY, DRAWN, the moment it is a key at all. Nothing on this
+                  page can tell you a DID is yours — the page has never seen it
+                  before — but a reader who knows their own mark will notice
+                  instantly that they have pasted somebody else's, or mistyped
+                  their own, which is otherwise fifty-six characters of base58
+                  to check by eye. */}
+              {didOk && (
+                <p className="field__mark">
+                  <Glyph did={did.trim()} size={20} />
+                  <span>
+                    The mark for this key. It is the same every time; it is not proof the key is
+                    yours.
+                  </span>
                 </p>
               )}
             </div>
@@ -332,17 +439,16 @@ export default function Bench() {
             setSig(s);
             setDid(d);
           }} />
-        </section>
+        </Panel>
 
         {/* --- 3. post it -------------------------------------------------- */}
-        <section className="bench__section">
-          <h2 className="bench__legend">Post it yourself</h2>
+        <Panel title="Post it yourself">
           {!ready ? (
-            <p className="bench__note">
-              The request appears once the signature above verifies. Foolscap builds it and hands
-              it over — it does not post anything on your behalf, here or anywhere else on this
-              site.
-            </p>
+            <PaneState
+              state="empty"
+              title="No request yet."
+              detail="It appears once the signature above verifies against the string at the top. Foolscap builds it and hands it over — it does not post anything on your behalf, here or anywhere else on this site."
+            />
           ) : (
             <>
               <Emit label="GET — no preflight, so this is the one to use in a browser" value={url!} />
@@ -354,15 +460,21 @@ export default function Bench() {
               </p>
             </>
           )}
-        </section>
+        </Panel>
 
-        <div className="bcaveat">
-          <strong>Foolscap never holds a key.</strong>
-          This page builds a string, checks a signature you made elsewhere, and writes out a
-          request for you to send. It has no server, and nothing you type here leaves the
-          browser except the one read that looks up your last nonce — which sends your DID and
-          the room name to technocore.chat and nothing else.
-        </div>
+        {/* CUT AT THE CRITIQUE STEP: a four-line band stood here saying Foolscap
+            never holds a key, has no server, and sends nothing but the one
+            nonce lookup. Every word of it is still on the page — the last two
+            questions below say it, at the point where a reader has just been
+            asked for a did:key and has started wondering — and the footer under
+            them says the first half again on every page of the site. Three
+            statements of one claim, and the loudest was the one nobody had a
+            question about yet. */}
+
+        <Questions
+          title="How do I sign and post without handing over my key?"
+          items={BENCH_QUESTIONS}
+        />
       </div>
     </Shell>
   );
@@ -411,8 +523,9 @@ function Verdict({ verdict, did }: { verdict: string; did: string }) {
   if (verdict === 'yes') {
     return (
       <p className="verdict">
+        <Glyph did={did} size={20} />
         <span className="verdict__word verdict__word--yes">Verified</span> — here, in this
-        browser, against {did.slice(0, 20)}…. The server will reach the same answer.
+        browser, against {shortDid(did)}. The server will reach the same answer.
       </p>
     );
   }

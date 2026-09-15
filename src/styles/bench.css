@@ -16,23 +16,16 @@
 
 /* --------------------------------------------------------------------- page */
 
+/* Pattern B: the console carries the width and the centring — see .console in
+ * foolscap.css. This page used to cap itself at 72rem and pin its own sections
+ * apart with a hairline; both jobs belong to the layout and the panel now, and
+ * .bench keeps only what is specific to the bench.
+ *
+ * .bench__section and .bench__legend went with them: a <section> with an h2 and
+ * a rule above it is a panel drawn by hand, and there are three of them on this
+ * page. */
 .bench {
-  max-width: var(--shell);
-  margin-inline: auto;
-}
-
-.bench__section {
-  margin-top: var(--space-2);
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--rule);
-}
-
-.bench__legend {
-  margin: 0 0 var(--space);
-  font-family: var(--display);
-  font-size: var(--t-h2);
-  font-weight: 600;
-  color: var(--ink);
+  min-width: 0;
 }
 
 .bench__note {
@@ -261,11 +254,19 @@
  *
  * And the URL below simply does not exist until this says yes. Absence is the
  * signal; a disabled button with a red badge beside it would be the kit. */
+/* The glyph rides on the first line rather than above it: the verdict is one
+ * sentence and the mark is part of the sentence. */
 .verdict {
   margin: var(--space-half) 0 0;
   font-size: var(--t-small);
   line-height: 1.6;
   color: var(--ink-mid);
+}
+
+.verdict .glyph {
+  display: inline-block;
+  vertical-align: -0.28em;
+  margin-right: 0.4rem;
 }
 
 .verdict__word {
@@ -375,24 +376,6 @@
 .emit__foot {
   display: flex;
   justify-content: flex-end;
-}
-
-/* ---------------------------------------------------------------- warnings */
-
-.bcaveat {
-  margin: var(--space-2) 0 0;
-  max-width: var(--measure);
-  padding-left: var(--space);
-  border-left: 2px solid var(--warn);
-  font-size: var(--t-small);
-  line-height: 1.65;
-  color: var(--ink-mid);
-}
-
-.bcaveat strong {
-  display: block;
-  color: var(--ink);
-  font-weight: 600;
 }
 
 /* ------------------------------------------------------------------ narrow */
