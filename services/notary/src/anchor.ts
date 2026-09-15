@@ -263,30 +263,6 @@ export async function signingStatus(): Promise<{ did: string; canSign: boolean; 
 }
 
 /**
- * Closed capture days that have records but no stored root.
- *
- * CLOSED, and the guard is not decoration. `--all` is the one path that used to
- * be missing it, and the open day is the largest and most tempting one in the
- * table: running `--all` at 23:12 UTC built a root over 614,510 records of a day
- * that reached 883,445 before midnight. That root was wrong the instant it was
- * written, and had it published, upsertAnchor would then — correctly — have
- * refused every later correction, freezing a commitment to a partial day for
- * good. The default path and the hourly sweep both wait for UTC to leave a day.
- * This one now does too.
- */
-export async function unanchoredDays(): Promise<string[]> {
-  const { rows } = await getPool().query(
-    `select to_char(r.day, 'YYYY-MM-DD') as day
-       from (select distinct day from records) r
-       left join anchors a on a.day = r.day
-      where r.day < (now() at time zone 'utc')::date
-        and a.root is null
-      order by r.day`
-  );
-  return rows.map((row: { day: string }) => row.day);
-}
-
-/**
  * Complete days that are not yet witnessed.
  *
  * `day < today` is the important half: anchoring the current day would commit to
@@ -303,6 +279,14 @@ export async function unanchoredDays(): Promise<string[]> {
  * sweep treat a published anchor as unpublished and post it again every hour.
  * published_at records that the post succeeded; published_seq is only where to
  * find it.
+ *
+ * THIS IS THE ONLY DEFINITION NOW. There used to be a second — unanchoredDays,
+ * "a day with no stored root at all" — and `--all` used it. Which meant `--all`
+ * could not touch the one day that most needed it: 2026-09-14 held a root built
+ * while the day was still open, never published and already wrong, and `--all`
+ * looked at it, saw a root, and reported "every day with records already has a
+ * root". A day whose root constrains nothing is exactly a day that needs
+ * anchoring, and the sweep had always known that. The command does now.
  */
 export async function daysNeedingPublication(): Promise<string[]> {
   const { rows } = await getPool().query(
@@ -413,7 +397,7 @@ async function main(): Promise<void> {
 
   let days: string[];
   if (args.includes('--all')) {
-    days = await unanchoredDays();
+    days = await daysNeedingPublication();
   } else {
     const explicit = args.find((arg) => /^\d{4}-\d{2}-\d{2}$/.test(arg));
     // Yesterday by default: anchoring today's records mid-day would commit to a
@@ -422,7 +406,7 @@ async function main(): Promise<void> {
   }
 
   if (days.length === 0) {
-    console.log('Nothing to anchor: every day with records already has a root.');
+    console.log('Nothing to anchor: every closed day has a published root.');
     return;
   }
 

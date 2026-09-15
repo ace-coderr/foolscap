@@ -578,14 +578,31 @@ const readSrc = (...parts) => readFileSync(join(SRC, ...parts), 'utf8');
 describe('only a closed day is anchored', () => {
   const CLOSED = "r.day < (now() at time zone 'utc')::date";
 
-  test('every day-selecting query waits for UTC to leave the day', () => {
+  test('the day-selecting query waits for UTC to leave the day', () => {
     const src = readSrc('src', 'anchor.ts');
-    for (const fn of ['unanchoredDays', 'daysNeedingPublication']) {
-      const start = src.indexOf(`export async function ${fn}(`);
-      assert.ok(start > -1, `${fn} should exist`);
-      const body = src.slice(start, src.indexOf('\n}', start));
-      assert.ok(body.includes(CLOSED), `${fn} would anchor the day still being captured`);
-    }
+    const start = src.indexOf('export async function daysNeedingPublication(');
+    assert.ok(start > -1, 'daysNeedingPublication should exist');
+    const body = src.slice(start, src.indexOf('\n}', start));
+    assert.ok(body.includes(CLOSED), 'it would anchor the day still being captured');
+  });
+
+  test('there is only one definition of a day that needs anchoring', () => {
+    // There were two, and `--all` used the other one — "a day with no stored
+    // root at all". So `--all` could not touch a day holding a root that had
+    // never been published, which is precisely a day that needs anchoring: an
+    // unpublished root constrains nothing. 2026-09-14 sat on one, built while
+    // the day was still open and already wrong, and `--all` looked straight at
+    // it and reported that every day already had a root.
+    const src = readSrc('src', 'anchor.ts');
+    const code = src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    assert.ok(!code.includes('unanchoredDays'), 'the second definition should stay gone');
+    const main = code.slice(code.indexOf('async function main('));
+    const all = main.indexOf("includes('--all')");
+    assert.ok(all > -1, '--all should still be a flag');
+    assert.ok(
+      main.slice(all, all + 200).includes('daysNeedingPublication()'),
+      '--all must select days the same way the hourly sweep does'
+    );
   });
 });
 
