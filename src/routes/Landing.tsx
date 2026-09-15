@@ -18,6 +18,9 @@ import { lazy, Suspense, useEffect, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { Footer, HeroNav } from '../components/Shell';
 import { PAGES } from '../pages';
+import { Card } from '../components/Card';
+import { ToolMark } from '../components/ToolMark';
+import { Questions } from '../components/Questions';
 import { useLivePulse, type LiveFeed } from '../hero/useLivePulse';
 import { num } from '../format';
 import { useCountUp, useInView, usePrefersReducedMotion } from '../motion';
@@ -136,6 +139,8 @@ export default function Landing() {
 
       <Tools />
 
+      <LandingQuestions />
+
       <Footer />
     </div>
   );
@@ -212,9 +217,11 @@ function About() {
         <p className="about__note rise" style={rise(4)}>
           {FOOTNOTE}
         </p>
-        <p className="about__close rise" style={rise(5)}>
-          Foolscap keeps what the network drops.
-        </p>
+        {/* CUT AT THE CRITIQUE STEP: "Foolscap keeps what the network drops."
+            stood here. The footer's headline, two screens down the same scroll,
+            is "Keep what the network drops." — the same sentence at four times
+            the size, as the page's closing line. One of them had to go, and the
+            one that goes is the one that says it first and smaller. */}
       </div>
     </section>
   );
@@ -284,6 +291,95 @@ const FOOTNOTE =
  * link, because a card that looks clickable and is not would be worse than the
  * honest blank.
  */
+/**
+ * The questions, above the footer.
+ *
+ * DESIGN.md asks every page for these, and this one is where a stranger
+ * arrives: the questions a sceptic asks before clicking anything, answered
+ * before they have to ask twice. At least one answer is a limitation, which on
+ * the front page of a tool that promises verification means saying what it
+ * cannot verify.
+ */
+function LandingQuestions() {
+  const [ref, seen] = useInView<HTMLElement>();
+
+  return (
+    <section className="lquestions" ref={ref} data-in={seen}>
+      <div className="lquestions__inner">
+        <Questions
+          title="Before you click anything"
+          items={[
+            {
+              q: 'What is Technocore, and what is Foolscap?',
+              a: (
+                <p>
+                  Technocore is a public message network: rooms anyone can write to, read over
+                  plain HTTP, with no accounts. Foolscap is six read-only tools for making sense of
+                  it — what the network is doing, who actually said what, where a request stands,
+                  and what a key was doing on a given day. It is not a client and it is not a
+                  gateway; nothing here can post on your behalf.
+                </p>
+              ),
+            },
+            {
+              q: 'Does any of this need my key?',
+              a: (
+                <p>
+                  No. Five of the six tools only read, and the sixth — the Bench — shows you the
+                  exact bytes to sign and takes back a signature, which is not a key and cannot be
+                  turned into one. There is no account, no sign-in and no server of ours between
+                  you and the network.
+                </p>
+              ),
+            },
+            {
+              q: 'Why should I believe what these pages say?',
+              a: (
+                <p>
+                  Because they show their working. Every signature that decides what you are shown
+                  is recomputed in your browser against the public key the message names — not
+                  taken from a server&rsquo;s word for it — and where a page is repeating something
+                  it could not check, it says so in the same sentence. The one key the Tracker
+                  treats as authoritative is printed on that page in full, to be compared against
+                  its published source by eye.
+                </p>
+              ),
+            },
+            {
+              q: 'What can Foolscap not tell me?',
+              a: (
+                <>
+                  <p>
+                    Anything that has rotated away. Technocore rooms are rings: past a size limit
+                    the oldest messages are dropped, and nothing can recover them — not Foolscap,
+                    not the archive, not the sender. So an absence here is almost never evidence,
+                    and every page that could mislead you with one says where its coverage stops.
+                  </p>
+                  <p>
+                    It also cannot tell you who holds a key. A verified signature proves that key
+                    signed those bytes and nothing whatever about the person behind it.
+                  </p>
+                </>
+              ),
+            },
+            {
+              q: 'Is it watching me?',
+              a: (
+                <p>
+                  There is no analytics on this site, no cookie and no account. Two pages keep one
+                  thing each in your own browser and nowhere else: which theme you picked, and —
+                  on the Vault — which namespaces you asked it to watch, so it can tell you what
+                  has gone since. Both are yours to clear, and neither leaves the machine.
+                </p>
+              ),
+            },
+          ]}
+        />
+      </div>
+    </section>
+  );
+}
+
 function Tools() {
   const [ref, seen] = useInView<HTMLElement>();
 
@@ -300,29 +396,39 @@ function Tools() {
           Each answers one question nothing else answers.
         </p>
 
+        {/* THE SHARED CARD, with each tool's own mark in the visual block.
+            These were hand-built cards — glass, a 20px radius, their own border
+            — and the six of them were the amendment's first example of where a
+            card belongs: a thing being offered. What they did not have was a
+            visual, and "a card without one is a row". The marks draw each
+            tool's mechanism rather than its category: a skyline for the City,
+            two leaves folding into a parent for Notary, a queue for the
+            Tracker. See components/ToolMark.tsx. */}
         <ul className="tools__list">
           {PAGES.map((page, i) => (
             <li
               className="tools__card rise"
               key={page.id}
-              data-available={page.available}
               style={rise(3 + i)}
               {...(page.available ? tiltProps() : {})}
             >
-              <p className="tools__name">
-                {page.available && <span className="hero__dot hero__dot--live" aria-hidden="true" />}
-                {page.label}
-              </p>
-              <p className="tools__question">{page.title}</p>
-              <p className="tools__what">{page.line}</p>
-
-              {page.available ? (
-                <Link className="hero__pill hero__pill--ghost tools__open" to={page.path} data-magnetic>
-                  Open {page.label}
-                </Link>
-              ) : (
-                <p className="tools__soon">Not built yet</p>
-              )}
+              <Card
+                visual={<ToolMark id={page.id} />}
+                title={page.label}
+                /* Two levels, not a fact: the question the tool answers and
+                   what it does. A card's meta row is for short facts with a
+                   mark beside them — a sentence and a half in one made the
+                   ring read as a bullet point. */
+                detail={
+                  <>
+                    <span className="tools__q">{page.title}</span>
+                    <span className="tools__w">{page.line}</span>
+                  </>
+                }
+                to={page.available ? page.path : undefined}
+                disabled={!page.available}
+                actionLabel={page.available ? `Open ${page.label}` : 'Not built yet'}
+              />
             </li>
           ))}
         </ul>

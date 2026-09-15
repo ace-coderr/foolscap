@@ -1312,74 +1312,35 @@ body.on-black {
   list-style: none;
 }
 
+/* THE CARD IS components/Card.tsx NOW. This element is the tilt surface and
+ * the grid cell around it; the box, the fill, the border and the padding all
+ * come from .card2. Two container systems on one page was the diagnosis, not
+ * a style. */
 .tools__card {
   display: flex;
-  flex-direction: column;
-  border-radius: 20px;
-  padding: clamp(1.35rem, 2.2vw, 1.85rem);
-  background: var(--hero-glass);
-  border: 1px solid var(--hero-edge);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
 }
 
-/* Only where there is something to open. A card that lit up and then did
- * nothing would be a worse answer than the flat one. */
-.tools__card[data-available='true']:hover {
+.tools__card > .card2 {
+  flex: 1 1 auto;
+}
+
+/* .tools__name, .tools__question, .tools__what, .tools__open and .tools__soon
+ * are gone with the hand-built card: they are .card2__title, .card2__detail,
+ * .card2__fact and .card2__open now, drawn once in foolscap.css for every card
+ * on the site. The mark in the visual block is components/ToolMark.tsx.
+ *
+ * The tilt survives, on the cell rather than on the card, because it is the
+ * landing's own flourish and not part of the card. */
+.tools__card[data-tilt='on'] .card2,
+.tools__card:hover .card2 {
   border-color: rgba(var(--surface-tint), 0.18);
 }
 
-.tools__card[data-available='true']:hover .tools__name {
-  transform: translateX(2px);
-}
-
-.tools__name {
-  transition: transform 140ms ease-out;
-  display: flex;
-  align-items: center;
-  gap: 0.55em;
-  margin: 0 0 0.5rem;
-  font-family: var(--hero-display);
-  font-stretch: 112%;
-  font-weight: 600;
-  font-size: 22px;
-  line-height: 1.1;
-  letter-spacing: 0.01em;
-  text-transform: uppercase;
+/* The mark takes the card's text colour and sits quiet: it is a label for the
+ * tool, not a picture competing with the name under it. */
+.tmark {
   color: var(--ink);
-}
-
-.tools__question {
-  margin: 0 0 0.75rem;
-  font-size: 14px;
-  font-style: italic;
-  line-height: 1.45;
-  color: var(--hero-mid);
-}
-
-.tools__what {
-  margin: 0 0 1.15rem;
-  font-size: 13.5px;
-  line-height: 1.55;
-  color: var(--about-label);
-}
-
-/* Pushed to the bottom so the actions line up across a row whose questions and
- * descriptions are different lengths. */
-.tools__open,
-.tools__soon {
-  margin-top: auto;
-  align-self: start;
-}
-
-.tools__soon {
-  margin-bottom: 0;
-  padding: 0.5rem 0;
-  font-size: 11.5px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--about-quiet);
+  opacity: 0.82;
 }
 
 /* ----------------------------------------------------------------- narrow */
@@ -1394,4 +1355,37 @@ body.on-black {
   .tools__list {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* The tool card's two lines of text: the question it answers, then what it
+ * does. .card2__detail is one paragraph, so they are stacked here rather than
+ * run together. */
+.card2__detail:has(.tools__q) {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.tools__q {
+  font-style: italic;
+  color: var(--ink-mid);
+}
+
+.tools__w {
+  font-size: var(--t-micro);
+  line-height: 1.55;
+  color: var(--ink-faint);
+}
+
+/* ------------------------------------------------------- before you click */
+
+/* The questions, between the tools and the footer. Same band rhythm as the
+ * sections above it, and the panel inside carries its own edges. */
+.lquestions {
+  position: relative;
+  padding: clamp(3rem, 8vh, 5rem) var(--hero-gutter) clamp(2rem, 5vh, 3.5rem);
+}
+
+.lquestions__inner {
+  max-width: var(--shell);
+  margin-inline: auto;
 }
