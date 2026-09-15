@@ -12,48 +12,11 @@
  * did not hold. A column of grey rules with one red one in it is readable at
  * arm's length and keeps the common case out of the alarming register. */
 
-/* --------------------------------------------------------------- the split */
-
-.split {
-  display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  gap: 20px;
-  align-items: start;
-  max-width: var(--shell);
-  margin-inline: auto;
-}
-
-.split__aside {
-  min-width: 0;
-}
-
-/* THE LIST HAS TO END SOMEWHERE ON SCREEN. Uncapped it was taller than the
- * viewport and simply ran off the bottom — no border, no closing edge, which is
- * the exact "where does this thing end" failure DESIGN.md opens with.
- *
- * NOT STICKY, and it was: position:sticky on this aside did nothing at all,
- * because a sticky element can only travel inside its parent's box and this
- * aside IS the tallest item in the grid. There was no slack to stick within, so
- * it scrolled away like anything else while claiming not to. Capped and
- * internally scrolled gives the independent scroll DESIGN.md asks for, and
- * actually does it.
- *
- * Clamped rather than a plain subtraction so a short viewport gets a usable
- * list instead of a sliver, and a tall one does not get a mile of rows. */
-.split__aside .panel2--scroll > .panel2__body {
-  max-height: clamp(18rem, calc(100dvh - 24rem), 42rem);
-}
-
-.split__main {
-  min-width: 0;
-}
-
-/* AND SO DOES THE MESSAGE LIST, for the same reason and a worse symptom.
+/* THE MESSAGE LIST ENDS ON SCREEN TOO, and it is the pane that needed it most.
  * Measured on `lobby` with 400 messages in the ring: the document was 43,341px
- * tall, which put the page's closing prose and its whole question block below
- * four hundred messages — reachable in principle and not in practice. DESIGN.md
- * asks for "both full height with independent scroll" and only the left pane
- * had it.
+ * tall, which put this page's whole question block below four hundred messages
+ * — reachable in principle and not in practice. DESIGN.md asks for "both full
+ * height with independent scroll" and only the left pane had it.
  *
  * The cap is on the list rather than on the panel body, so the counts, the
  * coverage holes and the cap notice stay put and only the messages move. A
@@ -402,26 +365,10 @@
   color: var(--ink-faint);
 }
 
-/* The page's closing prose and the question block below it. */
-.lens__tail {
-  max-width: var(--shell);
-  margin: var(--space-2) auto 0;
-}
 
 /* ------------------------------------------------------------------ narrow */
 
 @media (max-width: 62rem) {
-  /* One column: the list first, then the room. Neither pane sticks — a sticky
-   * header over a scrolling page on a phone eats a third of the screen. */
-  .split {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space);
-  }
-
-  .split__aside {
-    position: static;
-  }
-
   .msg__from {
     max-width: 18ch;
   }

@@ -2809,3 +2809,75 @@ body:not(.on-black) .footer {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* ========================================================================== */
+/* PATTERN A — THE SPLIT                                                      */
+/* ========================================================================== */
+
+/* DESIGN.md: "A list beside a detail pane. Left column 320px fixed, right
+ * fills, 20px gutter, both full height with independent scroll."
+ *
+ * Here rather than in lens.css because two pages use it now. It was written for
+ * /lens and copied nowhere: a layout pattern that exists twice is a layout
+ * pattern that will differ by four pixels within a month, which is most of how
+ * six pages ended up as six designs.
+ *
+ * Centred and capped, which is the amendment's third item: "a 45% column
+ * against 55% of empty black is the single most common complaint about this
+ * site and it is one CSS line per page." This is that line, once. */
+
+.split {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  max-width: var(--shell);
+  margin-inline: auto;
+}
+
+.split__aside,
+.split__main {
+  min-width: 0;
+}
+
+/* THE LIST HAS TO END SOMEWHERE ON SCREEN. Uncapped it was taller than the
+ * viewport and simply ran off the bottom — no border, no closing edge, which is
+ * the exact "where does this thing end" failure DESIGN.md opens with.
+ *
+ * NOT STICKY, and it was: position:sticky on the aside did nothing at all,
+ * because a sticky element can only travel inside its parent's box and the
+ * aside IS the tallest item in the grid. There was no slack to stick within, so
+ * it scrolled away like anything else while claiming not to. Capped and
+ * internally scrolled gives the independent scroll DESIGN.md asks for, and
+ * actually does it.
+ *
+ * Clamped rather than a plain subtraction so a short viewport gets a usable
+ * list instead of a sliver, and a tall one does not get a mile of rows. */
+.split__aside .panel2--scroll > .panel2__body {
+  max-height: clamp(18rem, calc(100dvh - 24rem), 42rem);
+}
+
+/* Stacked panels in the detail pane — the raw line and the reading of it —
+ * with the same 20px between them as between the columns. */
+.split__main > * + * {
+  margin-top: 20px;
+}
+
+/* The page's closing prose and the question block, under the whole split. */
+.split__tail {
+  max-width: var(--shell);
+  margin: var(--space-2) auto 0;
+}
+
+@media (max-width: 62rem) {
+  /* One column: the list first, then the detail. Neither pane sticks — a sticky
+   * header over a scrolling page on a phone eats a third of the screen. */
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space);
+  }
+
+  .split__aside {
+    position: static;
+  }
+}

@@ -91,6 +91,10 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
     selector: ".rooms2__row[aria-current='true']",
     why: 'the room being read, in the list you pick it from',
   },
+  {
+    selector: ".vkeys__row[aria-current='true']",
+    why: 'the note being read, in the list you pick it from',
+  },
 
   // --- verified, counted live ----------------------------------------------
   // How many signatures folded to the key that made them, climbing as the

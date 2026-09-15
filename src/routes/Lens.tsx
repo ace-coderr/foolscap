@@ -257,7 +257,7 @@ export default function Lens() {
         </div>
       </div>
 
-      <div className="lens__tail">
+      <div className="split__tail">
         {/* CUT AT THE CRITIQUE STEP: three lines of grey prose stood here saying
             that every signature was checked in the browser, that Lens holds no
             key, and that signing lives on the Bench. The footer directly below

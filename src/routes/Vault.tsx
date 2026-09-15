@@ -29,6 +29,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Shell } from '../components/Shell';
+import { Panel, PaneState, CapNotice } from '../components/Panel';
+import { Questions } from '../components/Questions';
+import { Card, MarkField } from '../components/Card';
+import { Glyph } from '../components/Glyph';
+import { looksLikeDid } from '../lib/did.ts';
 import { formatAge, formatUtc, num, plural } from '../format.ts';
 import { listNamespace, readNote as fetchNote, noteUrl } from '../lib/kv.ts';
 import {
@@ -198,22 +203,40 @@ export default function Vault() {
     return { live: matched.slice(0, DRAW), matched: matched.length, missing };
   }, [keys, filter, gone]);
 
+  /**
+   * The mark field for a watched namespace's card.
+   *
+   * Twenty-five cells sampled from the keys that were there at the last look,
+   * set where the key is still there. For the namespace currently open that is
+   * a real before-and-after; for the others Foolscap has not looked since, so
+   * every sampled cell is set and the card says so rather than implying a check
+   * it did not make.
+   */
+  const sampleField = (sighting: Sighting, name: string): boolean[] => {
+    const sample = sighting.keys.slice(0, 25);
+    const here = name === ns && listed.ns === ns ? new Set(keys) : null;
+    return Array.from({ length: 25 }, (_, i) =>
+      i < sample.length ? (here ? here.has(sample[i]) : true) : false
+    );
+  };
+
+  const watched = Object.entries(watch.watching);
+
+  /**
+   * How long ago, in words a person would use.
+   *
+   * formatAge is exact and says "0 seconds", which is what the watch line read
+   * the instant after anyone clicked Watch. Under a minute the honest and
+   * readable answer is the same one: just now.
+   */
+  const since = (ms: number): string => (ms < 60_000 ? 'just now' : `${formatAge(ms)} ago`);
+
   return (
     <Shell page="vault">
-      <div className="vault">
-        {/* First thing under the header. Not a footnote. */}
-        <div className="cannot">
-          <strong>Foolscap cannot tell you when a note will expire.</strong>
-          A note untouched for seven days is reclaimed, but the server publishes nothing that
-          exposes that clock — there is no written-at, no expires-at and no age, on the listing,
-          on a read or in a header. The <span className="mono">last-modified</span> you get back
-          is the time of your own request. So there is no countdown on this page and there will
-          not be one. What it can do is remember: watch a namespace, and Foolscap records which
-          keys were there and when it looked, so that next time it can tell you{' '}
-          <em>a note it saw last week is gone now</em>. That is an observation about the past,
-          not a forecast.
-        </div>
-
+      {/* The query, above the split, because it decides what both panes show.
+          A console header on a pattern A page, which is what a split whose
+          contents are chosen by a text field actually needs. */}
+      <div className="vquery">
         <div className="vpick">
           <div className="vpick__field">
             <label className="vpick__label" htmlFor="vault-ns">
@@ -236,16 +259,6 @@ export default function Vault() {
           <button className="vbutton" type="button" onClick={() => typed && setNs(typed)}>
             Read it
           </button>
-          {canRemember && (
-            <button
-              className="vbutton"
-              type="button"
-              disabled={watching != null || listing || listed.ns !== ns || keys.length === 0}
-              onClick={startWatching}
-            >
-              {watching ? 'Watching this one' : 'Watch this namespace'}
-            </button>
-          )}
         </div>
 
         <div className="vsuggest">
@@ -264,162 +277,299 @@ export default function Vault() {
             </button>
           ))}
         </div>
+      </div>
 
-        {listError && <p className="vproblem">{listError}</p>}
+      <div className="split">
+        <aside className="split__aside">
+          <Panel
+            flush
+            title="Keys"
+            action={
+              <span className="vkeys__count">
+                {listing ? 'listing…' : num.format(keys.length)}
+              </span>
+            }
+          >
+            <div className="vkeys__tools">
+              <input
+                className="vpick__input vfilter"
+                type="search"
+                value={filter}
+                placeholder="Filter keys"
+                aria-label="Filter keys"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                onChange={(e) => setFilter(e.target.value)}
+              />
+            </div>
 
-        {gone.length > 0 && (
-          <div className="cannot">
-            <strong>
-              {plural(gone.length, 'key')} Foolscap saw here last time {gone.length === 1 ? 'is' : 'are'}{' '}
-              gone.
-            </strong>
-            {describeGap(sinceMs)}
-          </div>
+            {/* THE WATCH STATE, IN THE LIST PANEL, which is what DESIGN.md asks
+                for: it was a section below both panes, where a reader had to
+                already know it existed. It is the only thing on this page that
+                bears on the expiry question at all, so it belongs against the
+                list it is about. */}
+            {canRemember && (
+              <div className="vwatchline" data-changed={gone.length > 0 ? 'true' : 'false'}>
+                {watching ? (
+                  <>
+                    <span className="vwatchline__state">
+                      Watched. Last looked {since(Date.now() - watching.lastLookedMs)},{' '}
+                      {plural(watching.keys.length, 'key')} then.
+                    </span>
+                    {gone.length > 0 && (
+                      <span className="vwatchline__gone">
+                        {plural(gone.length, 'key')} {gone.length === 1 ? 'is' : 'are'} gone since.{' '}
+                        {describeGap(sinceMs)}
+                      </span>
+                    )}
+                    <button
+                      className="vbutton vbutton--quiet"
+                      type="button"
+                      onClick={() => stopWatching(ns)}
+                    >
+                      Stop watching
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="vwatchline__state">
+                      Not watched. Foolscap can only tell you a note has gone if it looked before.
+                    </span>
+                    <button
+                      className="vbutton vbutton--quiet"
+                      type="button"
+                      disabled={listing || listed.ns !== ns || keys.length === 0}
+                      onClick={startWatching}
+                    >
+                      Watch this namespace
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {listing && keys.length === 0 ? (
+              <PaneState state="loading" title={`Listing ${ns}…`} />
+            ) : listError ? (
+              <PaneState
+                state="failed"
+                title="That namespace could not be listed."
+                detail={`${listError} Notes are still readable by name if you know one.`}
+              />
+            ) : shown.live.length === 0 && shown.missing.length === 0 ? (
+              <PaneState
+                state="empty"
+                title={keys.length === 0 ? `Nothing in ${ns}.` : 'No key matches that filter.'}
+                detail={
+                  keys.length === 0
+                    ? 'Either nobody has written to it, or everything in it has been reclaimed — those look identical from out here.'
+                    : `Filtering searches all ${num.format(keys.length)}.`
+                }
+              />
+            ) : (
+              <>
+                <ul className="vkeys__list">
+                  {shown.missing.map((key) => (
+                    <li key={`gone-${key}`}>
+                      <span
+                        className="vkeys__row"
+                        data-gone="true"
+                        title="Seen at the last look; not in this listing"
+                      >
+                        {key}
+                      </span>
+                    </li>
+                  ))}
+                  {shown.live.map((key) => (
+                    <li key={key}>
+                      <button
+                        className="vkeys__row"
+                        type="button"
+                        aria-current={key === openKey ? 'true' : undefined}
+                        onClick={() => setSelected({ ns, key })}
+                      >
+                        {key}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <CapNotice
+                  shown={shown.live.length}
+                  total={shown.matched}
+                  noun="keys"
+                  how={`Filtering searches all ${num.format(keys.length)}.`}
+                />
+              </>
+            )}
+          </Panel>
+
+          <p className="vnote-quiet">
+            Keys beginning <span className="mono">p-</span> are never listed by the server. They
+            are reachable by name and this page cannot show you they exist.
+          </p>
+        </aside>
+
+        <div className="split__main">
+          {openKey ? (
+            <Note ns={ns} noteKey={openKey} />
+          ) : (
+            <Panel title="Note">
+              <PaneState
+                state="empty"
+                title="Pick a key to read its note."
+                detail={
+                  <>
+                    Every namespace here is world-writable — the server checks signatures on writes
+                    to <span className="mono">room-owners</span> and{' '}
+                    <span className="mono">room-allow</span> and nowhere else. Whatever comes back
+                    is shown exactly as stored, and any reading of it sits beside the bytes rather
+                    than in place of them.
+                  </>
+                }
+              />
+            </Panel>
+          )}
+        </div>
+      </div>
+
+      <div className="split__tail">
+        {canRemember && watched.length > 0 && (
+          <section className="vwatched">
+            <h2 className="vwatched__title">Namespaces Foolscap has looked at</h2>
+            <div className="vwatched__grid">
+              {watched.map(([name, sighting]) => (
+                <Card
+                  key={name}
+                  visual={<MarkField present={sampleField(sighting, name)} />}
+                  title={name}
+                  detail={
+                    name === ns
+                      ? gone.length > 0
+                        ? `${plural(gone.length, 'key')} gone since the last look.`
+                        : 'Nothing has gone since the last look.'
+                      : 'Open it to compare against the last look.'
+                  }
+                  meta={[
+                    `${plural(sighting.keys.length, 'key')} then`,
+                    `looked ${since(Date.now() - sighting.lastLookedMs)}`,
+                  ]}
+                  actionLabel={name === ns ? 'Stop watching' : 'Open'}
+                  onClick={() => {
+                    if (name === ns) {
+                      stopWatching(name);
+                      return;
+                    }
+                    setTyped(name);
+                    setNs(name);
+                  }}
+                />
+              ))}
+            </div>
+            <p className="vnote-quiet">
+              These times are this browser&rsquo;s clock, recording when <em>Foolscap</em> looked —
+              not when anything was written. Nothing here came from the server.{' '}
+              <button
+                className="vbutton vbutton--quiet"
+                type="button"
+                onClick={() => {
+                  forgetAll();
+                  watchRef.current = { watching: {} };
+                  setWatch({ watching: {} });
+                  setGone([]);
+                }}
+              >
+                Forget everything
+              </button>
+            </p>
+          </section>
         )}
 
-        <div className="vpanes">
-          <div className="vkeys">
-            <p className="vkeys__head">
-              <span>
-                {listing
-                  ? 'listing…'
-                  : shown.matched === keys.length
-                    ? `${num.format(keys.length)} keys`
-                    : `${num.format(shown.matched)} of ${num.format(keys.length)}`}
-              </span>
-              <span>{ns}</span>
-            </p>
-            <input
-              className="vpick__input"
-              type="search"
-              value={filter}
-              placeholder="Filter keys"
-              aria-label="Filter keys"
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck={false}
-              onChange={(e) => setFilter(e.target.value)}
-            />
-            <ul className="vkeys__list">
-              {shown.missing.map((key) => (
-                <li key={`gone-${key}`}>
-                  <span className="vkeys__row" data-gone="true" title="Seen at the last look; not in this listing">
-                    {key}
-                  </span>
-                </li>
-              ))}
-              {shown.live.map((key) => (
-                <li key={key}>
-                  <button
-                    className="vkeys__row"
-                    type="button"
-                    aria-current={key === openKey ? 'true' : undefined}
-                    onClick={() => setSelected({ ns, key })}
-                  >
-                    {key}
-                  </button>
-                </li>
-              ))}
-              {shown.matched > shown.live.length && (
-                <li>
-                  <p className="vnote-quiet">
-                    Showing {num.format(shown.live.length)} of {num.format(shown.matched)}.
-                    Filtering searches all {num.format(keys.length)}.
+        <Questions
+          title="What notes exist, who owns them, and when do they expire?"
+          items={[
+            {
+              q: 'When does this note expire?',
+              a: (
+                <>
+                  <p>
+                    Nobody can tell you, including this page. A note untouched for seven days is
+                    reclaimed and the clock is real, but the server publishes nothing that exposes
+                    it — no written-at, no expires-at and no age, on the listing, on a read or in a
+                    header. The <span className="mono">last-modified</span> you get back is the
+                    time of your own request, and it moves every time you ask.
                   </p>
-                </li>
-              )}
-              {!listing && shown.live.length === 0 && shown.missing.length === 0 && (
-                <li>
-                  <p className="vnote-quiet">
-                    {keys.length === 0
-                      ? `Nothing in ${ns}. Either nobody has written to it, or everything in it has been reclaimed — those look identical from out here.`
-                      : 'No key matches that filter.'}
+                  <p>
+                    So there is no countdown here and there will not be one. A ring or a bar would
+                    be wrong in both directions: a note rewritten an hour ago has a full week left
+                    and would read as expiring, and a note nobody has touched in six days would
+                    read as fresh because Foolscap first saw it this morning.
                   </p>
-                </li>
-              )}
-            </ul>
-            <p className="vnote-quiet">
-              Keys beginning <span className="mono">p-</span> are never listed by the server.
-              They are reachable by name and this page cannot show you they exist.
-            </p>
-          </div>
-
-          <div className="vnote">
-            {openKey ? (
-              <Note ns={ns} noteKey={openKey} />
-            ) : (
-              <p className="vempty">
-                Pick a key to read its note. Every namespace here is world-writable — the server
-                checks signatures on writes to <span className="mono">room-owners</span> and{' '}
-                <span className="mono">room-allow</span> and nowhere else.
-              </p>
-            )}
-          </div>
-        </div>
-
-        <section className="vwatch">
-          <h2 className="vwatch__title">What Foolscap has looked at</h2>
-          {!canRemember ? (
-            <p className="vnote-quiet">
-              This browser will not let the page remember anything — private mode, or site data
-              switched off. Watching needs somewhere to keep the last listing, so it is
-              unavailable here. Nothing else on the page depends on it.
-            </p>
-          ) : Object.keys(watch.watching).length === 0 ? (
-            <p className="vnote-quiet">
-              Nothing watched yet. Watching a namespace stores its key list and the time of the
-              look in this browser, and nothing else — no note contents, no identifiers, nothing
-              from any other page. It is the only thing on this site that is kept between visits.
-            </p>
-          ) : (
-            <>
-              <ul className="vwatch__list">
-                {Object.entries(watch.watching).map(([name, sighting]) => (
-                  <li
-                    className="vwatch__row"
-                    key={name}
-                    data-changed={name === ns && gone.length > 0 ? 'true' : 'false'}
-                  >
-                    <span className="vwatch__ns">{name}</span>
-                    <span className="vwatch__when">
-                      {plural(sighting.keys.length, 'key')} at the last look ·{' '}
-                      {formatUtc(sighting.lastLookedMs)} ·{' '}
-                      {formatAge(Date.now() - sighting.lastLookedMs)} ago
-                    </span>
-                    {name === ns && gone.length > 0 && (
-                      <span className="vwatch__gone">gone since: {gone.join(', ')}</span>
-                    )}
-                    <span>
-                      <button
-                        className="vbutton vbutton--quiet"
-                        type="button"
-                        onClick={() => stopWatching(name)}
-                      >
-                        Stop watching
-                      </button>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <p className="vnote-quiet">
-                These times are this browser&rsquo;s clock, recording when <em>Foolscap</em>{' '}
-                looked — not when anything was written. Nothing here came from the server.{' '}
-                <button
-                  className="vbutton vbutton--quiet"
-                  type="button"
-                  onClick={() => {
-                    forgetAll();
-                    watchRef.current = { watching: {} };
-                    setWatch({ watching: {} });
-                    setGone([]);
-                  }}
-                >
-                  Forget everything
-                </button>
-              </p>
-            </>
-          )}
-        </section>
+                </>
+              ),
+            },
+            {
+              q: 'Then what does “watching” actually do?',
+              a: (
+                <p>
+                  It remembers. Watch a namespace and Foolscap stores which keys were listed and
+                  when it looked; come back and it compares the two. “This key was here on Monday
+                  and is not here now” is something it knows, and it is an observation about the
+                  past rather than a forecast. It cannot tell you <em>why</em> a key went: a
+                  reclaimed note and a deleted one look identical from out here.
+                </p>
+              ),
+            },
+            {
+              q: 'Where is that stored, and what is in it?',
+              a: (
+                <p>
+                  In this browser and nowhere else. It holds the namespaces you chose to watch, the
+                  key names that were listed, and the time of the look — no note contents, no
+                  identifiers, nothing from any other page and nothing about you. All of it was
+                  public and on screen already, and “Forget everything” empties it. It is the only
+                  thing on this site kept between visits.
+                </p>
+              ),
+            },
+            {
+              q: 'Can I trust what a note says?',
+              a: (
+                <p>
+                  Not from the fact that it is there. Every namespace on this server is
+                  world-writable except two: the server checks signatures on writes to{' '}
+                  <span className="mono">room-owners</span> and{' '}
+                  <span className="mono">room-allow</span>, and nowhere else. Anywhere else, anyone
+                  could have written anything. Where a note carries a signed delegate record,
+                  Foolscap checks that signature here, in this browser, and says which way it went.
+                </p>
+              ),
+            },
+            {
+              q: 'Why is the raw line always shown?',
+              a: (
+                <p>
+                  Because it is the only part that is certainly true. Notes follow conventions —
+                  field lists, bare DIDs, JSON, delegate records — and where one matches, this page
+                  shows its reading of it. A reading is a guess at what somebody meant, so it sits
+                  beside the bytes and never in place of them.
+                </p>
+              ),
+            },
+            {
+              q: 'Are these all the keys?',
+              a: (
+                <p>
+                  All the ones the server will list. Keys beginning <span className="mono">p-</span>{' '}
+                  are excluded from every listing by design: they are reachable by name and this
+                  page cannot show you they exist, so a namespace can hold notes nothing here will
+                  ever display. The list also draws at most {num.format(DRAW)} at once — a
+                  namespace holds up to 250,000 — and filtering searches the whole of it.
+                </p>
+              ),
+            },
+          ]}
+        />
       </div>
     </Shell>
   );
@@ -427,6 +577,19 @@ export default function Vault() {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * The note, as two or three stacked panels.
+ *
+ * DESIGN.md: "The note pane gets the raw line and the parsed reading as two
+ * panels stacked, not two headings in one column." They were two <section>s
+ * with small grey labels, in one undifferentiated column, and the distinction
+ * that matters most on this page — bytes against interpretation — was carried
+ * by a label at --t-micro.
+ *
+ * A READING IS NEVER A REPLACEMENT, and the panels are how that gets said: the
+ * first one is what is actually stored, and every panel under it is this page's
+ * guess at what somebody meant, titled as a guess.
+ */
 function Note({ ns, noteKey }: { ns: string; noteKey: string }) {
   const [raw, setRaw] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -456,22 +619,28 @@ function Note({ ns, noteKey }: { ns: string; noteKey: string }) {
 
   return (
     <>
-      <h2 className="vnote__key">
-        {ns}/{noteKey}
-      </h2>
-      <p className="vnote__url">
-        <a href={noteUrl(ns, noteKey)} target="_blank" rel="noreferrer noopener">
-          {noteUrl(ns, noteKey)}
-        </a>
-      </p>
-
-      {loading && <p className="vempty">Reading…</p>}
-      {error && <p className="vproblem">{error}</p>}
-
-      {!loading && !error && (
-        <>
-          <section className="vsection">
-            <p className="vsection__label">The note, exactly as stored</p>
+      <Panel
+        title={
+          <span className="vnote__key">
+            {ns}/{noteKey}
+          </span>
+        }
+        action={
+          <a className="vnote__url" href={noteUrl(ns, noteKey)} target="_blank" rel="noreferrer noopener">
+            Raw
+          </a>
+        }
+      >
+        {loading ? (
+          <PaneState state="loading" title={`Reading ${noteKey}…`} />
+        ) : error ? (
+          <PaneState
+            state="failed"
+            title="That note could not be read."
+            detail={`${error} The key is still listed; this was the read of it that failed.`}
+          />
+        ) : (
+          <>
             <p className="vraw">
               {raw === null
                 ? '(nothing here — the key is not in the store)'
@@ -479,35 +648,54 @@ function Note({ ns, noteKey }: { ns: string; noteKey: string }) {
                   ? '(empty)'
                   : raw}
             </p>
-          </section>
+            <p className="vauth" data-signed={authority.signedLane ? 'true' : 'false'}>
+              {authority.note}
+            </p>
+          </>
+        )}
+      </Panel>
 
-          {reading.shape !== 'text' && reading.shape !== 'empty' && (
-            <section className="vsection">
-              <p className="vsection__label">
-                Read as {reading.shape === 'did' ? 'a did:key' : reading.shape}
-                {' — a convention, not something the server enforces'}
-              </p>
-              <Parsed reading={reading} />
-            </section>
-          )}
+      {!loading && !error && reading.shape !== 'text' && reading.shape !== 'empty' && (
+        <Panel
+          title={
+            <>
+              Read as {reading.shape === 'did' ? 'a did:key' : reading.shape}
+              <span className="panel2__qualifier">
+                {' '}
+                — a convention, not something the server enforces
+              </span>
+            </>
+          }
+        >
+          <Parsed reading={reading} />
+        </Panel>
+      )}
 
-          {reading.delegates.length > 0 && reading.did && (
-            <section className="vsection">
-              <p className="vsection__label">
-                {plural(reading.delegates.length, 'delegate record')}, checked here
-              </p>
-              {reading.delegates.map((record, i) => (
-                <Delegate record={record} rootDid={reading.did!} key={`${record.nonce}-${i}`} />
-              ))}
-            </section>
-          )}
-
-          <p className="vauth" data-signed={authority.signedLane ? 'true' : 'false'}>
-            {authority.note}
-          </p>
-        </>
+      {!loading && !error && reading.delegates.length > 0 && reading.did && (
+        <Panel flush title={`${plural(reading.delegates.length, 'delegate record')}, checked here`}>
+          {reading.delegates.map((record, i) => (
+            <Delegate record={record} rootDid={reading.did!} key={`${record.nonce}-${i}`} />
+          ))}
+        </Panel>
       )}
     </>
+  );
+}
+
+/**
+ * A DID, with its mark.
+ *
+ * Wherever a did:key is the subject rather than a mention. Printed in full —
+ * this is a page about who owns what, and a truncated owner is not an owner —
+ * with the glyph beside it so two DIDs in a list are distinguishable before
+ * either is read.
+ */
+function Did({ value }: { value: string }) {
+  return (
+    <span className="vdid">
+      <Glyph did={value} size={20} />
+      <span className="vdid__value">{value}</span>
+    </span>
   );
 }
 
@@ -519,7 +707,9 @@ function Parsed({ reading }: { reading: NoteReading }) {
     return (
       <dl className="vfields">
         <dt>did:key</dt>
-        <dd>{reading.did}</dd>
+        <dd>
+          <Did value={reading.did!} />
+        </dd>
       </dl>
     );
   }
@@ -528,7 +718,7 @@ function Parsed({ reading }: { reading: NoteReading }) {
       {reading.fields.map((field, i) => (
         <div style={{ display: 'contents' }} key={`${field.name}-${i}`}>
           <dt>{field.name}</dt>
-          <dd>{field.value}</dd>
+          <dd>{looksLikeDid(field.value) ? <Did value={field.value} /> : field.value}</dd>
         </div>
       ))}
     </dl>
@@ -565,8 +755,9 @@ function Delegate({ record, rootDid }: { record: DelegateRecord; rootDid: string
 
   return (
     <div className="vdel" data-ok={state == null ? undefined : String(state.ok)}>
+      <Did value={record.agent} />
       <span className="vdel__line">
-        {record.agent} · {record.scope} · expires {formatUtc(record.expires * 1000)}
+        {record.scope} · expires {formatUtc(record.expires * 1000)}
       </span>
       <span className={`vdel__verdict vdel__verdict--${verdict}`}>
         {verdict === 'checking'
@@ -577,7 +768,7 @@ function Delegate({ record, rootDid }: { record: DelegateRecord; rootDid: string
               ? 'signature verified — and this permission has expired'
               : 'signature does not verify'}
       </span>
-      {state && !state.ok && state.reason && <span>{state.reason}</span>}
+      {state && !state.ok && state.reason && <span className="vdel__why">{state.reason}</span>}
     </div>
   );
 }
