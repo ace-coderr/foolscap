@@ -1,113 +1,130 @@
-/* lens.css — reading a room with every signature checked.
+/* lens.css — pattern A, the split.
  *
- * TWO PANES, and the weight is all on the right one. The room list is a means
- * of getting to a room; the messages are what the page is for.
+ * DESIGN.md: "A list beside a detail pane. Left column 320px fixed, right
+ * fills, 20px gutter, both full height with independent scroll." This page was
+ * two stacked columns of text and the room list was not treated as navigation
+ * at all, which is what the rebuild fixes.
  *
- * THE VERDICT IS A MARGIN, NOT A BADGE. Each message carries a 2px rule down
- * its left edge and nothing else: --rule-strong for verified, --rule for
- * unsigned, --alarm for failed. A column of quiet grey rules with one red one
- * in it is legible at a glance and at arm's length, which a row of little
- * coloured pills is not — and it keeps the common case (unsigned) from looking
- * like a warning, which is the mistake this page most has to avoid.
+ * Containers are Panel — see foolscap.css. Nothing here draws its own box.
  *
- * ONE ACCENT, on the verified count in the header. Live, climbing, and it means
- * what it means everywhere else on this site. Individual verified messages get
- * NO colour: making the normal case teal would make the other two read as
- * exceptions, and most Technocore traffic is unsigned.
- *
- * DIDs are mono and truncated in the list with the whole value on hover — and
- * never truncated where the value is doing the work, which is the detail line
- * under a message that failed. */
+ * THE VERDICT IS STILL A MARGIN, NOT A BADGE: a 2px rule down each message's
+ * left edge, grey for verified, quieter for unsigned, --alarm for a proof that
+ * did not hold. A column of grey rules with one red one in it is readable at
+ * arm's length and keeps the common case out of the alarming register. */
 
-/* --------------------------------------------------------------------- page */
+/* --------------------------------------------------------------- the split */
 
-.lens {
+.split {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
   max-width: var(--shell);
   margin-inline: auto;
-  display: grid;
-  grid-template-columns: minmax(0, 17rem) minmax(0, 1fr);
-  gap: var(--space-2);
-  align-items: start;
 }
 
-/* ---------------------------------------------------------------- room list */
-
-.rooms {
-  position: sticky;
-  top: calc(var(--nav-height) + var(--space));
-  display: grid;
-  gap: var(--space-half);
-  max-height: calc(100dvh - var(--nav-height) - var(--space-2));
-  min-height: 0;
+.split__aside {
+  min-width: 0;
 }
 
-/* Opaque, not glass — a search input carries a clear control and, on some
- * platforms, a suggestion list. See the note in bench.css. */
-.rooms__search {
+/* THE LIST HAS TO END SOMEWHERE ON SCREEN. Uncapped it was taller than the
+ * viewport and simply ran off the bottom — no border, no closing edge, which is
+ * the exact "where does this thing end" failure DESIGN.md opens with.
+ *
+ * NOT STICKY, and it was: position:sticky on this aside did nothing at all,
+ * because a sticky element can only travel inside its parent's box and this
+ * aside IS the tallest item in the grid. There was no slack to stick within, so
+ * it scrolled away like anything else while claiming not to. Capped and
+ * internally scrolled gives the independent scroll DESIGN.md asks for, and
+ * actually does it.
+ *
+ * Clamped rather than a plain subtraction so a short viewport gets a usable
+ * list instead of a sliver, and a tall one does not get a mile of rows. */
+.split__aside .panel2--scroll > .panel2__body {
+  max-height: clamp(18rem, calc(100dvh - 24rem), 42rem);
+}
+
+.split__main {
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------- room search */
+
+/* In the panel header, as DESIGN.md asks: the list's own search belongs to the
+ * list rather than floating above it. */
+.rsearch {
   width: 100%;
-  padding: 0.5rem var(--space-half);
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  background-color: #14161b;
+  padding: 0.35rem var(--space-half);
+  border: 1px solid var(--s-border);
+  border-radius: var(--r-inner);
+  background-color: var(--s3);
   font-family: var(--mono);
   font-size: var(--mono-optical);
   color: var(--ink);
 }
 
-.rooms__search:focus-visible {
+.rsearch:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
 
-.rooms__list {
+/* --------------------------------------------------------------- room rows */
+
+.rooms2 {
   margin: 0;
   padding: 0;
   list-style: none;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  min-height: 0;
 }
 
-.rooms__row {
+.rooms2__row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-half);
   width: 100%;
-  padding: 0.4rem var(--space-half);
+  min-height: 44px;
+  padding: 12px var(--pad-panel);
+  /* The selected row's 2px accent edge lives here as a transparent border, so
+   * selecting a row never moves it by two pixels. */
   border: 0;
-  border-radius: 4px;
+  border-left: 2px solid transparent;
+  border-bottom: 1px solid var(--s-divider);
   background: none;
   font: inherit;
-  font-size: var(--t-small);
   color: var(--ink-mid);
   text-align: left;
   cursor: pointer;
+  min-width: 0;
 }
 
-.rooms__row:hover {
-  background: rgba(255, 255, 255, 0.04);
+.rooms2__row:hover {
+  background: rgba(255, 255, 255, 0.03);
   color: var(--ink);
 }
 
-.rooms__row[aria-current='true'] {
-  background: rgba(255, 255, 255, 0.07);
+.rooms2__row[aria-current='true'] {
+  background: var(--s2);
+  border-left-color: var(--accent);
   color: var(--ink);
 }
 
-.rooms__row:focus-visible {
+.rooms2__row:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 
-.rooms__name {
+.rooms2 li:last-child .rooms2__row {
+  border-bottom: 0;
+}
+
+.rooms2__name {
   font-family: var(--mono);
   font-size: var(--mono-optical);
   overflow-wrap: anywhere;
   min-width: 0;
 }
 
-.rooms__size {
+.rooms2__size {
   flex: 0 0 auto;
   font-family: var(--display);
   font-size: var(--t-micro);
@@ -115,39 +132,13 @@
   color: var(--ink-faint);
 }
 
-/* The City's wording about what /rooms is. Same caveat, same page furniture. */
-.rooms__caveat {
-  margin: 0;
-  font-size: var(--t-micro);
-  line-height: 1.55;
-  color: var(--ink-faint);
-}
+/* ------------------------------------------------------------ room header */
 
-/* ------------------------------------------------------------------- header */
-
-.reading__head {
-  position: sticky;
-  top: var(--nav-height);
-  z-index: 1;
-  padding-block: var(--space-half);
-  background: var(--paper);
-  border-bottom: 1px solid var(--rule);
-}
-
-.reading__room {
-  margin: 0;
-  font-family: var(--mono);
-  font-size: var(--t-h2);
-  color: var(--ink);
-  overflow-wrap: anywhere;
-}
-
-.reading__facts {
+.rhead {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-half) var(--space);
-  margin-top: 0.35rem;
+  gap: 0.35rem var(--space);
   font-family: var(--display);
   font-size: var(--t-micro);
   font-variant-numeric: tabular-nums;
@@ -156,36 +147,40 @@
   color: var(--ink-faint);
 }
 
-/* The one accent on the page: how many of N verified, climbing as it checks. */
-.reading__verified {
+.rhead__room {
+  font-family: var(--mono);
+  font-size: var(--t-small);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* The one accent in the header: how many verified, climbing live as it checks. */
+.rhead__verified {
   color: var(--accent);
 }
 
-.reading__failed {
+.rhead__failed {
   color: var(--alarm);
 }
 
-.reading__controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-half);
-  margin-top: var(--space-half);
-}
+/* ---------------------------------------------------------------- messages */
 
-/* ----------------------------------------------------------------- messages */
-
-.reading__list {
+.msgs {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-/* The margin rule IS the verdict. Nothing else carries it. */
 .msg {
-  padding: var(--space-half) 0 var(--space-half) var(--space);
+  padding: 12px var(--pad-panel);
   border-left: 2px solid var(--rule);
-  margin-top: var(--space-half);
+  border-bottom: 1px solid var(--s-divider);
+}
+
+.msgs li:last-child .msg {
+  border-bottom: 0;
 }
 
 .msg[data-verdict='verified'] {
@@ -197,25 +192,24 @@
 }
 
 .msg[data-verdict='checking'] {
-  border-left-color: var(--rule);
   opacity: 0.6;
 }
 
 .msg__head {
   display: flex;
-  flex-wrap: wrap;
   align-items: baseline;
   gap: var(--space-half);
   font-size: var(--t-micro);
   color: var(--ink-faint);
+  min-width: 0;
 }
 
 .msg__from {
   font-family: var(--mono);
   color: var(--ink-mid);
-  /* Truncated in the head; the whole value is in the title and, where it is
-   * being used as proof, printed in full below. */
-  max-width: 22ch;
+  /* Truncated here; the whole value is in the title, and printed in full below
+   * wherever it is the thing being checked. */
+  max-width: 24ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -226,14 +220,7 @@
   color: var(--ink);
 }
 
-.msg__seq,
-.msg__time {
-  font-family: var(--display);
-  font-variant-numeric: tabular-nums;
-}
-
 .msg__state {
-  margin-left: auto;
   font-family: var(--display);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -243,8 +230,16 @@
   color: var(--alarm);
 }
 
+/* Right-aligned, as DESIGN.md asks, and tabular so a column of them lines up. */
+.msg__time {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-family: var(--display);
+  font-variant-numeric: tabular-nums;
+}
+
 .msg__text {
-  margin: 0.3rem 0 0;
+  margin: 0.35rem 0 0;
   font-size: var(--t-small);
   line-height: 1.6;
   color: var(--ink);
@@ -252,7 +247,6 @@
   white-space: pre-wrap;
 }
 
-/* A qualifier under an unsigned message, or the reason a check failed. */
 .msg__note {
   margin: 0.35rem 0 0;
   max-width: var(--measure);
@@ -271,7 +265,10 @@
 .msg__proof {
   display: grid;
   gap: 0.15rem;
-  margin-top: 0.35rem;
+  margin-top: 0.4rem;
+  padding: var(--space-half);
+  border-radius: var(--r-inner);
+  background: var(--s2);
   font-family: var(--mono);
   font-size: var(--t-micro);
   line-height: 1.55;
@@ -284,13 +281,14 @@
 
 .lbutton {
   padding: 0.35rem 0.8rem;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--s-border);
   border-radius: 999px;
   background: none;
   font: inherit;
   font-size: var(--t-micro);
   color: var(--ink-mid);
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .lbutton:hover {
@@ -308,6 +306,16 @@
   outline-offset: 2px;
 }
 
+.lgap {
+  margin: 0;
+  padding: 12px var(--pad-panel);
+  border-bottom: 1px solid var(--s-divider);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-mid);
+  border-left: 2px solid var(--warn);
+}
+
 .lnote {
   margin: var(--space) 0 0;
   max-width: var(--measure);
@@ -316,45 +324,23 @@
   color: var(--ink-faint);
 }
 
-.lgap {
-  margin: var(--space) 0;
-  max-width: var(--measure);
-  padding-left: var(--space);
-  border-left: 2px solid var(--warn);
-  font-size: var(--t-small);
-  line-height: 1.6;
-  color: var(--ink-mid);
-}
-
-.lempty {
-  margin: var(--space-2) 0;
-  max-width: var(--measure);
-  font-size: var(--t-small);
-  line-height: 1.6;
-  color: var(--ink-mid);
+/* The page's closing prose and the question block below it. */
+.lens__tail {
+  max-width: var(--shell);
+  margin: var(--space-2) auto 0;
 }
 
 /* ------------------------------------------------------------------ narrow */
 
 @media (max-width: 62rem) {
-  /* One column: the room list on top, then the messages. Neither pane is
-   * sticky at this width — a sticky header over a scrolling page on a phone
-   * eats a third of the screen. */
-  .lens {
+  /* One column: the list first, then the room. Neither pane sticks — a sticky
+   * header over a scrolling page on a phone eats a third of the screen. */
+  .split {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space);
   }
 
-  .rooms {
-    position: static;
-    max-height: none;
-  }
-
-  .rooms__list {
-    max-height: 13rem;
-  }
-
-  .reading__head {
+  .split__aside {
     position: static;
   }
 

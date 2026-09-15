@@ -27,6 +27,10 @@
 //   that vanishes into a closed panel is a keyboard trap.
 //
 //   Tab closes it and moves on, which is what a native select does.
+//
+//   Scrolling does NOT close it. The panel is a scrolling list; a dismiss-on-
+//   scroll rule makes the control unusable the moment the list is longer than
+//   the panel, which is the case it exists for.
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 
@@ -118,12 +122,16 @@ export function Listbox({
   }, [open, selectedIndex]);
 
   /**
-   * Outside click and scroll both close it.
+   * Outside click closes it. Escape closes it. SCROLLING DOES NOT.
    *
-   * The scroll listener is capturing and passive so it sees scrolls in any
-   * container, not only the window — an absolutely positioned panel does not
-   * follow its control, so a panel left open through a scroll ends up detached
-   * from the thing it belongs to.
+   * There was a capturing scroll listener here that closed the panel, and it
+   * made the control unusable for the obvious reason: the panel is a scrolling
+   * list, so the first wheel gesture inside it dismissed the thing being
+   * scrolled. The justification written above it was also wrong — it claimed an
+   * absolutely positioned panel does not follow its control. It does. This one
+   * is absolute inside a relative .listbox, so it is positioned against the
+   * control and moves with it through any page scroll, for free. `position:
+   * fixed` is the case that needs repositioning, and this is not that.
    */
   useEffect(() => {
     if (!open) return;
@@ -132,15 +140,8 @@ export function Listbox({
       if (controlRef.current?.contains(target) || panelRef.current?.contains(target)) return;
       setOpen(false);
     };
-    const onScroll = () => setOpen(false);
     document.addEventListener('mousedown', onPointer);
-    window.addEventListener('scroll', onScroll, { capture: true, passive: true });
-    window.addEventListener('resize', onScroll);
-    return () => {
-      document.removeEventListener('mousedown', onPointer);
-      window.removeEventListener('scroll', onScroll, { capture: true } as EventListenerOptions);
-      window.removeEventListener('resize', onScroll);
-    };
+    return () => document.removeEventListener('mousedown', onPointer);
   }, [open]);
 
   // Keep the active option in view when the arrows walk past the panel's edge.

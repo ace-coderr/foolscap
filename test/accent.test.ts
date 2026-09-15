@@ -78,6 +78,20 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
     why: 'a key whose signature verified before the cutoff asked about',
   },
 
+  // --- the current one in a list -------------------------------------------
+  // Where you are is state, and a list you navigate with has a current row the
+  // same way the nav has a current page. A 2px edge rather than a fill: the row
+  // is already on --s2, and the accent marks which one rather than colouring it.
+  {
+    selector: ".rooms2__row[aria-current='true']",
+    why: 'the room being read, in the list you pick it from',
+  },
+
+  // --- verified, counted live ----------------------------------------------
+  // How many signatures folded to the key that made them, climbing as the
+  // browser checks. Same meaning as everywhere else: this verified.
+  { selector: '.rhead__verified', why: 'signatures that verified, counted live as they check' },
+
   // --- in flight -----------------------------------------------------------
   // A read is happening right now. It is the narrowest kind of state there is —
   // it exists only while the request is open and is gone the instant it
@@ -88,6 +102,9 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
     selector: '.nloading__rule::after',
     why: 'a read is in flight, for as long as it is and no longer',
   },
+  // The same sweep, in the shared pane-state component, so every page's
+  // loading state says the same thing in the same way.
+  { selector: '.pstate__rule::after', why: 'a read is in flight, in any panel on any page' },
 
   // --- verified, on the write lane ------------------------------------------
   // /bench checks a pasted signature against the DID above it and the exact
@@ -112,13 +129,14 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
     why: 'the field keyboard focus is on, on the bench',
   },
   { selector: '.listbox__control:focus-visible', why: 'the picker keyboard focus is on' },
-  { selector: '.rooms__search:focus-visible', why: 'the room search keyboard focus is on' },
-  { selector: '.rooms__row:focus-visible', why: 'the room in the list keyboard focus is on' },
   { selector: '.lbutton:focus-visible', why: 'the filter keyboard focus is on' },
   { selector: '.vpick__input:focus-visible', why: 'the namespace field keyboard focus is on' },
   { selector: '.vbutton:focus-visible', why: 'the vault button keyboard focus is on' },
   { selector: '.vsuggest__item:focus-visible', why: 'the namespace chip keyboard focus is on' },
   { selector: '.vkeys__row:focus-visible', why: 'the note key keyboard focus is on' },
+  { selector: '.qa__q:focus-visible', why: 'the question keyboard focus is on' },
+  { selector: '.rsearch:focus-visible', why: 'the room search keyboard focus is on' },
+  { selector: '.rooms2__row:focus-visible', why: 'the room in the list keyboard focus is on' },
   {
     selector: '.vdel__verdict--yes',
     why: 'a delegate record whose signature verified against the note it sits in',
@@ -127,7 +145,6 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
     selector: ".listbox__option[aria-selected='true'] .listbox__name",
     why: 'the option currently chosen',
   },
-  { selector: '.reading__verified', why: 'signatures that verified, counted live as they check' },
   { selector: '.bbutton:focus-visible', why: 'the button keyboard focus is on, on the bench' },
 ];
 
