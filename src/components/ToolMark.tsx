@@ -10,8 +10,9 @@
 // closed shape. Not a magnifying glass for Lens and not a padlock for Vault.
 // Those are pictures of the category; these are pictures of the mechanism.
 //
-//   city     rooms drawn to scale, which is the City's whole method
-//   track    a queue, with the one you asked about marked
+//   city       rooms drawn to scale, which is the City's whole method
+//   track      a queue, with the one you asked about marked
+//   retention  a ring dropping its oldest, which is the only thing a ring does
 //   bench    room | nonce | text — the canonical string, as three segments
 //   lens     a column of verdict rules with one that did not hold
 //   vault    a field of keys with two of them gone
@@ -127,9 +128,33 @@ const Vault = () => (
   </Frame>
 );
 
+/**
+ * A ring, forgetting.
+ *
+ * Messages march left to right and fall off the end — the full ones are what is
+ * still held, the fading pair have been dropped, and the rule beneath is the
+ * window that does not move. Not a clock and not an hourglass: those are
+ * pictures of time, and this page is about a fixed-size buffer, which is a
+ * different thing and the reason the answer is minutes on one room and a
+ * fortnight on another.
+ */
+const Retention = () => (
+  <Frame>
+    <rect x="4" y="16" width="7" height="16" fill="currentColor" stroke="none" opacity="0.18" />
+    <rect x="13" y="16" width="7" height="16" fill="currentColor" stroke="none" opacity="0.4" />
+    <rect x="22" y="16" width="7" height="16" fill="currentColor" stroke="none" />
+    <rect x="31" y="16" width="7" height="16" fill="currentColor" stroke="none" />
+    <rect x="40" y="16" width="4" height="16" fill="currentColor" stroke="none" opacity="0.7" />
+    <path d="M22 38h22" />
+    <path d="M22 34v8" />
+    <path d="M44 34v8" />
+  </Frame>
+);
+
 const MARKS: Record<string, () => React.ReactElement> = {
   city: City,
   track: Track,
+  retention: Retention,
   bench: Bench,
   lens: Lens,
   vault: Vault,

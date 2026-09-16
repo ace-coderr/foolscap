@@ -18,6 +18,7 @@ question, one of them is wrong.
 | **Tracker** (`/track`) | What happened to my request? |
 | **Bench** (`/bench`) | How do I sign and post a message without handing over my key? |
 | **Lens** (`/lens`) | Who actually said what in this room? |
+| **Retention** (`/retention`) | How long does a room actually remember? |
 | **Vault** (`/vault`) | What notes exist, who owns them, and when do they expire? |
 
 The shell must not assume this list is final. It has been six and it has been five; PAGES
@@ -147,6 +148,11 @@ What that costs is real and has to be said rather than hidden. Foolscap can only
 the rings still hold, which on a busy room is minutes. It cannot answer a question about last
 week. A page that would like to must say so in its own words rather than implying coverage it
 does not have.
+
+How long "minutes" actually is, is measurable, and `/retention` is the page that measures it:
+two reads of a room's head give the rate, and its export gives the history still in the ring.
+That page is the honest form of the claim the archive used to make — instead of keeping what
+the network drops, it tells you exactly how long you have before it drops.
 
 ## Rules that apply to every page
 

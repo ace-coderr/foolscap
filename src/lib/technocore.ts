@@ -104,6 +104,17 @@ export interface ExportResult {
   generation: number | null;
   firstSeq: number | null;
   lastSeq: number;
+  /**
+   * The size of the dump, in bytes, measured rather than reported.
+   *
+   * /export answers with `Transfer-Encoding: chunked` and no content-length, so
+   * there is no way to know this before the body has arrived — which is most of
+   * why nobody on this network has measured what a room retains. Counted as
+   * UTF-8 octets, never as string length: `.length` is UTF-16 code units, and a
+   * room carrying any text outside Latin-1 would then report short against the
+   * server's own figure for the same bytes.
+   */
+  bytes: number;
 }
 
 export interface WatcherStatus {
@@ -631,7 +642,24 @@ export async function readRoom(
  */
 export async function exportRoom(
   room: string,
-  { signal, fetchImpl }: { signal?: AbortSignal; fetchImpl?: typeof fetch } = {}
+  {
+    signal,
+    fetchImpl,
+    onBytes,
+  }: {
+    signal?: AbortSignal;
+    fetchImpl?: typeof fetch;
+    /**
+     * Called with the running octet count as the dump arrives.
+     *
+     * A busy room's export is several megabytes over a connection nobody chose,
+     * and there is no content-length to put a progress bar against — so a caller
+     * that wants to say anything truthful about the wait has to count what has
+     * landed. Omit it and the body is read in one piece, which is what every
+     * other caller wants.
+     */
+    onBytes?: (bytes: number) => void;
+  } = {}
 ): Promise<ExportResult> {
   const name = assertRoom(room);
   const res = await request(`${BASE}/r/${name}/export`, {
@@ -641,7 +669,7 @@ export async function exportRoom(
     accept: 'application/x-ndjson',
   });
 
-  const body = await res.text();
+  const { text: body, bytes } = await readCounted(res, onBytes);
   const lines = body.split('\n');
   let truncatedTail = null;
   if (body.length > 0 && !body.endsWith('\n')) {
@@ -667,7 +695,45 @@ export async function exportRoom(
     generation: numberOrNull(res.headers.get('x-room-generation')),
     firstSeq: messages.length ? messages[0].seq : null,
     lastSeq: messages.length ? messages[messages.length - 1].seq : 0,
+    bytes,
   };
+}
+
+/**
+ * The body, and how many octets it was.
+ *
+ * Streamed when the caller asked for progress and the runtime has a readable
+ * body, which is every browser this site runs in; res.text() otherwise,
+ * including under a fetchImpl stub in the tests. Both paths report the same
+ * number — the stream sums the chunks it is handed, the fallback encodes once.
+ *
+ * `stream: true` on every decode but the last is not optional. A multi-byte
+ * character split across a chunk boundary is otherwise resolved to a
+ * replacement character, which would corrupt a message and, far worse, leave it
+ * still parsing — a record that loads cleanly and no longer verifies.
+ */
+async function readCounted(
+  res: Response,
+  onBytes?: (bytes: number) => void
+): Promise<{ text: string; bytes: number }> {
+  const reader = onBytes && res.body ? res.body.getReader() : null;
+  if (!reader || !onBytes) {
+    const text = await res.text();
+    return { text, bytes: new TextEncoder().encode(text).byteLength };
+  }
+
+  const decoder = new TextDecoder('utf-8');
+  let text = '';
+  let bytes = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bytes += value.byteLength;
+    text += decoder.decode(value, { stream: true });
+    onBytes(bytes);
+  }
+  text += decoder.decode();
+  return { text, bytes };
 }
 
 // ---------------------------------------------------------------------------

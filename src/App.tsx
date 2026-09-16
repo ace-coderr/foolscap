@@ -4,6 +4,7 @@ import City from './routes/City';
 import Track from './routes/Track';
 import Bench from './routes/Bench';
 import Lens from './routes/Lens';
+import Retention from './routes/Retention';
 import Vault from './routes/Vault';
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
         <Route path="/track" element={<Track />} />
         <Route path="/bench" element={<Bench />} />
         <Route path="/lens" element={<Lens />} />
+        <Route path="/retention" element={<Retention />} />
         <Route path="/vault" element={<Vault />} />
         {/* The static site lived at these paths; old links still work. */}
         <Route path="/index.html" element={<Navigate to="/" replace />} />

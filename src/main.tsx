@@ -8,6 +8,7 @@ import './styles/hero.css';
 import './styles/bench.css';
 import './styles/lens.css';
 import './styles/vault.css';
+import './styles/retention.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('No #root element to mount into.');

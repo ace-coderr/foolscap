@@ -142,6 +142,12 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
   { selector: '.bbutton:focus-visible', why: 'the button keyboard focus is on, on the bench' },
   { selector: '.card2__open:focus-visible', why: "the card's action keyboard focus is on" },
   { selector: '.tswitch__opt:focus-visible', why: 'the theme control keyboard focus is on' },
+  { selector: '.rmeasure__input:focus-visible', why: 'the room field keyboard focus is on' },
+  {
+    selector: '.rmeasure__submit:focus-visible, .rbutton:focus-visible',
+    why: 'the measure button keyboard focus is on — including the one that spends megabytes',
+  },
+  { selector: '.rsuggest__item:focus-visible', why: 'the suggested room keyboard focus is on' },
 ];
 
 /**

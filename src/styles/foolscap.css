@@ -85,7 +85,8 @@
    * exactly right, and a container you have to look for is not doing the job a
    * container exists to do. Raised to 0.04 and 0.12, which is the smallest step
    * that makes a panel's edge legible across the whole page rather than only
-   * where it happens to sit over the grid. */
+   * where it happens to sit over the grid.
+   *
    * AND --s2 HAD TO MOVE WITH IT, which the amendment does not say and the
    * screen does. Raising --s1 to 0.04 left one hundredth of an opacity step
    * between it and --s2 at 0.05, so a header on a panel, a selected row in a

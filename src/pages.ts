@@ -69,6 +69,17 @@ export const PAGES: Page[] = [
     line: 'Every message checked against its own signature before it is shown.',
   },
   {
+    id: 'retention',
+    label: 'Retention',
+    path: '/retention',
+    available: true,
+    eyebrow: 'Retention',
+    title: 'How long does a room actually remember?',
+    line:
+      'Measured, not estimated: two reads of a room’s head give its rate, and its export gives ' +
+      'the history it is still holding. Nobody on this network knows these numbers.',
+  },
+  {
     id: 'vault',
     label: 'Vault',
     path: '/vault',

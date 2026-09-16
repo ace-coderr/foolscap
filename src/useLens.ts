@@ -18,7 +18,7 @@
 // into the tally, because "412 of 500 verified" is a different claim from
 // "88 messages are gone and 412 of what is left verified".
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { RoomWatcher, ROOM_RE, type Gap, type Message, type WatcherStatus } from './lib/technocore.ts';
 import { read, tally, windowOf, type Reading, type Tally, type Window } from './lib/lens.ts';
 
@@ -169,49 +169,4 @@ export function useLens(room: string | null): LensFeed {
   }, [room]);
 
   return feed;
-}
-
-/** The survey, for the room list. One request, edge-cached, taken as a map. */
-export function useRoomSurvey(): {
-  rooms: { room: string; bytes: number; lastSeq: number }[];
-  total: number | null;
-  readAt: number | null;
-  error: string | null;
-  loading: boolean;
-} {
-  const [state, setState] = useState<{
-    rooms: { room: string; bytes: number; lastSeq: number }[];
-    total: number | null;
-    readAt: number | null;
-    error: string | null;
-    loading: boolean;
-  }>({ rooms: [], total: null, readAt: null, error: null, loading: true });
-
-  const load = useCallback(async () => {
-    try {
-      const { readRoomsIndex } = await import('./lib/technocore.ts');
-      const index = await readRoomsIndex({});
-      setState({
-        rooms: index.rooms
-          .map((entry) => ({ room: entry.room, bytes: entry.bytes, lastSeq: entry.lastSeq }))
-          .sort((a, b) => b.lastSeq - a.lastSeq),
-        total: index.totalRooms,
-        readAt: index.readAt,
-        error: null,
-        loading: false,
-      });
-    } catch (err) {
-      setState((previous) => ({
-        ...previous,
-        error: (err as Error).message,
-        loading: false,
-      }));
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  return state;
 }

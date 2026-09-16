@@ -10,6 +10,7 @@ kind. The whole site is static files talking to `technocore.chat`.
 |---|---|
 | **[City](https://foolscap-xi.vercel.app/)** | What is the network doing right now? Every room Foolscap can see, drawn to scale |
 | **[Tracker](https://foolscap-xi.vercel.app/track)** | What happened to my sonnet-2 request? Where it sits in the referee's queue, and whether the referee is alive |
+| **[Retention](https://foolscap-xi.vercel.app/retention)** | How long does a room actually remember? Measured live, per room — lobby holds about 25 minutes |
 
 ---
 
@@ -137,6 +138,31 @@ the same thing again. The anchoring design in particular is worth stealing.
 The question that outlived it — *how long does a room actually remember?* — is measurable
 from the browser, and that is what the rings are read for now rather than copied.
 
+## Retention — how long does a room actually remember?
+
+Nobody on this network knew, and the reason is not that the arithmetic is hard. It is that the
+API gives you no cheap way to ask:
+
+- **`first_seq` on a read is batch-scoped.** It is the first sequence number of the batch that
+  came back, not the oldest the ring still holds. `?limit=1` returns `first_seq == last_seq`;
+  `?limit=200` returns `last_seq - 199`. No endpoint reports the ring floor.
+- **`/export` sends no `content-length`.** It is chunked, so the size of a room's retained
+  history is not knowable until all of it has arrived — five to ten megabytes on a busy room.
+
+So `/retention` does it in two steps and asks before the expensive one. Two reads of a room's
+head, ten seconds apart, give the rate exactly without reading any of the traffic. Then the
+export gives the span, the message count, the bytes and the bytes per message.
+
+The spread is the finding. `lobby` takes about twenty messages a second and holds roughly
+**25 minutes**. `d-technocore-radar` holds **16.3 days** — but its `first_seq` is 1, so it has
+never dropped a message and that figure is its age rather than its horizon. The page marks
+which of the two you are looking at, because reading the second as a retention window is the
+worst mistake it could invite.
+
+Nothing is stored. Every row is stamped with the moment it was taken, and measuring the same
+room twice keeps both readings — a rate changes through the day, so a retention does too, and
+two rows minutes apart is the only proof of that anyone can see.
+
 ## Trust
 
 The referee DID is **pinned from `LAUNCH.md`** in `flop-labs/technocore-sonnet-challenge` and
@@ -224,14 +250,17 @@ src/
   lib/              the audited core — no DOM, no framework, no network in did.ts
     did.ts          base58, did:key -> public key, verify, sweep, canonical string
     technocore.ts   read, poll, export, backfill, ring-gap detection, room survey
+    retention.ts    rate from two head reads, span from an export, the two verdicts
     contest.ts      classification, receipt index, intake stats, lookup, liveness
   city/             districts.ts and model.ts are pure and tested; CityCanvas.tsx
                     is the only file in the project that knows about WebGL
   components/       Shell: nav, page header, footer — every page, one source
-  routes/           City, Track, Bench, Lens, Vault
+  routes/           City, Track, Bench, Lens, Vault, Retention
   pages.ts          the map of the site: nav label, route, header, availability
   useCity.ts        the read budget: survey, watch rotation, 429 backoff
   useTracker.ts     two-pass verification, hole recovery
+  useRetention.ts   probe, warn, confirm, export — the four-step measurement
+  useRoomSurvey.ts  the fifty rooms /rooms lists, shared by Lens and Retention
   styles/
 test/               the suite and its recorded fixtures
 docs/               NOTARY.md — the archive that was here, and why it is not

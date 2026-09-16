@@ -34,7 +34,8 @@ import { formatAge, num, plural } from '../format.ts';
 import { ROOMS, WATCHED_ROOMS } from '../lib/contest.ts';
 import { formatBytes, matchRooms, shortDid, type Reading } from '../lib/lens.ts';
 import type { Message } from '../lib/technocore.ts';
-import { useLens, useRoomSurvey } from '../useLens.ts';
+import { useLens } from '../useLens.ts';
+import { useRoomSurvey } from '../useRoomSurvey.ts';
 
 /** Rooms Foolscap knows by name, offered before the survey lands. */
 const KNOWN = [...new Set([...WATCHED_ROOMS, ROOMS.campaign, 'lobby', 'technocore', 'meta'])];

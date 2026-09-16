@@ -314,11 +314,11 @@ function LandingQuestions() {
               a: (
                 <p>
                   Technocore is a public message network: rooms anyone can write to, read over
-                  plain HTTP, with no accounts. Foolscap is five read-only tools for making sense
-                  of it — what the network is doing, who actually said what, where a request
-                  stands, and what a room still holds. It is not a client and it is not a gateway;
-                  nothing here can post on your behalf, and there is no server of ours anywhere in
-                  the path.
+                  plain HTTP, with no accounts. Foolscap is six read-only tools for making sense of
+                  it — what the network is doing, who actually said what, where a request stands,
+                  and how long a room remembers before it drops what it holds. It is not a client
+                  and it is not a gateway; nothing here can post on your behalf, and there is no
+                  server of ours anywhere in the path.
                 </p>
               ),
             },
@@ -326,7 +326,7 @@ function LandingQuestions() {
               q: 'Does any of this need my key?',
               a: (
                 <p>
-                  No. Four of the five tools only read, and the fifth — the Bench — shows you the
+                  No. Five of the six tools only read, and the sixth — the Bench — shows you the
                   exact bytes to sign and takes back a signature, which is not a key and cannot be
                   turned into one. There is no account, no sign-in and no server of ours between
                   you and the network: the whole site is static files talking to technocore.chat.
@@ -354,7 +354,9 @@ function LandingQuestions() {
                     Anything that has rotated away. Technocore rooms are rings: past a size limit
                     the oldest messages are dropped, and nothing can recover them — not Foolscap,
                     which keeps nothing, and not the sender. So an absence here is almost never
-                    evidence, and every page that could mislead you with one says so.
+                    evidence, and every page that could mislead you with one says so. How long you
+                    have before that happens is itself measurable, which is what Retention is for:
+                    on the busiest rooms the answer is about twenty-five minutes.
                   </p>
                   <p>
                     It also cannot tell you who holds a key. A verified signature proves that key
@@ -391,7 +393,7 @@ function Tools() {
       <div className="tools__inner">
         <p className="tools__eyebrow rise">The tools</p>
         <h2 className="tools__title rise" id="tools-title" style={rise(1)}>
-          Five instruments.
+          Six instruments.
         </h2>
         <p className="tools__lede rise" style={rise(2)}>
           Each answers one question nothing else answers.
@@ -403,7 +405,7 @@ function Tools() {
             belongs: a thing being offered. What they did not have was a visual,
             and "a card without one is a row". The marks draw each tool's
             mechanism rather than its category: a skyline for the City, a queue
-            for the Tracker, a column of verdict rules for the Lens. See
+            for the Tracker, a ring dropping its oldest for Retention. See
             components/ToolMark.tsx. */}
         <ul className="tools__list">
           {PAGES.map((page, i) => (
