@@ -354,9 +354,62 @@ export function createApi({ limiter = new RateLimiter(CAPTURE_LIMIT) }: { limite
 
       return send(res, 404, { error: 'No such endpoint.' });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`[api] ${req.method} ${path} — ${message}`);
+      // THE USER'S MESSAGE STAYS VAGUE; THE LOG MUST NOT. What was logged here
+      // was err.message alone, which for a `pg` error is the one line Postgres
+      // put at the top and none of the fields that say what actually happened.
+      // A production outage was diagnosed by reproducing the queries by hand
+      // against the database, because the log said
+      //
+      //     [api] GET /api/notary/coverage — could not write to file ...
+      //
+      // with no code, no severity and no stack — and for a connection-pool
+      // failure it said "timeout exceeded when trying to connect", which names
+      // neither the pool nor the query that was waiting for it.
+      //
+      // The fields below are the ones that answer "is this us or is this the
+      // database": `code` alone separates 53100 disk-full from 57014 statement
+      // timeout from 25006 read-only transaction, and those three want three
+      // completely different responses from whoever is reading the log.
+      logFailure(req.method ?? 'GET', path, err);
       return send(res, 500, { error: 'The archive could not answer that.' });
     }
   };
+}
+
+/**
+ * Everything the log needs and the response must not contain.
+ *
+ * The response stays "The archive could not answer that." — a stranger asking
+ * about a DID does not need a Postgres error code, and an error message is a
+ * way to learn about a database you cannot see. The log is the other half of
+ * that bargain, and it was not being held up.
+ *
+ * pg's errors carry their diagnostics as own properties rather than in the
+ * message, so they have to be read off deliberately; `severity` and `code` come
+ * straight from the server, `detail` and `hint` are what psql prints under the
+ * error, and `routine` names the C function that raised it, which is the
+ * fastest way to tell a spill from a lock from a bad plan.
+ */
+function logFailure(method: string, path: string, err: unknown): void {
+  const e = err as Record<string, unknown> | null;
+  const parts: string[] = [];
+  const add = (label: string, value: unknown) => {
+    if (value != null && value !== '') parts.push(`${label}=${String(value)}`);
+  };
+
+  add('code', e?.code);
+  add('severity', e?.severity);
+  add('detail', e?.detail);
+  add('hint', e?.hint);
+  add('constraint', e?.constraint);
+  add('table', e?.table);
+  add('routine', e?.routine);
+
+  const message = err instanceof Error ? err.message : String(err);
+  console.error(
+    `[api] ${method} ${path} — ${message}${parts.length ? ` (${parts.join(' ')})` : ''}`
+  );
+  // Separately, and only when there is one: a stack is several lines and would
+  // bury the line above it if they were concatenated.
+  if (err instanceof Error && err.stack) console.error(err.stack);
 }

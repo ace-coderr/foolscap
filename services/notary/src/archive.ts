@@ -453,14 +453,35 @@ export async function didReport(did: string, before: string | null): Promise<Did
     // all still held has a row here saying the same thing; the page shows it
     // only where it says MORE than the records do, which is where records have
     // been pruned out from under it.
+    //
+    // ONE PASS OVER THE DID'S RECORDS, NOT ONE PER ROOM. This was a correlated
+    // subquery — `(select count(*) from records r where r.did = s.did and
+    // r.room = s.room)` — evaluated once for every summary row. The index on
+    // records is (did, captured_at), so `room` is not in it: each of those
+    // subqueries index-scanned EVERY record for the DID and threw away the ones
+    // for other rooms.
+    //
+    // Measured in production on the busiest DID — 40,888 records across six
+    // rooms — the old shape read 40,888 rows six times over, discarding 34,073
+    // each time: 93,966 buffers and 8.1 seconds cold. Grouping by room first
+    // reads them once: 13,543 buffers and 88ms. The plan goes from six index
+    // scans under a SubPlan to one bitmap scan under a HashAggregate.
+    //
+    // The join needs no `did` of its own because both sides are already scoped
+    // to one, and coalesce covers the row the whole point of this query is to
+    // find: a summary whose records have all been pruned away, where the
+    // subquery counted zero and this counts nothing at all.
     pool.query(
       `select s.room, s.first_captured_at, s.first_source_ts,
               s.last_captured_at, s.last_source_ts,
               s.message_count::text as message_count,
               s.pinned_record_id::text as pinned_record_id,
-              (s.message_count > (select count(*) from records r
-                                   where r.did = s.did and r.room = s.room)) as pruned_behind
-         from summaries s where s.did = $1 order by s.room`,
+              (s.message_count > coalesce(held.n, 0)) as pruned_behind
+         from summaries s
+         left join (select room, count(*) as n
+                      from records where did = $1
+                     group by room) held on held.room = s.room
+        where s.did = $1 order by s.room`,
       [did]
     ),
     coverage(),

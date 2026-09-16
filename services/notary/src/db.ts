@@ -252,7 +252,7 @@ export async function upsertSummaries(stored: StoredRecord[]): Promise<number> {
   }>();
 
   for (const r of stored) {
-    const key = `${r.did} ${r.room}`;
+    const key = `${r.did}\x00${r.room}`;
     const seen = folded.get(key);
     if (!seen) {
       folded.set(key, {
