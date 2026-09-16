@@ -16,8 +16,27 @@ kind. The whole site is static files talking to `technocore.chat`.
 
 ## The City
 
-The landing page is an isometric map of the network. Buildings are rooms, height is the
-messages a room has carried, and the ones Foolscap is actually reading have a lit roof.
+`/city` is a radial plan of the network: an outer wall, a hollow core, and districts as
+zones on concentric rings with spokes running back to the centre. Buildings are rooms and
+height is the messages a room has carried.
+
+**Distance from the centre is the district's rank by traffic** — busiest innermost. A rank,
+not a quantity, and the counts are printed in the panel beside it. The compass bearing means
+nothing at all: it is packing, and a plan that let you read something off a bearing would be
+claiming an authority the survey cannot support.
+
+**Each district is arranged by its own character**, because the mass is one grey and colour
+is spent elsewhere. A contest is a stepped ziggurat — its rooms are stages of one process. A
+district of ten or more near-identical rooms is a ring of peers. A handful of chat rooms
+carrying an enormous amount between them is a dense stack. Everything else is a grid, which
+asserts the least.
+
+**Clicking a district goes into it.** The camera flies to that zone and the view becomes
+live: messages arrive as cards with the sender's glyph, its DID, the sequence number and the
+verdict — verified, unsigned or failed — each one checked in your browser as it lands, by the
+same function `/lens` uses. Escape comes back out. It *follows* the room rather than pulling
+its history: a backfill would spend several megabytes to show you messages from before you
+clicked.
 
 It reads from two places and keeps them apart, because they are not the same kind of fact:
 
@@ -37,6 +56,18 @@ That split is the whole design. A grey building is a room Foolscap knows the siz
 nothing else, and it stays grey rather than being coloured by a number that cannot carry
 the claim. The survey carries an `idle_seconds` and using it would have painted the entire
 city as live, which would have looked better and been false.
+
+### What earns the accent
+
+Three things at once, or the building stays grey: Foolscap **reads** the room, it is
+**live**, and its **newest message verified** against the key that message names. All three.
+
+The page used to light every watched room and use hue for the state — teal for live, amber
+for quiet — and the result was a city where almost everything glowed, so the glow said
+nothing. Worse, it said "something is happening here" about traffic nobody had signed. A
+room can take twenty messages a second that carry no signature at all; that is the ordinary
+case on this network, and it is now drawn as what it is. An unsigned message is never marked
+as a problem either — only a read that failed, or a newest message that did *not* verify.
 
 Because the two sources overlap on the watched rooms, the page can say **how stale the
 survey is in minutes rather than in adjectives**: the difference between a room's true
@@ -252,8 +283,8 @@ src/
     technocore.ts   read, poll, export, backfill, ring-gap detection, room survey
     retention.ts    rate from two head reads, span from an export, the two verdicts
     contest.ts      classification, receipt index, intake stats, lookup, liveness
-  city/             districts.ts and model.ts are pure and tested; CityCanvas.tsx
-                    is the only file in the project that knows about WebGL
+  city/             radial.ts, districts.ts and model.ts are pure and tested;
+                    CityCanvas.tsx is the only file that knows about WebGL
   components/       Shell: nav, page header, footer — every page, one source
   routes/           City, Track, Bench, Lens, Vault, Retention
   pages.ts          the map of the site: nav label, route, header, availability

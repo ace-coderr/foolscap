@@ -148,6 +148,16 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
     why: 'the measure button keyboard focus is on — including the one that spends megabytes',
   },
   { selector: '.rsuggest__item:focus-visible', why: 'the suggested room keyboard focus is on' },
+
+  // --- verified, arriving ---------------------------------------------------
+  // The City's live view, where a message that just landed had its signature
+  // checked in this browser against the key it names. Same claim as /lens's
+  // verdict and /bench's, and the same colour for it. "Unsigned" stays grey: a
+  // message nobody signed is the ordinary case on this network, not a problem.
+  {
+    selector: '.card3__verdict--verified',
+    why: 'a message that verified as it arrived, checked in this browser',
+  },
 ];
 
 /**

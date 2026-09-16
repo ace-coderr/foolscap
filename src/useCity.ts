@@ -26,8 +26,11 @@ import {
   type RoomsIndex,
 } from './lib/technocore.ts';
 import { ROOMS } from './lib/contest.ts';
-import { buildCity, type City, type Reading } from './city/model.ts';
-import type { Layout } from './city/districts.ts';
+import { buildCity, type City, type Proof, type Reading } from './city/model.ts';
+// The city lights a building on the same verdict /lens shows in a message row,
+// computed by the same function. See the note at the call site.
+import { read } from './lib/lens.ts';
+import type { RadialLayout } from './city/radial.ts';
 
 /**
  * The rooms Foolscap reads directly.
@@ -201,6 +204,28 @@ export function useCity(): CityFeed {
           const head = await readHead(room, { signal: controller.signal });
           if (stopped) return;
           const rate = rateFor(room, head.lastSeq, head.readAt);
+
+          // ONE VERIFICATION PER READ, and it is Lens's, not a second one
+          // written here. SHELL.md's rule — if two pages need the same logic it
+          // moves into the shared module rather than being copied — and the
+          // stakes are higher than usual for this particular logic: a city that
+          // decided "verified" by its own slightly different rule would be
+          // lighting buildings on a claim no other page on the site would make.
+          //
+          // The canonical string is rebuilt from the room this was READ FROM,
+          // which is read()'s doing and the reason it takes the room separately.
+          let proof: Proof | null = null;
+          if (head.newest) {
+            try {
+              proof = (await read(head.newest, room)).verdict;
+            } catch {
+              // A verification that threw is not a message that failed. Left
+              // null, which draws as unlit rather than as alarming.
+              proof = null;
+            }
+          }
+          if (stopped) return;
+
           setReadings((previous) => {
             const next = new Map(previous);
             next.set(room, {
@@ -208,6 +233,7 @@ export function useCity(): CityFeed {
               lastSeq: head.lastSeq,
               newestTsMs: head.newest?.tsMs || null,
               readAt: head.readAt,
+              proof,
               error: null,
               ...rate,
             });
@@ -235,6 +261,7 @@ export function useCity(): CityFeed {
                     readAt: Date.now(),
                     ratePerMin: null,
                     rateSpanMs: null,
+                    proof: null,
                     error: message,
                   }
             );
@@ -280,7 +307,7 @@ export function useCity(): CityFeed {
 
   // The layout is held for as long as the set of rooms is unchanged; see the
   // note on BuildInput.layout for why it must not be recomputed on every read.
-  const layoutRef = useRef<{ key: string; layout: Layout } | null>(null);
+  const layoutRef = useRef<{ key: string; layout: RadialLayout } | null>(null);
 
   const city = useMemo(() => {
     const built = buildCity({

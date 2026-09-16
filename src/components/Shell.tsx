@@ -441,7 +441,15 @@ export function Shell({
             apart — the rule that one link cannot exist on four of six pages
             holds because nothing is written twice, not because this component
             is the only thing allowed to render it. */}
-        <header className={bleed ? 'page-header page-header--float' : 'page-header'}>
+        {/* data-canvas-header: a floating header sits OVER the canvas, and the
+            canvas has to know how much of its top edge is covered so it can
+            move the drawing out from under it. Marked by attribute rather than
+            found by class, for the same reason the panel is — the renderer
+            should not have to know the name of the page it is drawing for. */}
+        <header
+          className={bleed ? 'page-header page-header--float' : 'page-header'}
+          data-canvas-header={bleed ? '' : undefined}
+        >
           <p className="page-header__eyebrow">{current.eyebrow}</p>
           <h1 className="page-header__title">{current.title}</h1>
           <p className="page-header__line">{current.line}</p>

@@ -63,7 +63,25 @@ const EMPTY: LensFeed = {
   seen: 0,
 };
 
-export function useLens(room: string | null): LensFeed {
+export interface LensOptions {
+  /**
+   * Whether to pull the whole retained ring before following.
+   *
+   * TRUE IS RIGHT FOR /lens AND WRONG FOR THE CITY. The Lens exists to let
+   * somebody read a room properly, and a room's history is the thing they came
+   * for — so it backfills from /export, which on a busy room is the five-to-ten
+   * megabyte download /retention exists to warn about.
+   *
+   * The City's live view is a glance at what is ARRIVING. Backfilling there
+   * would spend several megabytes to show a reader messages from before they
+   * clicked, on a page they are passing through, and the first thing they would
+   * see is a long wait — which is what it did, before this option existed.
+   * Following from the head costs half a kilobyte a poll.
+   */
+  backfill?: boolean;
+}
+
+export function useLens(room: string | null, { backfill = true }: LensOptions = {}): LensFeed {
   const [feed, setFeed] = useState<LensFeed>(EMPTY);
 
   /**
@@ -111,7 +129,7 @@ export function useLens(room: string | null): LensFeed {
 
     const watcher = new RoomWatcher(room, {
       limit: 200,
-      backfill: true,
+      backfill,
       onStatus: (status) => {
         if (!stopped) setFeed((previous) => ({ ...previous, status: status.state }));
       },
@@ -166,7 +184,7 @@ export function useLens(room: string | null): LensFeed {
       controller.abort();
       watcher.stop();
     };
-  }, [room]);
+  }, [room, backfill]);
 
   return feed;
 }

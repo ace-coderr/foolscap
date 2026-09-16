@@ -1548,15 +1548,58 @@ body:not(.on-black) .footer {
   pointer-events: none;
 }
 
-.city__label {
+/* A district's number and name, at the end of its leader line outside the wall.
+ *
+ * NUMBER FIRST AND BOXED, because the number is what ties the label to the plan
+ * and the name is what ties it to the panel — a reader coming from the drawing
+ * needs the digit to find the row, and one coming from the panel needs the name
+ * to be sure they have the right line. Both, in that order, at a size where the
+ * pair is still one object. */
+.city__mark {
   position: absolute;
   top: 0;
   left: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--t-micro);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  letter-spacing: 0.14em;
   color: var(--ink-faint);
   white-space: nowrap;
+  transition: opacity 180ms ease;
+}
+
+.city__mark-n {
+  display: grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 3px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.city__mark-name {
+  color: var(--ink-mid);
+}
+
+/* The one label about what is NOT drawn. Quieter than the districts and wider,
+ * because it is a sentence rather than a name, and it must not read as another
+ * district sitting off the edge of the plan. */
+.city__mark--overflow {
+  max-width: 15rem;
+  white-space: normal;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--ink-faint);
+  opacity: 0.85;
 }
 
 /* ------------------------------------------------------------- city panel */
@@ -1666,13 +1709,19 @@ body:not(.on-black) .footer {
   background: var(--accent);
 }
 
+/* WATCHED AND UNLIT. Not amber any more: a quiet room is not a warning, it is a
+ * room with nothing to report, and colouring it put the ordinary case in the
+ * same register as the one that wants attention. Hollow with a solid rim — the
+ * same shape as a lit dot, plainly not filled. */
 .chip--quiet .chip__dot,
 .rooms__dot--quiet {
-  background: var(--warn);
+  background: transparent;
+  border: 1px solid var(--ink-faint);
 }
 
 .chip--failing .chip__dot,
-.rooms__dot--failing {
+.rooms__dot--failing,
+.legend__swatch--failing {
   background: var(--alarm);
 }
 
@@ -1907,9 +1956,293 @@ body:not(.on-black) .footer {
   /* The canvas honours this itself — no entry animation, no transitions between
    * readings, no damping on the controls. Nothing here can reach into WebGL, so
    * this block is only the DOM half; see CityCanvas.tsx for the rest. */
-  .city__label {
+  .city__mark {
     transition: none;
   }
+}
+
+
+/* ------------------------------------------------------- the district key */
+
+/* The numbers on the plan, read off against their names. Ordered exactly as the
+ * rings are, which is what makes "1 is innermost" a rule a reader can check by
+ * looking rather than a claim they have to take on trust. */
+
+.key {
+  list-style: none;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--s-divider);
+  border: 1px solid var(--s-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.key__row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 9px 12px;
+  background: var(--s1);
+  font-size: var(--t-small);
+}
+
+.key__n {
+  justify-self: start;
+  min-width: 17px;
+  height: 17px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  font-size: var(--t-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.key__label {
+  color: var(--ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.key__count {
+  font-size: var(--t-micro);
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+/* The shape word, under the name rather than beside it: it is the quietest
+ * thing in the row and it belongs to the label, not to the count. */
+.key__form {
+  grid-column: 2 / -1;
+  font-size: var(--t-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* ---------------------------------------------------------- inside a district */
+
+.inside__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-half);
+  margin-bottom: var(--space-half);
+}
+
+.inside__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--t-h2);
+  font-family: var(--display);
+  color: var(--ink);
+}
+
+.inside__n {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  font-size: var(--t-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-mid);
+}
+
+.inside__leave {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--s2);
+  border: 1px solid var(--s-border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  color: var(--ink-mid);
+  font-size: var(--t-micro);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.inside__leave:hover {
+  color: var(--ink);
+  border-color: var(--rule-bright);
+}
+
+.inside__leave kbd {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  padding: 1px 4px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--ink-faint);
+}
+
+.inside__basis {
+  margin: 0 0 var(--space);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-mid);
+}
+
+.inside__rooms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--space);
+}
+
+.inside__room {
+  appearance: none;
+  background: var(--s1);
+  border: 1px solid var(--s-border);
+  border-radius: 999px;
+  padding: 5px 11px;
+  color: var(--ink-mid);
+  font-size: var(--t-micro);
+  cursor: pointer;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.inside__room:hover {
+  color: var(--ink);
+  border-color: var(--rule-bright);
+}
+
+/* The room being read. --s2 and a brighter rim rather than the accent: which
+ * room you are looking at is navigation, and the accent on this page is spent
+ * on whether the traffic verifies. */
+.inside__room[aria-pressed='true'] {
+  background: var(--s2);
+  border-color: var(--ink-faint);
+  color: var(--ink);
+}
+
+.inside__more {
+  align-self: center;
+  font-size: var(--t-micro);
+  color: var(--ink-faint);
+}
+
+.inside__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px var(--space-half);
+  margin: 0 0 var(--space-half);
+  font-size: var(--t-small);
+  color: var(--ink);
+}
+
+.inside__tally {
+  font-size: var(--t-micro);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* -------------------------------------------------------------- message cards */
+
+.cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+/* A card rather than a log row, because these are arriving rather than being
+ * scrolled through. The state rule is on the left edge, which is the shape
+ * /lens uses for the same fact — one verdict, drawn the same way twice. */
+.card3 {
+  background: var(--s1);
+  border: 1px solid var(--s-border);
+  border-left: 2px solid var(--rule-strong);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.card3--verified {
+  border-left-color: var(--ink-faint);
+}
+
+.card3--failed {
+  border-left-color: var(--alarm);
+  border-color: rgba(224, 103, 79, 0.4);
+}
+
+.card3__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.card3__did {
+  font-size: var(--t-micro);
+  color: var(--ink-mid);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card3__seq {
+  margin-left: auto;
+  font-size: var(--t-micro);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+.card3__text {
+  margin: 0;
+  font-size: var(--t-small);
+  line-height: 1.55;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.card3__foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-half);
+  margin: 8px 0 0;
+  font-size: var(--t-micro);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.card3__verdict {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The one place on this page other than a lit roof where the accent is spent,
+ * and it is the same claim: this signature verified, here, in this browser. */
+.card3__verdict--verified {
+  color: var(--accent);
+}
+
+.card3__verdict--failed {
+  color: var(--alarm);
+}
+
+.cards__cap {
+  margin: var(--space) 0 0;
+  font-size: var(--t-micro);
+  line-height: 1.6;
+  color: var(--ink-faint);
 }
 
 /* ---------------------------------------------------------- the pinned key */

@@ -24,7 +24,7 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import type { Plot } from './districts.ts';
+import { CORE_RADIUS, overflowAnchor, type Zone } from './radial.ts';
 
 // --- palette ---------------------------------------------------------------
 // The tokens from foolscap.css. Duplicated here because WebGL cannot read a CSS
@@ -46,11 +46,29 @@ const PLATE_EDGE = 0x262e3d; /* --rule */
 const HOVER_EDGE = 0xa4b0bf; /* --ink-mid */
 const SELECT_EDGE = 0xe6ecf2; /* --ink */
 
-const STATE_COLOUR: Record<string, number> = {
-  live: 0x3fb3c4 /* --accent */,
-  quiet: 0xd9a441 /* --warn */,
-  failing: 0xe0674f /* --alarm */,
-};
+/**
+ * The two colours this city is allowed to spend, and what earns them.
+ *
+ * LIT is the accent and it is the whole argument of the page: a room Foolscap
+ * is reading, that is live, whose newest message verified against the key it
+ * names. Not "watched". Not "busy". The model decides it in one place — see
+ * CityRoom.lit — and this file only paints what it is told.
+ *
+ * ALARM is a read that failed or a message that did not verify. Both are things
+ * a reader should go and look at, which is what a state colour is for.
+ *
+ * There is no third. Quiet used to be amber and the result was a city where
+ * almost every roof glowed, so the glow said nothing. A quiet room is now the
+ * same grey as an unread one, with a roof to say it is being watched and no
+ * colour on it to say anything more.
+ */
+const LIT_COLOUR = 0x3fb3c4; /* --accent */
+const ALARM_COLOUR = 0xe0674f; /* --alarm */
+const ROOF_DIM = 0x6b7a90;
+
+/** The wall, the spokes, and the leader lines out to the labels. */
+const WALL_COLOUR = 0x39445a;
+const SPOKE_COLOUR = 0x232b3a;
 
 /**
  * Per-face brightness, so a box reads as solid from any angle without a light.
@@ -66,6 +84,8 @@ const FACE_SHADE = [0.55, 0.3, 1.0, 0.12, 0.72, 0.22]; // +X −X +Y −Y +Z −
 const FOOTPRINT = 1.32;
 const ROOF_HEIGHT = 0.16;
 const TRANSITION_MS = 650;
+/** Long enough to read as travel, short enough that nobody waits for it. */
+const FLIGHT_MS = 850;
 const ENTRY_MS = 900;
 
 /**
@@ -79,25 +99,34 @@ const ENTRY_MS = 900;
 export interface Building {
   /** Opaque identity. Reported back by onHover and onSelect; never parsed here. */
   room: string;
-  /** Ground position, in world units. From layoutCity. */
+  districtId: string;
+  /** Ground position, in world units. From layoutRadial. */
   x: number;
   z: number;
   /** World units tall. Whatever the page has decided height means. */
   height: number;
   /** 0–1. Lerps the body between the dim end and the bright end, and nothing else. */
   activity: number;
-  /** Whether this one gets a roof — the cap that carries a state colour. */
+  /** Whether this one gets a roof — the cap that says Foolscap reads this room. */
   watched: boolean;
-  /** Which state colour that roof takes. An unknown name leaves it the body colour. */
-  state: string;
+  /** Live and verifying. The only thing on this canvas that takes the accent. */
+  lit: boolean;
+  /** A read that failed, or a newest message that did not verify. */
+  alarming: boolean;
 }
 
 export interface CityCanvasProps {
   rooms: Building[];
-  plots: Plot[];
+  zones: Zone[];
+  wallRadius: number;
   radius: number;
+  /** Rooms the survey says exist and does not name. Drawn as one label. */
+  overflow: number;
   selected: string | null;
+  /** The district the camera has flown into, or null for the whole city. */
+  entered: string | null;
   onSelect: (room: string | null) => void;
+  onEnter: (districtId: string) => void;
   onHover: (room: string | null) => void;
   reducedMotion: boolean;
   /** Called once if WebGL is unavailable, so the page can fall back to the list. */
@@ -131,7 +160,15 @@ interface Scene {
   roofs: THREE.InstancedMesh | null;
   /** Roof instance index -> index into `order`, for the rooms that have one. */
   roofOf: Map<number, number>;
-  plates: THREE.Object3D[];
+  ground: THREE.Object3D[];
+  /** Invisible discs, one per zone, so a click on open ground enters a district. */
+  zoneDiscs: THREE.Mesh | null;
+  zoneOrder: Zone[];
+  /** Target the camera is easing towards, and how long it has left. */
+  flight: { from: THREE.Vector3; to: THREE.Vector3; fromHalf: number; toHalf: number; left: number } | null;
+  half: number;
+  /** True while the camera is inside a district. Hides the other districts' marks. */
+  inside: boolean;
   hoverBox: THREE.LineSegments;
   selectBox: THREE.LineSegments;
   order: Building[];
@@ -172,12 +209,38 @@ function occludedRight(canvas: HTMLCanvasElement): number {
   return Math.max(0, host.right - over.left);
 }
 
+/**
+ * ...and how much of the top edge the page header is covering.
+ *
+ * The same argument as the panel, found by the radial plan. The old city was a
+ * field of buildings and the header floated over its top-left corner with
+ * nothing in particular under it; this one hangs its district numbers outside
+ * the wall, all the way round, and two of them landed inside the header's
+ * paragraph — a number over a sentence, neither readable.
+ *
+ * Measured rather than assumed, because the header is three lines at 1440 and
+ * six at 400, and any constant would be wrong at one of them.
+ */
+function occludedTop(canvas: HTMLCanvasElement): number {
+  const header = canvas.closest('[data-canvas-stage]')?.parentElement?.querySelector(
+    '[data-canvas-header]'
+  );
+  if (!header) return 0;
+  const host = canvas.getBoundingClientRect();
+  const over = header.getBoundingClientRect();
+  return Math.max(0, Math.min(over.bottom - host.top, host.height * 0.45));
+}
+
 export default function CityCanvas({
   rooms,
-  plots,
+  zones,
+  wallRadius,
   radius,
+  overflow,
   selected,
+  entered,
   onSelect,
+  onEnter,
   onHover,
   reducedMotion,
   onUnavailable,
@@ -188,8 +251,8 @@ export default function CityCanvas({
 
   // Props the animation loop reads. Kept in refs so changing them never tears the
   // scene down and rebuilds it.
-  const handlers = useRef({ onSelect, onHover });
-  handlers.current = { onSelect, onHover };
+  const handlers = useRef({ onSelect, onEnter, onHover });
+  handlers.current = { onSelect, onEnter, onHover };
 
   // --- set up, once --------------------------------------------------------
   useEffect(() => {
@@ -259,7 +322,12 @@ export default function CityCanvas({
       bodies: null,
       roofs: null,
       roofOf: new Map(),
-      plates: [],
+      ground: [],
+      zoneDiscs: null,
+      zoneOrder: [],
+      flight: null,
+      half: 1,
+      inside: false,
       hoverBox,
       selectBox,
       order: [],
@@ -295,9 +363,12 @@ export default function CityCanvas({
 
     const onPointerMove = (event: PointerEvent) => {
       const index = pick(event);
+      // The cursor answers for the ground as well: a district you can enter has
+      // to look like one before you find out by clicking.
+      const overSomething = index >= 0 || pickZone(event) >= 0;
+      renderer.domElement.style.cursor = overSomething ? 'pointer' : '';
       if (index === state.hovered) return;
       state.hovered = index;
-      renderer.domElement.style.cursor = index >= 0 ? 'pointer' : '';
       handlers.current.onHover(index >= 0 ? state.order[index]?.room ?? null : null);
       state.dirty = true;
     };
@@ -308,12 +379,40 @@ export default function CityCanvas({
       pressedY = event.clientY;
     };
 
+    /** Which district's ground is under the pointer, if any. */
+    const pickZone = (event: PointerEvent): number => {
+      if (!state.zoneDiscs) return -1;
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObject(state.zoneDiscs, false);
+      return hits.length && hits[0].instanceId != null ? hits[0].instanceId : -1;
+    };
+
     const onPointerUp = (event: PointerEvent) => {
       // A drag that ends over a building is an orbit, not a click on it.
       const moved = Math.hypot(event.clientX - pressedX, event.clientY - pressedY);
       if (moved > 5 || performance.now() - pressedAt > 600) return;
+
+      // A BUILDING BEATS ITS OWN GROUND. Both are under the pointer when you
+      // click a room — the disc is the district it stands on — and picking the
+      // district would mean a room could never be clicked at all.
       const index = pick(event);
-      handlers.current.onSelect(index >= 0 ? state.order[index]?.room ?? null : null);
+      if (index >= 0) {
+        handlers.current.onSelect(state.order[index]?.room ?? null);
+        return;
+      }
+
+      const zone = pickZone(event);
+      if (zone >= 0) {
+        const district = state.zoneOrder[zone]?.district.id;
+        if (district) {
+          handlers.current.onEnter(district);
+          return;
+        }
+      }
+      handlers.current.onSelect(null);
     };
 
     const onPointerLeave = () => {
@@ -357,6 +456,23 @@ export default function CityCanvas({
 
       const moved = controls.update();
       let animating = false;
+
+      if (state.flight) {
+        animating = true;
+        const flight = state.flight;
+        flight.left = Math.max(0, flight.left - delta);
+        const t = ease(1 - flight.left / FLIGHT_MS);
+        controls.target.lerpVectors(flight.from, flight.to, t);
+        state.half = lerp(flight.fromHalf, flight.toHalf, t);
+        // The camera sits at a fixed direction from its target, so moving the
+        // target moves the camera with it and the angle the reader chose by
+        // orbiting is preserved through the flight. Anything else would snap the
+        // view back to a default nobody asked for.
+        const offset = camera.position.clone().sub(controls.target);
+        camera.position.copy(controls.target).add(offset);
+        frame_(state, renderer.domElement.clientWidth, renderer.domElement.clientHeight);
+        if (flight.left === 0) state.flight = null;
+      }
 
       if (state.transition > 0 || state.entry > 0) {
         animating = true;
@@ -407,53 +523,104 @@ export default function CityCanvas({
     state.order = rooms;
     // Room for the tallest building and a little air, and no more: the city
     // should fill the frame it is given rather than sit in the middle of it.
-    state.radius = Math.max(6, radius * 1.22 + 2);
+    state.radius = Math.max(6, radius * 1.08 + 2);
+    // Only when the whole city is being shown. Entering a district sets its own
+    // half-extent, and rebuilding the shape must not yank the camera back out.
+    if (!entered) state.half = state.radius;
 
-    // Plates first, so buildings draw over them.
-    const plateGeometry = shadedBox();
-    const plateMaterial = new THREE.MeshBasicMaterial({ color: PLATE, vertexColors: true });
-    const plateMesh = new THREE.InstancedMesh(plateGeometry, plateMaterial, Math.max(1, plots.length));
-    const matrix = new THREE.Matrix4();
-    plots.forEach((plot, i) => {
-      matrix.compose(
-        new THREE.Vector3(plot.x, -0.06, plot.z),
-        new THREE.Quaternion(),
-        new THREE.Vector3(plot.width, 0.06, plot.depth)
+    // --- the ground -------------------------------------------------------
+    // Drawn first, so buildings sit over it. Everything here is flat geometry
+    // on the y=0 plane: the wall, one disc per district, the spokes that tie
+    // them to the centre, and the leader lines out to the numbered labels.
+
+    // THE WALL. A ring at the edge of what Foolscap can name, and the reason it
+    // is a wall rather than a fade is the overflow label hanging outside it:
+    // there has to be an inside for the tens of thousands of unnamed rooms to be
+    // outside of.
+    const wall = new THREE.Mesh(
+      new THREE.RingGeometry(wallRadius, wallRadius + 0.5, 128),
+      new THREE.MeshBasicMaterial({ color: WALL_COLOUR, side: THREE.DoubleSide })
+    );
+    wall.rotation.x = -Math.PI / 2;
+    wall.position.y = 0.004;
+    state.scene.add(wall);
+    state.ground.push(wall);
+
+    // THE CORE. Nothing is placed inside it and nothing is claimed about it —
+    // it is where the spokes meet, which is the only thing a centre has to be.
+    const core = new THREE.Mesh(
+      new THREE.RingGeometry(CORE_RADIUS - 0.4, CORE_RADIUS, 96),
+      new THREE.MeshBasicMaterial({ color: SPOKE_COLOUR, side: THREE.DoubleSide })
+    );
+    core.rotation.x = -Math.PI / 2;
+    core.position.y = 0.004;
+    state.scene.add(core);
+    state.ground.push(core);
+
+    // One disc per district, and they are the click target for entering one.
+    // Invisible would be wrong — a reader needs to see the ground they are
+    // clicking — so they are drawn at the plate colour and picked directly.
+    const discGeometry = new THREE.CircleGeometry(1, 48);
+    const discs = new THREE.InstancedMesh(
+      discGeometry,
+      new THREE.MeshBasicMaterial({ color: PLATE }),
+      Math.max(1, zones.length)
+    );
+    const groundMatrix = new THREE.Matrix4();
+    const groundQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+    zones.forEach((zone, i) => {
+      groundMatrix.compose(
+        new THREE.Vector3(zone.x, 0.002, zone.z),
+        groundQuat,
+        new THREE.Vector3(zone.plotRadius, zone.plotRadius, 1)
       );
-      plateMesh.setMatrixAt(i, matrix);
+      discs.setMatrixAt(i, groundMatrix);
     });
-    plateMesh.instanceMatrix.needsUpdate = true;
-    plateMesh.count = plots.length;
-    state.scene.add(plateMesh);
-    state.plates.push(plateMesh);
+    discs.instanceMatrix.needsUpdate = true;
+    discs.count = zones.length;
+    state.scene.add(discs);
+    state.ground.push(discs);
+    state.zoneDiscs = discs;
+    state.zoneOrder = zones;
 
-    // A hairline around each plot, so the districts read as a plan.
-    const outline: number[] = [];
-    for (const plot of plots) {
-      const x0 = plot.x - plot.width / 2;
-      const x1 = plot.x + plot.width / 2;
-      const z0 = plot.z - plot.depth / 2;
-      const z1 = plot.z + plot.depth / 2;
-      const corners = [
-        [x0, z0],
-        [x1, z0],
-        [x1, z1],
-        [x0, z1],
-      ];
-      for (let i = 0; i < 4; i++) {
-        const [ax, az] = corners[i];
-        const [bx, bz] = corners[(i + 1) % 4];
-        outline.push(ax, 0.005, az, bx, 0.005, bz);
+    // A hairline around each disc, so a district reads as a place rather than a
+    // smudge of ground.
+    const rims: number[] = [];
+    for (const zone of zones) {
+      const steps = 48;
+      for (let i = 0; i < steps; i++) {
+        const a0 = (i / steps) * Math.PI * 2;
+        const a1 = ((i + 1) / steps) * Math.PI * 2;
+        rims.push(
+          zone.x + Math.cos(a0) * zone.plotRadius, 0.006, zone.z + Math.sin(a0) * zone.plotRadius,
+          zone.x + Math.cos(a1) * zone.plotRadius, 0.006, zone.z + Math.sin(a1) * zone.plotRadius
+        );
       }
     }
-    const outlineGeometry = new THREE.BufferGeometry();
-    outlineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(outline, 3));
-    const outlineMesh = new THREE.LineSegments(
-      outlineGeometry,
+
+    // SPOKES, from the core out to each district's near edge, and LEADER LINES
+    // from its far edge out past the wall to where its number hangs. The two
+    // together are what make the plan read as radial rather than as a scatter
+    // that happens to be round.
+    const lines: number[] = [];
+    const labelRadius = wallRadius + 3.2;
+    for (const zone of zones) {
+      const cos = Math.cos(zone.angle);
+      const sin = Math.sin(zone.angle);
+      const inner = Math.max(CORE_RADIUS, zone.radius - zone.plotRadius);
+      lines.push(cos * CORE_RADIUS, 0.006, sin * CORE_RADIUS, cos * inner, 0.006, sin * inner);
+      const outer = zone.radius + zone.plotRadius;
+      lines.push(cos * outer, 0.006, sin * outer, cos * labelRadius, 0.006, sin * labelRadius);
+    }
+
+    const lineGeometry = new THREE.BufferGeometry();
+    lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute([...rims, ...lines], 3));
+    const lineMesh = new THREE.LineSegments(
+      lineGeometry,
       new THREE.LineBasicMaterial({ color: PLATE_EDGE })
     );
-    state.scene.add(outlineMesh);
-    state.plates.push(outlineMesh);
+    state.scene.add(lineMesh);
+    state.ground.push(lineMesh);
 
     // Bodies and roofs.
     const bodyGeometry = shadedBox();
@@ -503,31 +670,56 @@ export default function CityCanvas({
 
     applyInstances(state, new THREE.Matrix4(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Quaternion());
 
-    // District labels, positioned each frame by projecting the plot centre.
+    // --- the labels -------------------------------------------------------
+    // Each district's number sits outside the wall at the end of its own leader
+    // line. NUMBERED rather than named in place, because the names do not fit:
+    // a label long enough to say "Infrastructure" laid over a district covers
+    // the district, and one laid outside it needs a line to say which district
+    // it belongs to — at which point a number is smaller, never collides with
+    // the mass, and reads off against the list in the panel.
+    //
+    // The anchor is a fixed world point, projected each frame, so the numbers
+    // stay attached to their leader lines as the city is orbited.
     state.labels.forEach((label) => label.remove());
-    state.labels = plots
-      .slice()
-      .sort((a, b) => b.width * b.depth - a.width * a.depth)
-      .map((plot) => {
+    const marks: HTMLElement[] = zones.map((zone) => {
       const element = document.createElement('span');
-      element.className = 'city__label';
-      element.textContent = plot.district.label;
-      element.dataset.x = String(plot.x);
-      element.dataset.z = String(plot.z);
-      element.dataset.w = String(plot.width / 2);
-      element.dataset.d = String(plot.depth / 2);
-      // Bigger districts win the space when two labels collide.
-      element.dataset.area = String(plot.width * plot.depth);
-        labelHost.appendChild(element);
-        return element;
-      });
+      element.className = 'city__mark';
+      element.innerHTML =
+        '<span class="city__mark-n">' +
+        String(zone.index) +
+        '</span><span class="city__mark-name">' +
+        zone.district.label +
+        '</span>';
+      element.dataset.x = String(zone.labelX);
+      element.dataset.z = String(zone.labelZ);
+      labelHost.appendChild(element);
+      return element;
+    });
+
+    // THE OVERFLOW LABEL, in the arc radial.ts keeps clear for it. The survey
+    // names the busiest fifty of tens of thousands, and a plan that drew those
+    // fifty inside a wall and said nothing else would leave a reader with a
+    // picture of a network that looks complete. This is the one label on the
+    // page about what is NOT drawn, which is why it gets reserved ground rather
+    // than competing for space with the districts that are.
+    if (overflow > 0) {
+      const anchor = overflowAnchor(wallRadius);
+      const element = document.createElement('span');
+      element.className = 'city__mark city__mark--overflow';
+      element.textContent = `${overflow.toLocaleString('en')} more public rooms, not named to this page`;
+      element.dataset.x = String(anchor.x);
+      element.dataset.z = String(anchor.z);
+      labelHost.appendChild(element);
+      marks.push(element);
+    }
+    state.labels = marks;
 
     // Frame the city.
     const canvas = state.renderer.domElement;
     frame_(state, canvas.clientWidth, canvas.clientHeight);
     state.dirty = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the room set
-  }, [shapeKey, plots, radius]);
+  }, [shapeKey, zones, wallRadius, radius, overflow]);
 
   // --- the city's values ---------------------------------------------------
   useEffect(() => {
@@ -549,6 +741,45 @@ export default function CityCanvas({
     }
     state.dirty = true;
   }, [rooms]);
+
+  // --- entering a district -------------------------------------------------
+  // The camera eases to the district's centre and closes in on it; leaving eases
+  // back to the whole plan. Both go through the same flight, so the movement is
+  // the same shape in either direction and the reader can tell they are
+  // retracing their steps rather than being put somewhere new.
+  useEffect(() => {
+    const state = sceneRef.current;
+    if (!state) return;
+    const zone = entered ? zones.find((entry) => entry.district.id === entered) : null;
+    // The numbers belong to the whole plan. Inside one district they project to
+    // wherever the wall happens to be off screen, which put "4 CONTEST" over the
+    // page's own heading — and a reader who is in a district already knows which
+    // one, because the panel is titled with it.
+    state.inside = zone != null;
+
+    const to = zone ? new THREE.Vector3(zone.x, 0, zone.z) : new THREE.Vector3(0, 0, 0);
+    // Room for the district and a margin, floored so a one-room district does
+    // not fill the screen with a single box.
+    const toHalf = zone ? Math.max(7, zone.plotRadius * 2.1) : state.radius;
+
+    if (state.reducedMotion) {
+      state.controls.target.copy(to);
+      state.half = toHalf;
+      frame_(state, state.renderer.domElement.clientWidth, state.renderer.domElement.clientHeight);
+      state.flight = null;
+      state.dirty = true;
+      return;
+    }
+
+    state.flight = {
+      from: state.controls.target.clone(),
+      to,
+      fromHalf: state.half,
+      toHalf,
+      left: FLIGHT_MS,
+    };
+    state.dirty = true;
+  }, [entered, zones]);
 
   // --- selection -----------------------------------------------------------
   useEffect(() => {
@@ -572,7 +803,7 @@ export default function CityCanvas({
 /** Set the orthographic frustum to hold the city, clear of the panel. */
 function frame_(state: Scene, width: number, height: number) {
   if (width === 0 || height === 0) return;
-  const half = state.radius;
+  const half = state.half;
   const aspect = width / height;
   state.camera.left = -half * aspect;
   state.camera.right = half * aspect;
@@ -583,6 +814,11 @@ function frame_(state: Scene, width: number, height: number) {
   const shift = (occluded / width) * (state.camera.right - state.camera.left) * 0.5;
   state.camera.left += shift;
   state.camera.right += shift;
+  // ...and up by half the header, which moves the city down out from under it.
+  const above = occludedTop(state.renderer.domElement);
+  const drop = (above / height) * (state.camera.top - state.camera.bottom) * 0.5;
+  state.camera.top += drop;
+  state.camera.bottom += drop;
   state.camera.updateProjectionMatrix();
 }
 
@@ -610,7 +846,8 @@ function setTargets(state: Scene, rooms: Building[]): boolean {
 
   for (const [roofIndex, roomIndex] of state.roofOf) {
     const room = rooms[roomIndex];
-    const colour = STATE_COLOUR[room?.state ?? ''] ?? BODY_DIM;
+    // Three outcomes and no more. The page's whole colour budget is here.
+    const colour = room?.alarming ? ALARM_COLOUR : room?.lit ? LIT_COLOUR : ROOF_DIM;
     scratchColour.setHex(colour);
     note(state.target.roof, roofIndex * 3, scratchColour.r);
     note(state.target.roof, roofIndex * 3 + 1, scratchColour.g);
@@ -722,12 +959,25 @@ function updateMarkers(state: Scene, position: THREE.Vector3, scale: THREE.Vecto
 }
 
 /**
- * Put each district's label on the nearest corner of its plot.
+ * Project each mark's world anchor and put the element there.
  *
- * Not the centre: at this camera angle the centre of a plot is behind its own
- * buildings, and a label competing with a skyline is unreadable. The nearest
- * corner is whichever projects lowest on screen, which stays correct as the city
- * is orbited — there is no fixed “front” once it turns.
+ * Two tests, and the second one is here because removing it was wrong.
+ *
+ * THE FRUSTUM TEST: a mark whose anchor has gone off screen is hidden rather
+ * than clamped to the edge, because a number pinned to the border points at
+ * nothing.
+ *
+ * THE COLLISION TEST, which this file briefly did without. radial.ts guarantees
+ * the zones do not share an arc, and I took that to mean the marks could not
+ * collide either. It does not: the guarantee is in WORLD space and a label is a
+ * fixed number of PIXELS, so as the plan shrinks the marks keep their size and
+ * close on each other. At 375 wide "3 FLOP" and "4 MARKETS" ran into one
+ * another, which is the exact failure the old rectangular layout had and which I
+ * had just finished claiming was impossible here.
+ *
+ * Lower numbers win, so the innermost district keeps its label and a collision
+ * costs the outer one — and a hidden mark costs nothing, because the panel's key
+ * lists every district by number whatever the plan is doing.
  */
 function positionLabels(
   state: Scene,
@@ -737,44 +987,20 @@ function positionLabels(
 ) {
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
-  // Boxes already given to a label, in the order the labels were sorted: biggest
-  // district first, so a small one yields rather than the other way round.
   const taken: Array<[number, number, number, number]> = [];
 
   for (const label of state.labels) {
-    const cx = Number(label.dataset.x);
-    const cz = Number(label.dataset.z);
-    const hw = Number(label.dataset.w);
-    const hd = Number(label.dataset.d);
+    screen.set(Number(label.dataset.x), 0, Number(label.dataset.z)).project(camera);
+    const x = (screen.x * 0.5 + 0.5) * width;
+    const y = (-screen.y * 0.5 + 0.5) * height;
+    // Placed before it is measured, so the element has a width to measure.
+    label.style.transform = `translate(-50%, -50%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
 
-    let x = 0;
-    let y = -Infinity;
-    for (const [dx, dz] of [
-      [-1, -1],
-      [1, -1],
-      [1, 1],
-      [-1, 1],
-    ]) {
-      screen.set(cx + dx * hw, 0, cz + dz * hd).project(camera);
-      const sy = (-screen.y * 0.5 + 0.5) * height;
-      if (sy > y) {
-        y = sy;
-        x = (screen.x * 0.5 + 0.5) * width;
-      }
-    }
+    const w = label.offsetWidth || 60;
+    const h = label.offsetHeight || 16;
+    const box: [number, number, number, number] = [x - w / 2, y - h / 2, w, h];
 
-    // Placed first, so the element has a width to measure; the measurement is
-    // cached because it only changes with the font, never with the camera.
-    label.style.transform = `translate(-50%, 0.55rem) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
-
-    const measured = Number(label.dataset.px) || label.offsetWidth;
-    if (measured) label.dataset.px = String(measured);
-    const box: [number, number, number, number] = [x - measured / 2, y + 4, measured, 15];
-
-    const onScreen = x > -60 && x < width + 60 && y > -30 && y < height + 30;
-    // A label over another label is worse than a district going unnamed: the
-    // district is in the room detail either way, and two names on top of each
-    // other is just a smear.
+    const onScreen = x > -80 && x < width + 80 && y > -40 && y < height + 40;
     const clear = !taken.some(
       (other) =>
         box[0] < other[0] + other[2] &&
@@ -783,13 +1009,14 @@ function positionLabels(
         box[1] + box[3] > other[1]
     );
 
-    label.style.opacity = onScreen && clear ? '1' : '0';
-    if (onScreen && clear) taken.push(box);
+    const show = onScreen && clear && !state.inside;
+    label.style.opacity = show ? '1' : '0';
+    if (show) taken.push(box);
   }
 }
 
 function disposeCity(state: Scene) {
-  for (const object of [state.bodies, state.roofs, ...state.plates]) {
+  for (const object of [state.bodies, state.roofs, ...state.ground]) {
     if (!object) continue;
     state.scene.remove(object);
     const mesh = object as THREE.Mesh;
@@ -800,6 +1027,8 @@ function disposeCity(state: Scene) {
   }
   state.bodies = null;
   state.roofs = null;
-  state.plates = [];
+  state.ground = [];
+  state.zoneDiscs = null;
+  state.zoneOrder = [];
   state.roofOf = new Map();
 }

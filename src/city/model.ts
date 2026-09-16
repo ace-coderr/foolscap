@@ -20,7 +20,8 @@
 // would be inventing the one fact the page exists to report.
 
 import type { RoomSummary } from '../lib/technocore.ts';
-import { districtFor, layoutCity, type Layout } from './districts.ts';
+import { districtFor } from './districts.ts';
+import { layoutRadial, type RadialLayout } from './radial.ts';
 
 /** A room is live if Foolscap has seen a message this recently. */
 export const LIVE_MS = 120_000;
@@ -39,9 +40,30 @@ export interface Reading {
   ratePerMin: number | null;
   /** How long the rate was measured over. A short span is a rough number. */
   rateSpanMs: number | null;
+  /**
+   * What happened when the newest message in the room was checked, here, in
+   * this browser, against the key it names. Null where there was nothing to
+   * check or the check has not run.
+   *
+   * ONE MESSAGE, NOT THE ROOM. This is the newest message and only the newest
+   * message. It is enough to decide whether the traffic arriving right now
+   * carries proof, which is what the accent is spent on — and it is nowhere near
+   * enough to say the room is trustworthy, which is why nothing on the page
+   * says that. /lens is where a room gets read properly.
+   */
+  proof: Proof | null;
   /** Set when the most recent attempt to read this room failed. */
   error: string | null;
 }
+
+/**
+ * Whether the newest message verified. Lens's three verdicts, unchanged.
+ *
+ * `unsigned` is not a failure and must never be drawn as one. Most traffic on
+ * this network carries no signature at all; a message without one is not a
+ * forgery, it is a message nobody made a claim about.
+ */
+export type Proof = 'verified' | 'unsigned' | 'failed';
 
 export type RoomState = 'live' | 'quiet' | 'failing' | 'unwatched';
 
@@ -61,6 +83,33 @@ export interface CityRoom {
   activity: number;
   activityBasis: 'read' | 'none';
   state: RoomState;
+  /** See Reading.proof. */
+  proof: Proof | null;
+  /**
+   * WHETHER THIS ROOM GETS THE ACCENT, decided in one place.
+   *
+   * The rule, and it is the whole of the rule: a room is lit when Foolscap has
+   * read it, found it live, AND the newest message in it verified against the
+   * key that message names. Live but unsigned is not lit. Quiet is not lit.
+   * Unread is not lit.
+   *
+   * The old page lit every watched room and used hue for the state — teal for
+   * live, amber for quiet — and the result was a city where almost everything
+   * glowed, so the glow said nothing. If brightness is going to mean "there is
+   * something arriving here and it is provably from who it says", then it has to
+   * be rare enough that seeing it is information.
+   */
+  lit: boolean;
+  /**
+   * Something here wants looking at: the read failed, or the newest message did
+   * not verify against the key it names.
+   *
+   * A message that carries NO signature is not in here. Most traffic on this
+   * network is unsigned, and drawing an unsigned room as alarming would turn the
+   * ordinary case into the alarming one — which is the same mistake as lighting
+   * every watched room, made in the other direction.
+   */
+  alarming: boolean;
   watched: boolean;
   ratePerMin: number | null;
   rateSpanMs: number | null;
@@ -80,12 +129,19 @@ export interface CityRoom {
 
 export interface City {
   rooms: CityRoom[];
-  layout: Layout;
+  layout: RadialLayout;
   /** How far the survey has fallen behind, measured rather than assumed. */
   surveyLag: SurveyLag;
   /** Messages a minute across the rooms Foolscap reads. The page's one answer. */
   watchedRate: number | null;
-  watchedCounts: { live: number; quiet: number; failing: number; measured: number };
+  watchedCounts: {
+    live: number;
+    quiet: number;
+    failing: number;
+    measured: number;
+    /** Live AND verifying. The only rooms on the page that take the accent. */
+    lit: number;
+  };
 }
 
 export interface SurveyLag {
@@ -145,7 +201,7 @@ export interface BuildInput {
    * would rearrange itself under the reader for no reason they could see. The
    * caller holds the layout for as long as the set of rooms is unchanged.
    */
-  layout?: Layout;
+  layout?: RadialLayout;
 }
 
 export function buildCity({ survey, readings, watched, now, layout: given }: BuildInput): City {
@@ -191,6 +247,14 @@ export function buildCity({ survey, readings, watched, now, layout: given }: Bui
       state = busy || recent ? 'live' : 'quiet';
     }
 
+    // THE ACCENT, DECIDED ONCE. Live is not enough and never was: a room can be
+    // taking twenty messages a second that nobody has signed, and lighting it
+    // would be this page saying "something is provably happening here" about
+    // traffic it cannot vouch for a word of.
+    const proof = reading?.proof ?? null;
+    const lit = state === 'live' && proof === 'verified';
+    const alarming = state === 'failing' || proof === 'failed';
+
     rooms.push({
       room: name,
       districtId: districtFor(name).id,
@@ -202,6 +266,9 @@ export function buildCity({ survey, readings, watched, now, layout: given }: Bui
       activity,
       activityBasis,
       state,
+      proof,
+      lit,
+      alarming,
       watched: isWatched,
       ratePerMin: reading?.ratePerMin ?? null,
       rateSpanMs: reading?.rateSpanMs ?? null,
@@ -218,7 +285,8 @@ export function buildCity({ survey, readings, watched, now, layout: given }: Bui
     });
   }
 
-  const layout = given ?? layoutCity(rooms.map((room) => ({ room: room.room, volume: room.volume })));
+  const layout =
+    given ?? layoutRadial(rooms.map((room) => ({ room: room.room, volume: room.volume })));
   for (const room of rooms) {
     const placement = layout.placements.get(room.room);
     if (placement) {
@@ -244,6 +312,7 @@ export function buildCity({ survey, readings, watched, now, layout: given }: Bui
       quiet: rooms.filter((r) => r.state === 'quiet').length,
       failing: rooms.filter((r) => r.state === 'failing').length,
       measured: measured.length,
+      lit: rooms.filter((r) => r.lit).length,
     },
   };
 }

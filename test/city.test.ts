@@ -12,7 +12,8 @@
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import type { RoomSummary } from '../src/lib/technocore.ts';
-import { districtFor, layoutCity, LOT, STREET } from '../src/city/districts.ts';
+import { districtFor } from '../src/city/districts.ts';
+import { CORE_RADIUS, formFor, layoutRadial, LOT, RING_MIN } from '../src/city/radial.ts';
 import { buildCity, estimateSurveyLag, heightFor, type Reading } from '../src/city/model.ts';
 
 function summary(room: string, lastSeq: number, extra: Partial<RoomSummary> = {}): RoomSummary {
@@ -67,7 +68,7 @@ describe('districts', () => {
   });
 });
 
-describe('layout', () => {
+describe('the radial layout', () => {
   const rooms = [
     { room: 'lobby', volume: 41_000_000 },
     { room: 'technocore', volume: 6_700_000 },
@@ -80,14 +81,14 @@ describe('layout', () => {
   ];
 
   it('places every room exactly once', () => {
-    const layout = layoutCity(rooms);
+    const layout = layoutRadial(rooms);
     assert.equal(layout.placements.size, rooms.length);
     for (const room of rooms) assert.ok(layout.placements.has(room.room), room.room);
   });
 
   it('is the same city twice — nothing moves between loads', () => {
-    const a = layoutCity(rooms);
-    const b = layoutCity([...rooms].reverse());
+    const a = layoutRadial(rooms);
+    const b = layoutRadial([...rooms].reverse());
     for (const room of rooms) {
       const first = a.placements.get(room.room)!;
       const second = b.placements.get(room.room)!;
@@ -101,14 +102,14 @@ describe('layout', () => {
       { room: 'bbb', volume: 100 },
       { room: 'aaa', volume: 100 },
     ];
-    const a = layoutCity(tied);
-    const b = layoutCity([...tied].reverse());
+    const a = layoutRadial(tied);
+    const b = layoutRadial([...tied].reverse());
     assert.deepEqual(a.placements.get('aaa'), b.placements.get('aaa'));
     assert.deepEqual(a.placements.get('bbb'), b.placements.get('bbb'));
   });
 
   it('gives no two buildings the same lot', () => {
-    const layout = layoutCity(rooms);
+    const layout = layoutRadial(rooms);
     const seen = new Set<string>();
     for (const placement of layout.placements.values()) {
       const key = `${placement.x.toFixed(3)},${placement.z.toFixed(3)}`;
@@ -117,34 +118,108 @@ describe('layout', () => {
     }
   });
 
-  it('keeps districts on separate plots, with street between them', () => {
-    const layout = layoutCity(rooms);
-    for (let i = 0; i < layout.plots.length; i++) {
-      for (let j = i + 1; j < layout.plots.length; j++) {
-        const a = layout.plots[i];
-        const b = layout.plots[j];
-        const apart =
-          Math.abs(a.x - b.x) >= (a.width + b.width) / 2 - 1e-6 ||
-          Math.abs(a.z - b.z) >= (a.depth + b.depth) / 2 - 1e-6;
-        assert.ok(apart, `${a.district.id} overlaps ${b.district.id}`);
+  /**
+   * THE ONE THAT MATTERS. Radius is rank and the ring has to close, and those
+   * two pull against each other — a zone's angular width depends on its radius,
+   * so anything that shrinks a zone to make room reorders the ranks.
+   *
+   * The file solves it by scaling every radius by one factor, which cannot
+   * reorder anything. These two tests are what hold that: ranks come out in
+   * volume order, and no two zones share an arc.
+   */
+  it('puts the busiest district innermost, and the rest in rank order', () => {
+    const layout = layoutRadial(rooms);
+    const byRadius = [...layout.zones].sort((a, b) => a.radius - b.radius);
+    for (let i = 1; i < byRadius.length; i++) {
+      assert.ok(
+        byRadius[i - 1].volume >= byRadius[i].volume,
+        `${byRadius[i - 1].district.id} is inside ${byRadius[i].district.id} on less volume`
+      );
+    }
+    assert.equal(byRadius[0].index, 1, 'the innermost zone is numbered 1');
+  });
+
+  it('no two districts share an arc, so the rings close without overlap', () => {
+    const layout = layoutRadial(rooms);
+    for (let i = 0; i < layout.zones.length; i++) {
+      for (let j = i + 1; j < layout.zones.length; j++) {
+        const a = layout.zones[i];
+        const b = layout.zones[j];
+        // Distance between centres against the sum of the radii: the plain
+        // circle test, which holds whatever the angles worked out to.
+        const apart = Math.hypot(a.x - b.x, a.z - b.z);
+        assert.ok(
+          apart >= a.plotRadius + b.plotRadius - 1e-6,
+          `${a.district.id} overlaps ${b.district.id}`
+        );
       }
     }
   });
 
-  it('centres the city on the origin, so the camera needs no offset', () => {
-    const layout = layoutCity(rooms);
-    const xs = [...layout.placements.values()].map((p) => p.x);
-    const zs = [...layout.placements.values()].map((p) => p.z);
-    const spread = (values: number[]) => (Math.min(...values) + Math.max(...values)) / 2;
-    // Roughly, not exactly: plots are packed, and the last row need not be full.
-    assert.ok(Math.abs(spread(xs)) < layout.radius, 'x is off centre');
-    assert.ok(Math.abs(spread(zs)) < layout.radius, 'z is off centre');
+  it('keeps every building inside the wall and outside the core', () => {
+    const layout = layoutRadial(rooms);
+    for (const placement of layout.placements.values()) {
+      const r = Math.hypot(placement.x, placement.z);
+      assert.ok(r <= layout.wallRadius, `${placement.room} is outside the wall`);
+      assert.ok(r >= CORE_RADIUS - LOT, `${placement.room} is inside the core`);
+    }
   });
 
-  it('leaves a lot of room for the building itself', () => {
-    // The building footprint is under one lot; STREET is the gap around a plot.
-    assert.ok(LOT > 1);
-    assert.ok(STREET > 0);
+  it('numbers the districts from the centre out, with no gaps', () => {
+    const layout = layoutRadial(rooms);
+    const numbers = [...layout.zones].sort((a, b) => a.index - b.index).map((z) => z.index);
+    assert.deepEqual(numbers, numbers.map((_, i) => i + 1));
+  });
+
+  it('hangs every label outside the wall', () => {
+    const layout = layoutRadial(rooms);
+    for (const zone of layout.zones) {
+      assert.ok(Math.hypot(zone.labelX, zone.labelZ) > layout.wallRadius, zone.district.id);
+    }
+  });
+
+  it('an empty survey is an empty city rather than a crash', () => {
+    const layout = layoutRadial([]);
+    assert.equal(layout.placements.size, 0);
+    assert.deepEqual(layout.zones, []);
+    assert.ok(layout.wallRadius > 0);
+  });
+
+  it('one room is one district and still draws', () => {
+    const layout = layoutRadial([{ room: 'lobby', volume: 10 }]);
+    assert.equal(layout.zones.length, 1);
+    assert.equal(layout.zones[0].index, 1);
+    assert.ok(layout.wallRadius > layout.zones[0].radius);
+  });
+});
+
+describe('built form', () => {
+  /**
+   * Form is the only thing telling one district from another at a glance, since
+   * the mass is one grey and the accent is spent on something else. So it has to
+   * come from the district's own character rather than being handed out.
+   */
+  it('a contest is stepped whatever its size — its rooms are stages', () => {
+    assert.equal(formFor({ kind: 'contest', count: 3 }), 'stepped');
+    assert.equal(formFor({ kind: 'contest', count: 40 }), 'stepped');
+  });
+
+  it('many rooms are peers on a ring', () => {
+    assert.equal(formFor({ kind: 'pair', count: RING_MIN }), 'ring');
+    assert.equal(formFor({ kind: 'fringe', count: 200 }), 'ring');
+  });
+
+  it('a few chat rooms are a stack — depth rather than spread', () => {
+    assert.equal(formFor({ kind: 'chat', count: 6 }), 'stack');
+  });
+
+  it('...but enough of them are peers again, because the count wins', () => {
+    assert.equal(formFor({ kind: 'chat', count: RING_MIN }), 'ring');
+  });
+
+  it('anything else is a grid, which asserts the least', () => {
+    assert.equal(formFor({ kind: 'infra', count: 4 }), 'grid');
+    assert.equal(formFor({ kind: 'market', count: 1 }), 'grid');
   });
 });
 
