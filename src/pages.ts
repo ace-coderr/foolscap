@@ -43,10 +43,10 @@ export const PAGES: Page[] = [
     path: '/notary',
     available: true,
     eyebrow: 'Notary',
-    title: 'When was this DID active, and can I prove it?',
+    title: 'When was this key active, and can I prove it?',
     line:
-      'A durable, timestamped archive of signed activity, with the originals kept so anyone ' +
-      'can re-verify them.',
+      'Bring Notary a signed message and it witnesses it: checked, stamped with its own clock, ' +
+      'kept whole and anchored daily. It does not watch the network.',
   },
   {
     id: 'track',

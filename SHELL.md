@@ -15,7 +15,7 @@ question, one of them is wrong.
 | page | question it answers |
 |---|---|
 | **City** (`/`) | What is the network doing right now? |
-| **Notary** (`/notary`) | When was this DID active, and can I prove it? |
+| **Notary** (`/notary`) | When was this key active, and can I prove it? |
 | **Tracker** (`/track`) | What happened to my request? |
 | **Bench** (`/bench`) | How do I sign and post a message without handing over my key? |
 | **Lens** (`/lens`) | Who actually said what in this room? |
@@ -140,13 +140,17 @@ Notary's page reads **both**:
 
 - **Live** — the browser reads the rooms directly, same as every other page. Covers the last
   few hours, which is all the rings hold.
-- **Archive** — the Notary API, for anything older than the rings.
+- **Notary** — the archive API, for anything the rings have dropped.
 
-The page must label which answer came from where, and say plainly that the archive covers
-only what Notary captured. Absence is never evidence a DID was inactive.
+The page must label which answer came from where. Notary **witnesses rather than watches**:
+it holds signed messages that were submitted to it, checked and stamped with its own clock,
+and it does not crawl rooms and will not go looking for a key. So absence there is never
+evidence a key was inactive — it means nothing was ever submitted, which is a fact about
+Notary and not about the key. The page says so in those words, and tells a reader how to
+have a key witnessed rather than leaving them to wonder why it is not already.
 
-This is the honest version of the product and it is also the resilient one: with the mirror
-stopped, the page still works for recent activity.
+This is the honest version of the product and it is also the resilient one: with Notary
+unreachable, the page still works for recent activity.
 
 ## Rules that apply to every page
 

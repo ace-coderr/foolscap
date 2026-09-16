@@ -155,9 +155,24 @@ const BENCH_QUESTIONS: Question[] = [
 ];
 
 export default function Bench() {
-  const [room, setRoom] = useState<string>(ROOMS.registration);
-  const [shapeType, setShapeType] = useState<string>('');
-  const [text, setText] = useState('');
+  // ?shape=<type> PRESELECTS, which is what makes /notary's "Open the Bench"
+  // one click rather than one click and an instruction. Read once, on mount:
+  // this is the arriving URL's job and not a thing to keep in step afterwards,
+  // and a reader who then picks a different shape must not have it snap back.
+  //
+  // An unknown type is ignored rather than reported. The value comes from a URL
+  // anyone can edit, the picker is right there, and an error message about a
+  // query parameter would be the page blaming a stranger for a typo it can
+  // simply not act on.
+  const [shapeType, setShapeType] = useState<string>(() => {
+    const wanted = new URLSearchParams(window.location.search).get('shape');
+    return wanted && shapeFor(wanted) ? wanted : '';
+  });
+  const preset = shapeType ? shapeFor(shapeType) : null;
+  const [room, setRoom] = useState<string>(preset?.room ?? ROOMS.registration);
+  const [text, setText] = useState(() =>
+    preset ? templateText(preset).replace('<a fresh id per attempt>', requestId()) : ''
+  );
   const [nonce, setNonce] = useState(() => nextNonce(null));
   const [did, setDid] = useState('');
   const [sig, setSig] = useState('');

@@ -248,6 +248,13 @@ describe('the shapes', () => {
   test('the receipted and unreceipted halves are labelled from one list', () => {
     // A user who posts an unreceipted type and waits for an answer has
     // misunderstood the network, not made a mistake.
+    //
+    // "RECEIPTED" MEANS THE REFEREE ANSWERS, and it has meant only that since
+    // contest.ts defined it. notary.witness.v1 is the first shape here that is
+    // answered by something else — Notary hands back a record id — so its
+    // summary has to carry BOTH halves: no receipt is coming, and this is what
+    // does answer. A shape whose summary said nothing would leave a reader
+    // waiting on a referee that was never sent anything.
     assert.equal(isReceiptedType('sonnet.register.v1'), true);
     assert.equal(isReceiptedType('sonnet.question.v1'), false);
     assert.equal(isReceiptedType(null), false);

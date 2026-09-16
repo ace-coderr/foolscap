@@ -39,67 +39,73 @@ export const archiveConfigured = (): boolean => NOTARY_API.length > 0;
 // Shapes, mirroring services/notary/src/archive.ts
 // ---------------------------------------------------------------------------
 
-export type CutoffAnswer = 'witnessed' | 'claimed' | 'no-evidence';
+/**
+ * Two answers, and `no-evidence` is not `false`.
+ *
+ * A false would be a claim about the key; this is a claim about the archive,
+ * which is the only one of the two Notary can make. The third state, `claimed`,
+ * went with the crawl — it carried a room's own timestamp, which Notary
+ * repeated without vouching for, and a submitted record has no such timestamp
+ * to carry.
+ */
+export type CutoffAnswer = 'witnessed' | 'no-evidence';
 
-export interface ArchiveGap {
-  id: string;
-  room: string;
-  /** 'missed' and 'downtime' are loss; 'rotated' marks where coverage begins. */
-  kind: 'missed' | 'downtime' | 'regenerated' | 'rotated';
-  missing: number | null;
-  recovered: number;
-  lost: number;
-  noticedAt: string;
-}
-
-export interface Coverage {
+/**
+ * What Notary holds, altogether.
+ *
+ * This was `Coverage`, and it was mostly about the sweep: rooms watched, the
+ * sampling policy, recorded holes, the retention window, loss split between
+ * "missed while reading" and "missed while down". None of that is true of a
+ * service that only ever sees what it is handed. The shape got much smaller,
+ * which is the honest outcome — Notary can now say exactly what it has, and
+ * has nothing to apologise for not having.
+ */
+export interface Holdings {
   firstCapturedAt: string | null;
   lastCapturedAt: string | null;
-  earliestSourceTs: string | null;
-  latestSourceTs: string | null;
   records: number;
   dids: number;
   rooms: number;
-  submitted: number;
-  staleSeconds: number | null;
-  /** The largest accountable holes, not all of them. `gapsTotal` is how many exist. */
-  gaps: ArchiveGap[];
-  gapsTotal: number;
-
-  // The three categories, never added together. See services/notary/src/archive.ts.
-  /** Lines that rotated past while the mirror was reading the room. */
-  lostMissed: number;
-  /** Lines that went past while the mirror was not running at all. */
-  lostDowntime: number;
-  /** lostMissed + lostDowntime. What Notary was responsible for and did not capture. */
-  lostMessages: number;
-  /**
-   * Rooms Notary first looked at after their ring had already turned. A COUNT
-   * OF ROOMS, never of messages: how much history each had behind it is not
-   * knowable, and summing the 'rotated' rows' own numbers is what overstated
-   * this archive's loss forty-fold.
-   */
-  roomsBegunMidRing: number;
-  /** The rooms the mirror follows — all of them completely. Named on the page. */
-  roomsWatched: string[];
-  /** Hours of full records kept. Past it: the summary tier plus pinned originals. */
-  retainHours: number;
-  pinsEarliest: boolean;
-  roomsCovered: Array<{ room: string; policy: 'full' | 'sightings'; records: number }>;
+  days: number;
+  anchoredDays: number;
+  publishedDays: number;
   caveat: string;
 }
 
 export interface ArchiveRecord {
   id: string;
+  did: string;
   room: string;
   nonce: string;
   sig: string;
   text: string;
   capturedAt: string;
-  sourceTs: string | null;
-  sourceSeq: string | null;
-  sighting: 'first' | 'last' | null;
-  source: 'submitted' | 'mirrored';
+}
+
+export interface Cutoff {
+  before: string;
+  answer: CutoffAnswer;
+  witnessedBefore: string | null;
+  evidenceRecordId: string | null;
+  caveat: string;
+}
+
+export interface DidReport {
+  did: string;
+  totalRecords: number;
+  firstCapturedAt: string | null;
+  lastCapturedAt: string | null;
+  rooms: Array<{
+    room: string;
+    records: number;
+    firstCapturedAt: string | null;
+    lastCapturedAt: string | null;
+  }>;
+  days: Array<{ day: string; records: number }>;
+  earliest: ArchiveRecord[];
+  cutoff: Cutoff | null;
+  holdings: Holdings;
+  caveat: string;
 }
 
 export interface Anchor {
@@ -126,15 +132,6 @@ export interface Anchor {
  * messages captured on a day, the other covers every key the tier knows about
  * at a point in time. Same room, same key, different claims.
  */
-export interface SummaryAnchor {
-  id: string;
-  builtAt: string;
-  rowCount: number;
-  root: string;
-  publishedSeq: string | null;
-  publishedAt: string | null;
-}
-
 export interface AnchorLog {
   /** What the API says its key is. Compared against the pinned one, never trusted. */
   notary_did: string;
@@ -143,8 +140,6 @@ export interface AnchorLog {
   anchor_room: string;
   anchors: Anchor[];
   unpublished: number;
-  summary_anchors: SummaryAnchor[];
-  summary_unpublished: number;
 }
 
 /**
@@ -180,59 +175,6 @@ export function useAnchors(): Async<AnchorLog & { matchesPinned: boolean; pinned
   return state;
 }
 
-export interface Cutoff {
-  before: string;
-  answer: CutoffAnswer;
-  witnessedBefore: string | null;
-  claimedBefore: string | null;
-  evidenceRecordId: string | null;
-  caveat: string;
-}
-
-/**
- * What the permanent tier says about one (did, room) pair.
- *
- * A second source, never a correction to the first. The record figures beside
- * it are counted from originals Notary still holds; these are counted from
- * originals it held and deleted. Served apart and shown apart, the same way
- * live and archive are — a reader has to know which they are leaning on.
- */
-export interface SummaryRow {
-  room: string;
-  firstCapturedAt: string;
-  firstSourceTs: string | null;
-  lastCapturedAt: string;
-  lastSourceTs: string | null;
-  messageCount: number;
-  pinnedRecordId: string | null;
-  /** True where the tier stands for messages no longer held whole. */
-  prunedBehind: boolean;
-}
-
-export interface DidReport {
-  did: string;
-  totalRecords: number;
-  firstCapturedAt: string | null;
-  lastCapturedAt: string | null;
-  firstSourceTs: string | null;
-  lastSourceTs: string | null;
-  rooms: Array<{
-    room: string;
-    policy: 'full' | 'sightings';
-    records: number;
-    sampled: boolean;
-    firstSourceTs: string | null;
-    lastSourceTs: string | null;
-  }>;
-  days: Array<{ day: string; records: number }>;
-  earliest: ArchiveRecord[];
-  /** The permanent tier, per room. Shown only where it says more than the records. */
-  summary: SummaryRow[];
-  cutoff: Cutoff | null;
-  coverage: Coverage;
-  caveat: string;
-}
-
 type Async<T> =
   | { phase: 'idle' }
   | { phase: 'loading' }
@@ -253,20 +195,20 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
 /**
  * Loaded on mount, not on lookup.
  *
- * The limits of the archive are not a footnote to a result; they are the frame
- * the result is read inside. A reader who types a DID and sees "nothing found"
- * without already knowing that capture began on a particular evening at a
- * particular minute has been misled by omission.
+ * What Notary holds is not a footnote to a result; it is the frame the result
+ * is read inside. A reader who types a key and sees "nothing found" without
+ * already knowing that Notary only holds what was submitted to it has been
+ * misled by omission.
  */
-export function useCoverage(): Async<Coverage> {
-  const [state, setState] = useState<Async<Coverage>>(
+export function useHoldings(): Async<Holdings> {
+  const [state, setState] = useState<Async<Holdings>>(
     archiveConfigured() ? { phase: 'loading' } : { phase: 'failed', error: 'No archive is configured for this build.' }
   );
 
   useEffect(() => {
     if (!archiveConfigured()) return;
     const abort = new AbortController();
-    getJson<Coverage>('/api/notary/coverage', abort.signal)
+    getJson<Holdings>('/api/notary/holdings', abort.signal)
       .then((value) => setState({ phase: 'ready', value }))
       .catch((err: Error) => {
         if (err.name === 'AbortError') return;

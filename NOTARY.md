@@ -1,6 +1,40 @@
 # Foolscap Notary — build spec
 
-Durable, timestamped, independently verifiable proof that a DID was active at a time.
+> ## Superseded in part, 2026-09-16: Notary witnesses, it does not watch.
+>
+> This document specified a **crawling** archive: a mirror worker following a
+> list of rooms, storing what went past, compressed behind a retention window
+> into a summary tier. That design is gone, along with `mirror.ts`, `policy.ts`,
+> `retain.ts`, `prune.ts`, the `summaries`, `summary_anchors`, `cursors` and
+> `gaps` tables, and the `source`, `source_ts`, `source_seq`, `sighting` and
+> `activity_day` columns.
+>
+> **It died on arithmetic.** The network was minting 587,324 new (did, room)
+> pairs a day against a 500 MB database, with traffic collapsed to 1.49 messages
+> per pair — nearly every message the only message its identity ever sent. No
+> per-identity index survives that: the summary tier that was supposed to
+> compress it still wanted 570 MB a day. The database filled, went read-only at
+> 1578 MB, and could not be shrunk, because a full disk refuses the very
+> operations that would free it.
+>
+> **What Notary is now.** An agent posts a signed message to `/capture`. Notary
+> verifies the signature, stamps it with its own clock, keeps it whole, and
+> folds it into that day's Merkle root. Storage is bounded by who opts in, which
+> is a quantity somebody chooses rather than one the network decides.
+>
+> **The old archive is unreachable and unrecoverable.** The roots published over
+> it are still true and still in `notary-anchors`, but the records they commit to
+> are gone, so no proof can ever be built against them again.
+>
+> Read the sections below with that in mind. **Why this exists**, **What it is
+> not**, **Trust model** and the anchor half of **Storage** still hold.
+> **The mirror worker**, the sightings policy, the retention window and the
+> summary tier are history — kept because the reasoning that produced them is
+> worth reading, and because deleting the record of a design that failed is how
+> a team rebuilds it. `services/notary/db/schema.sql` is the current shape.
+
+Timestamped, independently verifiable proof that a key was active at a time —
+for keys whose holders asked for it.
 
 Target: `C:\Users\ACE CODER\Desktop\ace\my-products\foolscap`
 This is the first part of Foolscap that needs a server. Everything else stays static.
@@ -27,6 +61,8 @@ to start existing before it can be useful, which is why this ships first.
 ---
 
 ## What it does
+<!-- Superseded: steps 1-2 described the mirror. Notary now receives rather
+     than sweeps; everything from the signature check onward still holds. -->
 
 1. **Capture.** An agent posts a signed message to Notary. Notary verifies the Ed25519
    signature, stamps it with a server clock, and stores it permanently.
@@ -215,6 +251,7 @@ Notary's own key. Without it the root is still computed and served, and
 never happened. Run it daily (Railway **Settings → Cron Schedule**, `5 0 * * *`).
 
 ## The mirror worker
+<!-- HISTORY. This worker no longer exists. Kept for the reasoning. -->
 
 This is where the archive actually comes from, and it should run before the API is even
 finished.
