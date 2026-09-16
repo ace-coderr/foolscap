@@ -21,8 +21,6 @@ import {
   getPool,
   upsertAnchor,
   markAnchorPublished,
-  unpublishedSummaryAnchors,
-  markSummaryAnchorPublished,
 } from './db.ts';
 import { leafHash, merkleRoot, isoStamp } from './merkle.ts';
 import { didFromSeed, parseSeed, signWithSeed } from '../../../src/lib/did.ts';
@@ -32,7 +30,6 @@ import {
   NOTARY_DID,
   ANCHOR_ROOM as PINNED_ROOM,
   anchorPayload as buildPayload,
-  summaryAnchorPayload,
 } from '../../../src/lib/notary.ts';
 
 /** Where roots are published. See src/lib/notary.ts — the room is pinned too. */
@@ -197,41 +194,6 @@ export async function publishAnchor(anchor: BuiltAnchor): Promise<{ published: b
 }
 
 /**
- * Publish a summary-tier root, the same way and into the same room.
- *
- * WHY THE SWEEP DOES THIS AND NOT A COMMAND. The tier is the half of the
- * archive that outlives the retention window — it is what a reader gets for
- * every period whose records have been pruned — and until its root is in a
- * public room it is the half with nothing standing behind it. A commitment
- * that only happens when somebody remembers to run something is not a
- * commitment; it is an intention. The record anchors were moved off a cron for
- * this reason and the tier should not be held to a weaker rule than the
- * records it replaces.
- */
-export async function publishSummaryAnchor(pending: {
-  id: string;
-  root: string;
-  rowCount: number;
-  builtAt: string;
-}): Promise<{ published: boolean; seq: number | null; reason?: string }> {
-  const key = await signingKey();
-  if (!key.ok) return { published: false, seq: null, reason: key.reason };
-
-  const { seed, did } = key;
-  const text = summaryAnchorPayload(pending);
-  const nonce = String(Date.now());
-  const sig = await signWithSeed(seed, canonicalString(ANCHOR_ROOM, nonce, text));
-
-  const reply = (await postSigned({ room: ANCHOR_ROOM, did, sig, nonce, text })) as {
-    seq?: number;
-  } | null;
-
-  const seq = typeof reply?.seq === 'number' ? reply.seq : await locatePublication(did, nonce);
-  await markSummaryAnchorPublished(pending.id, seq);
-  return { published: true, seq };
-}
-
-/**
  * Find a just-posted anchor in the room and return its sequence.
  *
  * Matched on (did, nonce), which is unique per key per room — not on the text,
@@ -339,19 +301,6 @@ export function startAnchoring(): AnchorHandle {
             : `[anchor] ${day}: not published — ${result.reason}`
         );
       }
-
-      // The tier's roots, on the same sweep. They are built by the retention
-      // run, which deletes records — so between that run and this one the
-      // pruned half of the archive has nothing witnessing it. The gap should be
-      // an hour at most, and never "until somebody remembers".
-      for (const pending of await unpublishedSummaryAnchors()) {
-        const result = await publishSummaryAnchor(pending);
-        console.log(
-          result.published
-            ? `[anchor] summary tier: ${pending.rowCount} rows, root ${pending.root}, published to ${ANCHOR_ROOM} at seq ${result.seq ?? '?'}`
-            : `[anchor] summary tier: not published — ${result.reason}`
-        );
-      }
     } catch (err) {
       // Never fatal. A failed anchor is retried next hour; taking the capture
       // process down with it would cost history, which is worse.
@@ -372,28 +321,6 @@ const utcDay = (at: Date): string => at.toISOString().slice(0, 10);
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const publish = !args.includes('--no-publish');
-
-  // --summary publishes the tier's roots and nothing else. Useful on its own
-  // because a record anchor for a large day and a summary root are very
-  // different amounts of work, and a timeout on the first should not be able to
-  // stop the second: the tier is the half of the archive with no other proof.
-  if (args.includes('--summary')) {
-    const pending = await unpublishedSummaryAnchors();
-    if (pending.length === 0) {
-      console.log('Every summary root is already published.');
-      return;
-    }
-    for (const row of pending) {
-      console.log(`summary tier: ${row.rowCount.toLocaleString('en')} keys, root ${row.root}`);
-      const result = await publishSummaryAnchor(row);
-      console.log(
-        result.published
-          ? `  published to ${ANCHOR_ROOM}${result.seq == null ? '' : ` at seq ${result.seq}`}`
-          : `  not published: ${result.reason}`
-      );
-    }
-    return;
-  }
 
   let days: string[];
   if (args.includes('--all')) {

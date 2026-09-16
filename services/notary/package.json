@@ -9,12 +9,8 @@
     "serve": "node --experimental-strip-types src/server.ts",
     "dev": "node --env-file-if-exists=../../.env --experimental-strip-types src/server.ts",
     "migrate": "node --env-file-if-exists=../../.env --experimental-strip-types src/migrate.ts",
-    "mirror": "node --env-file-if-exists=../../.env --experimental-strip-types src/mirror.ts",
     "anchor": "node --env-file-if-exists=../../.env --experimental-strip-types src/anchor.ts",
-    "stats": "node --env-file-if-exists=../../.env --experimental-strip-types src/stats.ts",
-    "prune": "node --env-file-if-exists=../../.env --experimental-strip-types src/prune.ts",
-    "typecheck": "tsc --noEmit",
-    "retain": "node --env-file-if-exists=../../.env --experimental-strip-types src/retain.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "pg": "^8.13.1"

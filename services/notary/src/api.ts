@@ -1,17 +1,23 @@
 // api.ts — the four endpoints, plus the one the honesty rules made necessary.
 //
-//   POST /api/notary/capture       store a signed message, idempotently
-//   GET  /api/notary/did/:did      what the archive holds for a DID, and the
-//                                  cutoff answer when ?before= is given
+//   POST /api/notary/capture       witness a signed message, idempotently
+//   GET  /api/notary/did/:did      what Notary holds for a key, and the cutoff
+//                                  answer when ?before= is given
 //   GET  /api/notary/record/:id    one original, with its Merkle proof
 //   GET  /api/notary/anchors       published roots by day
-//   GET  /api/notary/coverage      what the archive can speak to at all
+//   GET  /api/notary/holdings      what Notary holds at all
 //
-// The fifth is not in NOTARY.md. It is here because the page has to state the
-// coverage start and the recorded gaps BEFORE anyone types a DID — an archive
-// that only admits its limits inside a result is an archive that looks complete
-// on the way in. Folding it into /did/:did would have meant no honest empty
-// state; folding it into /anchors would have meant lying about what /anchors is.
+// /capture IS THE PRODUCT NOW. It existed for the whole life of the crawling
+// version and nothing ever called it: the mirror filled the archive and the
+// endpoint sat there as the documented way in that nobody needed. The crawl is
+// gone, so this is the only way anything gets into Notary, and everything else
+// here is a read of what it accepted.
+//
+// /holdings is not in NOTARY.md. It is here because the page has to say what
+// Notary has BEFORE anyone types a key — a service that only admits its limits
+// inside a result is one that looks complete on the way in. It was called
+// /coverage when there was a sweep to have coverage of; the old path still
+// answers, because a deployed page may still be asking for it.
 //
 // No framework. One `pg` dependency for the service and nothing else: a router
 // over node:http is forty lines, and every line of it is visible here.
@@ -28,8 +34,7 @@ import { captureRecord } from './db.ts';
 import {
   anchorForDay,
   anchors,
-  summaryAnchors,
-  coverage,
+  holdings,
   dayOfRecord,
   didReport,
   recordById,
@@ -233,8 +238,12 @@ export function createApi({ limiter = new RateLimiter(CAPTURE_LIMIT) }: { limite
       if (req.method !== 'GET') return send(res, 405, { error: 'GET only.' });
 
       // --- coverage --------------------------------------------------------
-      if (path === '/api/notary/coverage') {
-        return send(res, 200, { ...(await coverage()), caveat: CAVEAT }, { 'cache-control': 'public, max-age=30' });
+      if (path === '/api/notary/holdings' || path === '/api/notary/coverage') {
+        // /coverage is kept as an alias because it is the name a deployed page
+        // may still be asking for, and answering 404 to a cached client looks
+        // like the service is down. The name is wrong now — Notary has no
+        // coverage, it has holdings — and the new one is what the page calls.
+        return send(res, 200, { ...(await holdings()), caveat: CAVEAT }, { 'cache-control': 'public, max-age=30' });
       }
 
       // --- one DID ---------------------------------------------------------
@@ -285,11 +294,10 @@ export function createApi({ limiter = new RateLimiter(CAPTURE_LIMIT) }: { limite
             nonce: record.nonce,
             sig: record.sig,
             text: record.text,
+            // THE ONLY TIMESTAMP. A submitted record has no room-claimed
+            // time to disagree with: the agent posts and Notary stamps,
+            // seconds apart, and this is the one Notary watched happen.
             captured_at: isoStamp(record.capturedAt),
-            source_ts: record.sourceTs,
-            source_seq: record.sourceSeq,
-            source: record.source,
-            sighting: record.sighting,
           },
           canonical_string: `${record.room}|${record.nonce}|${record.text}`,
           leaf: leafHash({
@@ -318,7 +326,7 @@ export function createApi({ limiter = new RateLimiter(CAPTURE_LIMIT) }: { limite
 
       // --- anchors ---------------------------------------------------------
       if (path === '/api/notary/anchors') {
-        const [rows, summaries] = await Promise.all([anchors(), summaryAnchors()]);
+        const rows = await anchors();
         return send(
           res,
           200,
@@ -334,11 +342,6 @@ export function createApi({ limiter = new RateLimiter(CAPTURE_LIMIT) }: { limite
             anchor_room: ANCHOR_ROOM,
             anchors: rows,
             unpublished: rows.filter((row) => row.publishedSeq == null).length,
-            // Its own set, never folded into `anchors`. A record anchor covers
-            // one day's messages; a summary anchor covers the whole tier at one
-            // moment. Same room, same key, different claims.
-            summary_anchors: summaries,
-            summary_unpublished: summaries.filter((row) => row.publishedSeq == null).length,
             note:
               'A root with no published_seq has been computed but not yet witnessed by anyone. ' +
               'Only a published root constrains what Notary can change. Verify an anchor by ' +

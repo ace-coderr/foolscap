@@ -23,22 +23,6 @@ export interface ArchiveRecord {
   nonce: string;
   sig: string;
   text: string;
-  source: 'submitted' | 'mirrored';
-  sourceTs?: string | null;
-  sourceSeq?: number | null;
-  /** Set only for rooms under the sampling policy. */
-  sighting?: 'first' | 'last';
-  activityDay?: string;
-}
-
-export interface GapRow {
-  room: string;
-  /** 'missed' and 'downtime' are loss; 'rotated' marks where coverage begins. */
-  kind: 'missed' | 'downtime' | 'regenerated' | 'rotated';
-  missing?: number | null;
-  expectedSeq?: number | null;
-  firstSeq?: number | null;
-  generation?: number | null;
 }
 
 export interface ArchiveTotals {
@@ -156,321 +140,13 @@ export async function assertSchema(): Promise<void> {
   }
 }
 
-const COLUMNS = ['did', 'room', 'nonce', 'sig', 'text', 'source', 'source_ts', 'source_seq'];
-
-/**
- * Insert a batch of records, ignoring any (did, room, nonce) already held.
- *
- * Agents retry and rings overlap, so re-seeing a message is normal, not an
- * error. Returns how many rows were new.
- */
-export async function insertRecords(records: ArchiveRecord[]): Promise<StoredRecord[]> {
-  if (records.length === 0) return [];
-
-  const values: string[] = [];
-  const params: unknown[] = [];
-  records.forEach((record, i) => {
-    const base = i * COLUMNS.length;
-    values.push(
-      `($${base + 1}, $${base + 2}, $${base + 3}::numeric, $${base + 4}, $${base + 5}, ` +
-        `$${base + 6}, $${base + 7}::timestamptz, $${base + 8}::bigint, ` +
-        `now(), (now() at time zone 'utc')::date)`
-    );
-    params.push(
-      record.did,
-      record.room,
-      // A string, deliberately. See the module comment.
-      String(record.nonce),
-      record.sig,
-      record.text,
-      record.source,
-      record.sourceTs ?? null,
-      record.sourceSeq ?? null
-    );
-  });
-
-  // RETURNING, because the summary tier has to be built from the rows that
-  // actually landed. `on conflict do nothing` silently drops retries and
-  // overlapping ring reads, and a summary counted from the batch instead of
-  // from the result would inflate message_count every time the mirror re-read
-  // a stretch it already had.
-  const { rows } = await getPool().query(
-    `insert into records (${COLUMNS.join(', ')}, captured_at, day)
-     values ${values.join(', ')}
-     on conflict (did, room, nonce) where sighting is null do nothing
-     returning id, did, room, captured_at, source_ts`,
-    params
-  );
-  return rows.map((r: InsertedRow) => ({
-    id: String(r.id),
-    did: r.did,
-    room: r.room,
-    capturedAt: r.captured_at,
-    sourceTs: r.source_ts,
-  }));
-}
-
-interface InsertedRow {
-  id: string | number;
-  did: string;
-  room: string;
-  captured_at: Date;
-  source_ts: Date | null;
-}
-
-/** What an insert actually wrote, which is what the summary tier is built from. */
 export interface StoredRecord {
   id: string;
   did: string;
   room: string;
   capturedAt: Date;
-  sourceTs: Date | null;
 }
 
-/**
- * Fold a batch of stored records into the permanent tier.
- *
- * One row per (did, room), upserted on every capture rather than derived at
- * prune time — deriving it later would mean reading the records it is meant to
- * replace, on the run that is deleting them.
- *
- * least() and greatest() ignore nulls in Postgres, which is what makes
- * source_ts safe here: a message the room gave no timestamp for leaves the
- * claimed-clock bounds alone instead of poisoning them.
- *
- * The pin moves only backwards. It names the earliest record Notary CAPTURED —
- * the strongest thing it can say, and the one whose captured_at the summary's
- * first_captured_at reports — so the evidence offered always matches the
- * witnessed answer. A backfill reaching further back re-pins; nothing else does.
- */
-export async function upsertSummaries(stored: StoredRecord[]): Promise<number> {
-  if (stored.length === 0) return 0;
-
-  const folded = new Map<string, {
-    did: string; room: string; first: StoredRecord; firstSrc: Date | null;
-    lastCap: Date; lastSrc: Date | null; count: number;
-  }>();
-
-  for (const r of stored) {
-    const key = `${r.did}\x00${r.room}`;
-    const seen = folded.get(key);
-    if (!seen) {
-      folded.set(key, {
-        did: r.did, room: r.room, first: r, firstSrc: r.sourceTs,
-        lastCap: r.capturedAt, lastSrc: r.sourceTs, count: 1,
-      });
-      continue;
-    }
-    seen.count++;
-    if (r.capturedAt < seen.first.capturedAt) seen.first = r;
-    if (r.sourceTs && (!seen.firstSrc || r.sourceTs < seen.firstSrc)) seen.firstSrc = r.sourceTs;
-    if (r.capturedAt > seen.lastCap) seen.lastCap = r.capturedAt;
-    if (r.sourceTs && (!seen.lastSrc || r.sourceTs > seen.lastSrc)) seen.lastSrc = r.sourceTs;
-  }
-
-  const values: string[] = [];
-  const params: unknown[] = [];
-  let i = 0;
-  for (const f of folded.values()) {
-    const b = i * 8;
-    values.push(
-      `($${b + 1}, $${b + 2}, $${b + 3}::timestamptz, $${b + 4}::timestamptz, ` +
-        `$${b + 5}::timestamptz, $${b + 6}::timestamptz, $${b + 7}::bigint, $${b + 8}::bigint)`
-    );
-    params.push(
-      f.did, f.room, f.first.capturedAt, f.firstSrc,
-      f.lastCap, f.lastSrc, f.count, f.first.id
-    );
-    i++;
-  }
-
-  const { rowCount } = await getPool().query(
-    `insert into summaries (did, room, first_captured_at, first_source_ts,
-                            last_captured_at, last_source_ts, message_count, pinned_record_id)
-     values ${values.join(', ')}
-     on conflict (did, room) do update set
-       first_source_ts  = least(summaries.first_source_ts, excluded.first_source_ts),
-       last_captured_at = greatest(summaries.last_captured_at, excluded.last_captured_at),
-       last_source_ts   = greatest(summaries.last_source_ts, excluded.last_source_ts),
-       message_count    = summaries.message_count + excluded.message_count,
-       last_updated     = now(),
-       -- The pin and the first_captured_at it explains move together or not at
-       -- all: splitting them would let the summary report a witnessed time the
-       -- record it offers does not show.
-       pinned_record_id = case
-         when excluded.first_captured_at < summaries.first_captured_at
-           then excluded.pinned_record_id else summaries.pinned_record_id end,
-       first_captured_at = least(summaries.first_captured_at, excluded.first_captured_at)`,
-    params
-  );
-  return rowCount ?? 0;
-}
-
-/**
- * Store first/last sightings for a sampled room.
- *
- * 'first' moves only backwards and 'last' only forwards, so records arriving out
- * of order — a sweep filling a hole, say — settle to the true earliest and
- * latest rather than to whatever happened to be written last.
- *
- * One statement per row: the rows in a batch routinely collide with each other
- * on (did, room, activity_day, sighting), and Postgres will not let a single
- * INSERT touch the same conflict target twice.
- */
-export async function upsertSightings(records: ArchiveRecord[]): Promise<number> {
-  if (records.length === 0) return 0;
-  const pool = getPool();
-  let written = 0;
-
-  for (const record of records) {
-    const newer = record.sighting === 'last';
-    const { rowCount } = await pool.query(
-      `insert into records
-         (did, room, nonce, sig, text, source, source_ts, source_seq,
-          sighting, activity_day, captured_at, day)
-       values ($1, $2, $3::numeric, $4, $5, $6, $7::timestamptz, $8::bigint,
-               $9, $10::date, now(), (now() at time zone 'utc')::date)
-       on conflict (did, room, activity_day, sighting) where sighting is not null
-       do update set
-            nonce      = excluded.nonce,
-            sig        = excluded.sig,
-            text       = excluded.text,
-            source_ts  = excluded.source_ts,
-            source_seq = excluded.source_seq,
-            captured_at = excluded.captured_at
-          where ${newer
-            ? 'excluded.source_seq > records.source_seq'
-            : 'excluded.source_seq < records.source_seq'}`,
-      [
-        record.did,
-        record.room,
-        String(record.nonce),
-        record.sig,
-        record.text,
-        record.source,
-        record.sourceTs ?? null,
-        record.sourceSeq ?? null,
-        record.sighting,
-        record.activityDay,
-      ]
-    );
-    written += rowCount ?? 0;
-  }
-  return written;
-}
-
-/** Record a hole in the archive. Returns its id so a later sweep can amend it. */
-export async function insertGap({
-  room,
-  kind,
-  missing,
-  expectedSeq,
-  firstSeq,
-  generation,
-}: GapRow): Promise<number | null> {
-  const { rows } = await getPool().query(
-    `insert into gaps (room, kind, missing, expected_seq, first_seq, generation)
-     values ($1, $2, $3, $4::bigint, $5::bigint, $6)
-     returning id`,
-    [room, kind, missing ?? null, expectedSeq ?? null, firstSeq ?? null, generation ?? null]
-  );
-  return rows[0]?.id ?? null;
-}
-
-/** A summary-tier root waiting to be witnessed. */
-export interface PendingSummaryAnchor {
-  id: string;
-  root: string;
-  rowCount: number;
-  builtAt: string;
-}
-
-/**
- * Summary roots built but never published.
- *
- * Keyed off published_at rather than published_seq, the same way the record
- * anchors are: the POST reply does not reliably carry a sequence, so a sweep
- * that treated a null seq as "not published" would post the same root every
- * hour for ever.
- */
-export async function unpublishedSummaryAnchors(): Promise<PendingSummaryAnchor[]> {
-  const { rows } = await getPool().query(
-    `select id::text, root, row_count, built_at
-       from summary_anchors where published_at is null order by built_at`
-  );
-  return rows.map((r: { id: string; root: string; row_count: number; built_at: Date }) => ({
-    id: r.id,
-    root: r.root,
-    rowCount: Number(r.row_count),
-    builtAt: new Date(r.built_at).toISOString(),
-  }));
-}
-
-export async function markSummaryAnchorPublished(id: string, seq: number | null): Promise<void> {
-  await getPool().query(
-    `update summary_anchors set published_seq = $2::bigint, published_at = now() where id = $1::bigint`,
-    [id, seq]
-  );
-}
-
-/** Record a new summary root. Returns its id so the sweep can publish it. */
-export async function insertSummaryAnchor(root: string, rowCount: number): Promise<string> {
-  const { rows } = await getPool().query(
-    `insert into summary_anchors (row_count, root) values ($1, $2) returning id::text`,
-    [rowCount, root]
-  );
-  return rows[0].id;
-}
-
-/** Note how much of a hole a re-export got back. */
-export async function markGapRecovered(id: number | null, recovered: number): Promise<void> {
-  if (id == null) return;
-  await getPool().query(`update gaps set recovered = recovered + $2 where id = $1`, [id, recovered]);
-}
-
-/** The highest source_seq held for a room, so a restart resumes where it stopped. */
-/**
- * The highest sequence STORED for a room.
- *
- * No longer the resume point — see readCursor. It survives as the one-time seed
- * for an archive that predates the cursors table, and as the honest answer to a
- * different question: what is the newest thing actually held.
- */
-export async function lastSeqFor(room: string): Promise<number> {
-  const { rows } = await getPool().query(
-    `select max(source_seq) as seq from records where room = $1`,
-    [room]
-  );
-  const seq = rows[0]?.seq;
-  return seq == null ? 0 : Number(seq);
-}
-
-/** Where the mirror has read to, or null if it has never written one. */
-export async function readCursor(room: string): Promise<number | null> {
-  const { rows } = await getPool().query(`select last_seq from cursors where room = $1`, [room]);
-  const seq = rows[0]?.last_seq;
-  return seq == null ? null : Number(seq);
-}
-
-/**
- * Advance the cursor, never retreat it.
- *
- * `greatest` rather than a plain assignment because the sweep re-exports a room
- * to fill an old hole, and that read ends far below the follow cursor. A write
- * that took the last value would drag the resume point backwards and the next
- * restart would book everything since as lost.
- */
-export async function writeCursor(room: string, lastSeq: number): Promise<void> {
-  await getPool().query(
-    `insert into cursors (room, last_seq) values ($1, $2::bigint)
-     on conflict (room) do update
-       set last_seq = greatest(cursors.last_seq, excluded.last_seq),
-           updated_at = now()`,
-    [room, lastSeq]
-  );
-}
-
-/** What /capture answers with, and whether this call is what created the row. */
 export interface CaptureResult {
   id: string;
   capturedAt: string;
@@ -501,9 +177,13 @@ export async function captureRecord(record: {
   const params = [record.did, record.room, String(record.nonce), record.sig, record.text];
 
   const inserted = await pool.query(
-    `insert into records (did, room, nonce, sig, text, source, captured_at, day)
-     values ($1, $2, $3::numeric, $4, $5, 'submitted', now(), (now() at time zone 'utc')::date)
-     on conflict (did, room, nonce) where sighting is null do nothing
+    // No `source` column any more: everything is submitted, and a column that
+    // can only hold one value is a column pretending to be a choice. The
+    // conflict target is the plain unique index now that there are no partial
+    // sighting rows for it to have to step around.
+    `insert into records (did, room, nonce, sig, text, captured_at, day)
+     values ($1, $2, $3::numeric, $4, $5, now(), (now() at time zone 'utc')::date)
+     on conflict (did, room, nonce) do nothing
      returning id::text as id, captured_at, to_char(day, 'YYYY-MM-DD') as day`,
     params
   );
@@ -516,14 +196,14 @@ export async function captureRecord(record: {
   const existing = await pool.query(
     `select id::text as id, captured_at, to_char(day, 'YYYY-MM-DD') as day
        from records
-      where did = $1 and room = $2 and nonce = $3::numeric and sighting is null`,
+      where did = $1 and room = $2 and nonce = $3::numeric`,
     params.slice(0, 3)
   );
   const row = existing.rows[0];
   if (!row) {
-    // The insert hit a conflict and the row is not there to read back. That
-    // means a sighting row holds the key, which cannot happen for a submitted
-    // record — better to fail loudly than to invent an id.
+    // The insert hit a conflict and the row is not there to read back, which
+    // should be impossible on a single unique index. Better to fail loudly
+    // than to invent an id and hand it back as if something were stored.
     throw new Error('capture conflicted but the original could not be read back');
   }
   return { id: row.id, capturedAt: row.captured_at.toISOString(), day: row.day, created: false };

@@ -114,94 +114,89 @@ const record = (over: Partial<RecordRow> = {}): RecordRow => ({
   sig: 'sig',
   text: 'hello',
   capturedAt: '2026-09-12T21:10:00.000Z',
-  sourceTs: '2026-09-11T15:00:00.000Z',
-  sourceSeq: '1',
-  sighting: null,
-  source: 'mirrored',
   ...over,
 });
 
+/**
+ * The cutoff answer, after the pivot.
+ *
+ * THIS SUITE LOST A STATE AND GOT STRONGER FOR IT. It used to cover three
+ * answers, and the middle one — `claimed` — was the interesting one: the
+ * archive held a signed message that the ROOM dated before the cutoff, so the
+ * signature was real and the timestamp was somebody else's word. Notary
+ * repeated it without vouching for it, and most of the care in this file went
+ * into making sure a reader could not mistake the two.
+ *
+ * A witnessing service has no such case. The agent submits and Notary stamps,
+ * seconds apart, and the stamp is the only timestamp on the record. So there
+ * are two answers, both of them Notary's own, and the tests that used to guard
+ * the distinction now guard its absence: nothing can come back `claimed`
+ * because there is nowhere for a claimed time to enter.
+ */
 describe('the cutoff answer', () => {
   const CUTOFF = '2026-09-12T00:00:00Z';
 
   test('witnessed when Notary’s own clock beats the cutoff', () => {
     const result = evaluateCutoff({
       before: CUTOFF,
-      firstCapturedAt: '2026-09-11T20:00:00.000Z',
-      firstSourceTs: '2026-09-11T15:00:00.000Z',
-      earliest: [record({ capturedAt: '2026-09-11T20:00:00.000Z' })],
+      firstCapturedAt: '2026-09-11T22:00:00.000Z',
+      earliest: [record({ capturedAt: '2026-09-11T22:00:00.000Z' })],
     });
     assert.equal(result.answer, 'witnessed');
-    assert.equal(result.witnessedBefore, '2026-09-11T20:00:00.000Z');
+    assert.equal(result.witnessedBefore, '2026-09-11T22:00:00.000Z');
     assert.equal(result.evidenceRecordId, '1');
-  });
-
-  test('claimed when only the room’s timestamp beats it', () => {
-    // The ordinary case for a backfilled archive: the message is real and
-    // re-verifiable, but Notary read it out of ring history rather than
-    // watching it arrive, so the TIME is the room's claim and is labelled one.
-    const result = evaluateCutoff({
-      before: CUTOFF,
-      firstCapturedAt: '2026-09-12T21:10:00.000Z',
-      firstSourceTs: '2026-09-11T15:00:00.000Z',
-      earliest: [record()],
-    });
-    assert.equal(result.answer, 'claimed');
-    assert.equal(result.witnessedBefore, null);
-    assert.equal(result.claimedBefore, '2026-09-11T15:00:00.000Z');
-  });
-
-  test('witnessed outranks claimed when both are true', () => {
-    const result = evaluateCutoff({
-      before: CUTOFF,
-      firstCapturedAt: '2026-09-11T20:00:00.000Z',
-      firstSourceTs: '2026-09-11T15:00:00.000Z',
-      earliest: [record({ capturedAt: '2026-09-11T20:00:00.000Z' })],
-    });
-    assert.equal(result.answer, 'witnessed');
   });
 
   test('no-evidence is never spelled false, and never says inactive', () => {
     const result = evaluateCutoff({
       before: CUTOFF,
-      firstCapturedAt: '2026-09-12T21:10:00.000Z',
-      firstSourceTs: '2026-09-12T05:00:00.000Z',
-      earliest: [record({ sourceTs: '2026-09-12T05:00:00.000Z' })],
+      firstCapturedAt: '2026-09-12T05:00:00.000Z',
+      earliest: [record({ capturedAt: '2026-09-12T05:00:00.000Z' })],
     });
+    // The type carries the distinction; a boolean would have thrown it away.
     assert.equal(result.answer, 'no-evidence');
+    assert.equal(result.witnessedBefore, null);
     assert.equal(result.evidenceRecordId, null);
-
-    // The whole product rests on this distinction, so it is asserted as a type
-    // fact and not only as a string: there is no `false` to be read as "was
-    // not active", and the answer set has exactly three members.
-    assert.ok(!['true', 'false'].includes(String(result.answer)));
-    for (const answer of ['witnessed', 'claimed', 'no-evidence']) {
-      assert.ok(typeof answer === 'string');
-    }
+    assert.match(result.caveat, /never that the key was inactive/);
   });
 
-  test('a DID with nothing at all is still only no-evidence', () => {
+  test('a key with nothing at all is still only no-evidence', () => {
     const result = evaluateCutoff({
       before: CUTOFF,
       firstCapturedAt: null,
-      firstSourceTs: null,
       earliest: [],
     });
     assert.equal(result.answer, 'no-evidence');
     assert.equal(result.witnessedBefore, null);
-    assert.equal(result.claimedBefore, null);
+    assert.equal(result.evidenceRecordId, null);
+  });
+
+  test('there is no third answer to reach', () => {
+    // The guard on the pivot. `claimed` existed to carry a room's timestamp;
+    // if one ever finds its way back into a record, this fails rather than
+    // quietly serving somebody else's word as Notary's.
+    for (const capturedAt of ['2026-09-10T00:00:00.000Z', '2026-09-30T00:00:00.000Z']) {
+      const result = evaluateCutoff({
+        before: CUTOFF,
+        firstCapturedAt: capturedAt,
+        earliest: [record({ capturedAt })],
+      });
+      assert.ok(
+        result.answer === 'witnessed' || result.answer === 'no-evidence',
+        `unexpected answer ${result.answer}`
+      );
+    }
   });
 
   test('every cutoff carries the caveat, whatever the answer', () => {
-    for (const first of ['2026-09-11T20:00:00.000Z', null]) {
+    for (const first of ['2026-09-11T00:00:00.000Z', '2026-09-30T00:00:00.000Z', null]) {
       const result = evaluateCutoff({
         before: CUTOFF,
         firstCapturedAt: first,
-        firstSourceTs: first,
         earliest: [],
       });
       assert.equal(result.caveat, CAVEAT);
-      assert.match(result.caveat, /never evidence that a DID was inactive/);
+      assert.match(result.caveat, /never that the key was inactive/);
     }
   });
 
@@ -209,14 +204,11 @@ describe('the cutoff answer', () => {
     const result = evaluateCutoff({
       before: CUTOFF,
       firstCapturedAt: CUTOFF,
-      firstSourceTs: CUTOFF,
-      earliest: [record({ capturedAt: CUTOFF, sourceTs: CUTOFF })],
+      earliest: [record({ capturedAt: CUTOFF })],
     });
     assert.equal(result.answer, 'no-evidence');
   });
 });
-
-// ---------------------------------------------------------------------------
 
 describe('what /capture will accept', () => {
   const good = {

@@ -1,32 +1,26 @@
 // server.ts — the process that runs in production.
 //
-// ONE SERVICE, TWO JOBS. The HTTP API and the mirror worker run in the same
-// process because they want the same thing: a long-lived connection to
-// Postgres. Splitting them would mean two pools, two idle connections against
-// Supabase's limit, and two deployments to keep in step for no gain — the
-// mirror is I/O-bound on long-polling Technocore and uses almost no CPU between
-// batches.
+// ONE SERVICE, ONE JOB, since the pivot: serve the API and anchor what it has
+// been given. The mirror worker that used to share this process is gone — see
+// db/schema.sql for the arithmetic that killed it.
 //
-// NOT SERVERLESS, and that is the point. Vercel functions are the wrong shape
-// here twice over: the mirror has to hold a long-poll open for minutes at a
-// time, and every cold start would open a fresh Postgres connection and
-// abandon it. This is a container that stays up.
+// NOT SERVERLESS, still. Every cold start would open a fresh Postgres
+// connection and abandon it, and the anchor pass needs to hold one long enough
+// to walk a day in batches. This is a container that stays up.
 //
-//   NOTARY_RUN_MIRROR=1  capture as well as serve (the production setting)
+//   NOTARY_RUN_ANCHOR=0  serve without anchoring (roots still built on demand)
 //   PORT                 provided by the platform
 //
-// Shutdown drains: SIGTERM stops the mirror, stops accepting connections, lets
+// Shutdown drains: SIGTERM stops anchoring, stops accepting connections, lets
 // in-flight requests finish, then closes the pool. Railway and Fly both send
 // SIGTERM and then wait, so a clean exit here means no half-written batch.
 
 import { createServer } from 'node:http';
 import { assertSchema, closePool } from './db.ts';
 import { createApi } from './api.ts';
-import { startMirror, type MirrorHandle } from './mirror.ts';
 import { startAnchoring, signingStatus, type AnchorHandle } from './anchor.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
-const RUN_MIRROR = process.env.NOTARY_RUN_MIRROR === '1';
 /** Anchoring is on unless switched off; an archive that never anchors is a database. */
 const RUN_ANCHOR = process.env.NOTARY_RUN_ANCHOR !== '0';
 
@@ -56,28 +50,13 @@ async function main(): Promise<void> {
   let anchoring: AnchorHandle | null = null;
   if (RUN_ANCHOR) anchoring = startAnchoring();
 
-  let mirror: MirrorHandle | null = null;
-  if (RUN_MIRROR) {
-    // Started after the listener so the platform's health check passes while
-    // the backfill — which takes minutes across a dozen rooms — is still
-    // running. A service that only becomes reachable after the backfill would
-    // be killed and restarted, and would lose the backfill each time.
-    mirror = await startMirror();
-    log(`mirror following ${mirror.rooms} room(s) in this process.`);
-  } else {
-    log('mirror not started (set NOTARY_RUN_MIRROR=1 to capture as well as serve).');
-  }
-
   let leaving = false;
   const leave = async (signal: string): Promise<void> => {
     if (leaving) return;
     leaving = true;
     log(`${signal} — draining.`);
 
-    // Mirror first: it is the thing holding open long-polls and writing
-    // batches, and stopping it makes the rest quiet.
     anchoring?.stop();
-    await mirror?.stop().catch((err) => log(`mirror stop failed: ${err.message}`));
 
     const closed = new Promise<void>((resolve) => server.close(() => resolve()));
     const timeout = new Promise<void>((resolve) => setTimeout(resolve, DRAIN_MS).unref?.());
