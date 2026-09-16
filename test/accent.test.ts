@@ -59,12 +59,16 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
   // --- liveness -----------------------------------------------------------
   { selector: '.state--live', why: 'the referee is answering' },
   { selector: '.hero__dot--live', why: 'the live feed is reading rooms' },
-  {
-    selector: '.chip--live .chip__dot, .rooms__dot--live, .legend__swatch--live',
-    why: 'rooms the City reads directly and found active',
-  },
-  { selector: '.legend__key--live', why: 'the key for those rooms' },
+  { selector: '.cdot--live', why: 'a room the City reads, live, whose newest message verified' },
   { selector: '.detail__state--live', why: 'one room, read directly, active' },
+  {
+    selector: '.lpill--live .lpill__dot',
+    why: 'the City is reading rooms at this moment — the pill says something else when it is not',
+  },
+  {
+    selector: '.ctag',
+    why: 'the rates under it are being measured right now; the tag is not rendered when they are not',
+  },
 
   // --- something needing an answer ----------------------------------------
   {
@@ -85,6 +89,10 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
   {
     selector: ".vkeys__row[aria-current='true']",
     why: 'the note being read, in the list you pick it from',
+  },
+  {
+    selector: ".drow[aria-current='true']",
+    why: 'the district you are inside, in the list you entered it from',
   },
 
   // --- verified, counted live ----------------------------------------------
@@ -116,7 +124,11 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
   { selector: ".hero__nav-link[aria-current='page']", why: 'the page you are on' },
   { selector: 'a:focus-visible', why: 'the link keyboard focus is on' },
   { selector: '.lookup__input:focus-visible', why: 'the field keyboard focus is on' },
-  { selector: '.rooms__row:focus-visible', why: 'the room keyboard focus is on' },
+  { selector: '.cfound__row:focus-visible', why: 'the found room keyboard focus is on' },
+  { selector: '.brow:focus-visible', why: 'the busy room keyboard focus is on' },
+  { selector: '.drow:focus-visible', why: 'the district keyboard focus is on' },
+  { selector: '.ctool:focus-visible', why: "the camera control keyboard focus is on" },
+  { selector: '.csearch__input:focus-visible', why: 'the room field keyboard focus is on, in the City' },
   { selector: '.hero__pill:focus-visible', why: 'the pill keyboard focus is on' },
   {
     selector: '.field__input:focus-visible, .field__area:focus-visible',

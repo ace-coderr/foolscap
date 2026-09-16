@@ -115,6 +115,21 @@ export interface Building {
   alarming: boolean;
 }
 
+/**
+ * The camera, as the page's own controls can drive it.
+ *
+ * Three verbs, and no getters: the page has a row of buttons, not a second copy
+ * of the camera's state. Anything that needs to know where the camera is should
+ * be asking why — the canvas is the thing that knows that, and a page reading it
+ * back would be a second answer waiting to disagree with the first.
+ */
+export interface CityApi {
+  /** Multiply the zoom, clamped to the same limits the wheel obeys. */
+  zoomBy: (factor: number) => void;
+  /** Back to the whole plan, from whatever angle and zoom the reader left it. */
+  reset: () => void;
+}
+
 export interface CityCanvasProps {
   rooms: Building[];
   zones: Zone[];
@@ -129,8 +144,20 @@ export interface CityCanvasProps {
   onEnter: (districtId: string) => void;
   onHover: (room: string | null) => void;
   reducedMotion: boolean;
-  /** Called once if WebGL is unavailable, so the page can fall back to the list. */
+  /** Called once if WebGL is unavailable, so the page can say so. */
   onUnavailable: (reason: string) => void;
+  /** Filled in while the canvas is mounted, emptied when it goes. */
+  api?: { current: CityApi | null };
+  /**
+   * Frames a second, about once a second.
+   *
+   * WHAT IT MEASURES IS THE LOOP, NOT THE WORK. This renderer draws on demand —
+   * an idle city costs one boolean per frame — so a figure counting draws would
+   * read zero on a city that is sitting there perfectly happily. This counts the
+   * frames the loop is being given, which is the rate the page is keeping up
+   * with, and the page says as much next to it.
+   */
+  onFps?: (fps: number) => void;
 }
 
 /** A box whose origin is its base, with face shading baked in as vertex colour. */
@@ -167,6 +194,8 @@ interface Scene {
   /** Target the camera is easing towards, and how long it has left. */
   flight: { from: THREE.Vector3; to: THREE.Vector3; fromHalf: number; toHalf: number; left: number } | null;
   half: number;
+  /** What the panels cover, measured on resize and held between frames. */
+  insets: Insets;
   /** True while the camera is inside a district. Hides the other districts' marks. */
   inside: boolean;
   hoverBox: THREE.LineSegments;
@@ -186,49 +215,63 @@ interface Scene {
 }
 
 /**
- * How much of the canvas's right edge the panel is covering.
+ * What the floating panels are covering, one number per edge.
  *
- * The canvas runs the full width of the page — the panel is translucent and the
- * city carries on behind it, which is the whole reason for the blur — but
- * centring the city in the canvas would centre it under the panel. So the frustum
- * is shifted by however much is actually occluded, measured rather than assumed,
- * which also means the narrow layout (panel below, nothing occluded) needs no
- * special case.
+ * The canvas runs the full width and height of the page — the panels are
+ * translucent and the city carries on behind them, which is the whole reason
+ * for the blur — but centring the city in the canvas would centre it under
+ * them. So the frustum is shifted by however much is actually occluded, and
+ * "actually" is the operative word: every figure here is measured off the
+ * elements themselves rather than written down as a constant, because the
+ * panels are a fixed width at 1440 and the full width of the page at 375, and
+ * any constant would be wrong at one of them.
  *
- * Found by data attribute rather than by class, so the renderer does not have to
- * know the name of the page it is drawing for. It used to look for `.city
+ * Found by data attribute rather than by class, so the renderer does not have
+ * to know the name of the page it is drawing for. It used to look for `.city
  * .panel`, which compiled one page's stylesheet into the renderer.
+ *
+ * An element that does not overlap the canvas costs nothing, which is what
+ * makes the narrow layout need no special case: down there the panels are
+ * stacked under the canvas rather than floating over it, every rectangle misses
+ * it, and every inset is zero.
  */
-function occludedRight(canvas: HTMLCanvasElement): number {
-  const panel = canvas.closest('[data-canvas-stage]')?.querySelector('[data-canvas-panel]');
-  if (!panel) return 0;
-  const host = canvas.getBoundingClientRect();
-  const over = panel.getBoundingClientRect();
-  // Only when it is alongside, not below.
-  if (over.top > host.top + 4) return 0;
-  return Math.max(0, host.right - over.left);
+export interface Insets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
 }
 
-/**
- * ...and how much of the top edge the page header is covering.
- *
- * The same argument as the panel, found by the radial plan. The old city was a
- * field of buildings and the header floated over its top-left corner with
- * nothing in particular under it; this one hangs its district numbers outside
- * the wall, all the way round, and two of them landed inside the header's
- * paragraph — a number over a sentence, neither readable.
- *
- * Measured rather than assumed, because the header is three lines at 1440 and
- * six at 400, and any constant would be wrong at one of them.
- */
-function occludedTop(canvas: HTMLCanvasElement): number {
-  const header = canvas.closest('[data-canvas-stage]')?.parentElement?.querySelector(
-    '[data-canvas-header]'
-  );
-  if (!header) return 0;
+function measureInsets(canvas: HTMLCanvasElement): Insets {
+  const out: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
+  const stage = canvas.closest('[data-canvas-stage]');
+  if (!stage) return out;
   const host = canvas.getBoundingClientRect();
-  const over = header.getBoundingClientRect();
-  return Math.max(0, Math.min(over.bottom - host.top, host.height * 0.45));
+  if (host.width === 0 || host.height === 0) return out;
+
+  for (const element of stage.querySelectorAll<HTMLElement>('[data-canvas-inset]')) {
+    const side = element.dataset.canvasInset;
+    const over = element.getBoundingClientRect();
+    if (over.width === 0 || over.height === 0) continue;
+    // No overlap with the canvas at all: it is stacked above or below it.
+    if (
+      over.right <= host.left ||
+      over.left >= host.right ||
+      over.bottom <= host.top ||
+      over.top >= host.bottom
+    ) {
+      continue;
+    }
+    // Capped at a third of the canvas: a panel that covered half the frame
+    // would otherwise squeeze the city into a strip rather than moving it.
+    const capX = host.width / 3;
+    const capY = host.height / 3;
+    if (side === 'left') out.left = Math.max(out.left, Math.min(over.right - host.left, capX));
+    else if (side === 'right') out.right = Math.max(out.right, Math.min(host.right - over.left, capX));
+    else if (side === 'top') out.top = Math.max(out.top, Math.min(over.bottom - host.top, capY));
+    else if (side === 'bottom') out.bottom = Math.max(out.bottom, Math.min(host.bottom - over.top, capY));
+  }
+  return out;
 }
 
 export default function CityCanvas({
@@ -244,6 +287,8 @@ export default function CityCanvas({
   onHover,
   reducedMotion,
   onUnavailable,
+  api,
+  onFps,
 }: CityCanvasProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const labelHostRef = useRef<HTMLDivElement>(null);
@@ -251,8 +296,8 @@ export default function CityCanvas({
 
   // Props the animation loop reads. Kept in refs so changing them never tears the
   // scene down and rebuilds it.
-  const handlers = useRef({ onSelect, onEnter, onHover });
-  handlers.current = { onSelect, onEnter, onHover };
+  const handlers = useRef({ onSelect, onEnter, onHover, onFps });
+  handlers.current = { onSelect, onEnter, onHover, onFps };
 
   // --- set up, once --------------------------------------------------------
   useEffect(() => {
@@ -327,6 +372,7 @@ export default function CityCanvas({
       zoneOrder: [],
       flight: null,
       half: 1,
+      insets: { top: 0, right: 0, bottom: 0, left: 0 },
       inside: false,
       hoverBox,
       selectBox,
@@ -343,6 +389,51 @@ export default function CityCanvas({
       labels: [],
     };
     sceneRef.current = state;
+
+    // --- the controls the page draws its own buttons for --------------------
+    // The wheel and the drag are the canvas's; these are the same two movements
+    // with a button on them, for a reader who is not going to find out that a
+    // canvas can be scrolled. Both go through the same clamps as the wheel, so
+    // there is one set of limits rather than two.
+    if (api) {
+      api.current = {
+        zoomBy(factor: number) {
+          const next = Math.min(
+            controls.maxZoom,
+            Math.max(controls.minZoom, camera.zoom * factor)
+          );
+          if (Math.abs(next - camera.zoom) < 1e-4) return;
+          camera.zoom = next;
+          camera.updateProjectionMatrix();
+          state.dirty = true;
+        },
+        reset() {
+          // The direction as well as the target: reset has to undo an orbit, or
+          // pressing it from an odd angle leaves the reader looking at the same
+          // odd angle and wondering what it did.
+          camera.position
+            .copy(controls.target)
+            .add(new THREE.Vector3(1, 1, 1).multiplyScalar(300));
+          camera.zoom = 1;
+          camera.updateProjectionMatrix();
+          if (state.reducedMotion) {
+            controls.target.set(0, 0, 0);
+            state.half = state.radius;
+            state.flight = null;
+            frame_(state, renderer.domElement.clientWidth, renderer.domElement.clientHeight);
+          } else {
+            state.flight = {
+              from: controls.target.clone(),
+              to: new THREE.Vector3(0, 0, 0),
+              fromHalf: state.half,
+              toHalf: state.radius,
+              left: FLIGHT_MS,
+            };
+          }
+          state.dirty = true;
+        },
+      };
+    }
 
     // --- picking -----------------------------------------------------------
     const raycaster = new THREE.Raycaster();
@@ -433,6 +524,9 @@ export default function CityCanvas({
       const height = host.clientHeight;
       if (width === 0 || height === 0) return;
       renderer.setSize(width, height, false);
+      // Measured here and held, rather than per frame: the panels do not move
+      // between resizes, and a flight calls frame_ sixty times a second.
+      state.insets = measureInsets(renderer.domElement);
       frame_(state, width, height);
       state.dirty = true;
     };
@@ -448,11 +542,41 @@ export default function CityCanvas({
     const screen = new THREE.Vector3();
     let frame = 0;
     let previous = performance.now();
+    let ticks = 0;
+    let counted = performance.now();
+    let reported = 0;
 
     const draw = (time: number) => {
       frame = requestAnimationFrame(draw);
-      const delta = Math.min(64, time - previous);
+      const gap = time - previous;
+      const delta = Math.min(64, gap);
       previous = time;
+
+      // FRAMES THE LOOP IS BEING GIVEN, counted over a second and reported only
+      // when the whole number changes — the figure sits in a panel, and a panel
+      // that re-rendered sixty times a second to print a number that had not
+      // moved would cost more than the thing it is measuring.
+      //
+      // A LONG GAP IS NOT A SLOW FRAME RATE and must not be counted as one.
+      // requestAnimationFrame does not run at all while the page is hidden, so
+      // the first second after coming back to a backgrounded tab contains one
+      // tick and a second of nothing — which reported "1 fps" about a renderer
+      // that was not running. The window is thrown away instead.
+      if (gap > 250) {
+        ticks = 0;
+        counted = time;
+      } else {
+        ticks++;
+        if (time - counted >= 1000) {
+          const fps = Math.round((ticks * 1000) / (time - counted));
+          ticks = 0;
+          counted = time;
+          if (fps !== reported) {
+            reported = fps;
+            handlers.current.onFps?.(fps);
+          }
+        }
+      }
 
       const moved = controls.update();
       let animating = false;
@@ -492,6 +616,7 @@ export default function CityCanvas({
 
     return () => {
       cancelAnimationFrame(frame);
+      if (api) api.current = null;
       observer.disconnect();
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
@@ -509,7 +634,7 @@ export default function CityCanvas({
     };
     // Built once. Reduced motion is read here because a change to it mid-session
     // means the reader changed a system setting, and rebuilding is correct then.
-  }, [reducedMotion, onUnavailable]);
+  }, [reducedMotion, onUnavailable, api]);
 
   // --- the city's shape ----------------------------------------------------
   const shapeKey = rooms.map((room) => room.room).join('\n');
@@ -800,7 +925,7 @@ export default function CityCanvas({
 // Instance data
 // ---------------------------------------------------------------------------
 
-/** Set the orthographic frustum to hold the city, clear of the panel. */
+/** Set the orthographic frustum to hold the city, clear of the panels. */
 function frame_(state: Scene, width: number, height: number) {
   if (width === 0 || height === 0) return;
   const half = state.half;
@@ -809,16 +934,19 @@ function frame_(state: Scene, width: number, height: number) {
   state.camera.right = half * aspect;
   state.camera.top = half;
   state.camera.bottom = -half;
-  // Slide the view right by half the occluded width, which moves the city left.
-  const occluded = occludedRight(state.renderer.domElement);
-  const shift = (occluded / width) * (state.camera.right - state.camera.left) * 0.5;
-  state.camera.left += shift;
-  state.camera.right += shift;
-  // ...and up by half the header, which moves the city down out from under it.
-  const above = occludedTop(state.renderer.domElement);
-  const drop = (above / height) * (state.camera.top - state.camera.bottom) * 0.5;
-  state.camera.top += drop;
-  state.camera.bottom += drop;
+
+  // The city moves AWAY from whatever is covering an edge, by half the
+  // difference between the two sides — half, because moving by the whole inset
+  // would take the far edge of the plan off the other side of the frame.
+  const { top, right, bottom, left } = state.insets;
+  const acrossPerPixel = (state.camera.right - state.camera.left) / width;
+  const downPerPixel = (state.camera.top - state.camera.bottom) / height;
+  const across = ((left - right) / 2) * acrossPerPixel;
+  const down = ((bottom - top) / 2) * downPerPixel;
+  state.camera.left -= across;
+  state.camera.right -= across;
+  state.camera.top += down;
+  state.camera.bottom += down;
   state.camera.updateProjectionMatrix();
 }
 
@@ -1000,7 +1128,12 @@ function positionLabels(
     const h = label.offsetHeight || 16;
     const box: [number, number, number, number] = [x - w / 2, y - h / 2, w, h];
 
-    const onScreen = x > -80 && x < width + 80 && y > -40 && y < height + 40;
+    // THE WHOLE LABEL, not its anchor. Testing the anchor let a mark hang half
+    // off the right edge at 375 — "5 CONTEST" ending in the bezel, which reads
+    // as a rendering fault rather than as a label. A hidden mark costs nothing:
+    // the panel lists every district by number whatever the plan is doing.
+    const onScreen =
+      box[0] > -2 && box[0] + box[2] < width + 2 && box[1] > -2 && box[1] + box[3] < height + 2;
     const clear = !taken.some(
       (other) =>
         box[0] < other[0] + other[2] &&

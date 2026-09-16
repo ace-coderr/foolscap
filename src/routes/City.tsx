@@ -1,34 +1,41 @@
 // City.tsx — what is the network doing right now?
 //
+// A CANVAS WITH PANELS OVER IT, not a page with a canvas in it. The plan is the
+// page; everything else floats on it and is sized to be read at a glance rather
+// than studied. What went to make room for that was a scrolling column of forty
+// room names with their message counts beside them — honest, and a data dump.
+// Nobody reads a list like that. What survives of it is six rows of the rooms
+// actually moving right now, and a field to find any of the rest by name.
+//
 // The picture is a picture of two different things and the page never lets them
 // blur together. Height and footprint come from the survey, which is a map. State
 // comes from the eight rooms Foolscap reads itself, which is a reading. A building
 // with a lit roof is a room Foolscap has current evidence about; a grey one is a
 // room it knows the size of and nothing else. There is no third case, and nothing
 // on this page infers a room's state from its neighbours, its name or its topic.
-//
-// Everything the canvas shows is also here as text, so the list is not a fallback
-// bolted on for browsers without WebGL — it is the same page, and the canvas is
-// the part that can be missing.
+// The band across the bottom says so, in those words, without being clicked on.
 
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Shell } from '../components/Shell';
+import { pageById } from '../pages';
 import { districtById } from '../city/districts';
 import { HEIGHT_PER_DECADE, type CityRoom } from '../city/model';
+import type { CityApi } from '../city/CityCanvas';
 import type { Form, Zone } from '../city/radial';
-import { useCity, WATCHED } from '../useCity';
+import { SURVEY_ROOMS, useCity, WATCHED } from '../useCity';
 import { useLens } from '../useLens';
-import { shortDid } from '../lib/lens';
+import { matchRooms, shortDid } from '../lib/lens';
 import { Glyph } from '../components/Glyph';
 import { PaneState } from '../components/Panel';
 import { formatAge, formatUtc, num, plural } from '../format';
 
 /**
  * Three.js is most of what this page weighs and none of what the Tracker needs,
- * so it arrives in its own chunk, on this route only. The panel does not wait for
- * it: everything the canvas draws is in the list beside it, which is the same
- * reason the page works at all in a browser with no WebGL.
+ * so it arrives in its own chunk, on this route only. The panels do not wait for
+ * it: every figure on them is computed from the same two readings whether or not
+ * anything is ever drawn, which is also why a browser with no WebGL still gets a
+ * working page rather than an apology.
  */
 const CityCanvas = lazy(() => import('../city/CityCanvas'));
 
@@ -66,13 +73,21 @@ function rateWords(perMin: number | null): string | null {
   return `${num.format(Math.round(perMin))} a minute`;
 }
 
+/** Rows in the busiest list, and in the search results. Both are a glance. */
+const BUSIEST = 6;
+const MATCHES = 6;
+
 export default function City() {
   const { city, survey, surveyError, state, resumeAt, lastError, paused, now } = useCity();
   const reducedMotion = usePrefersReducedMotion();
+  const page = pageById('city');
 
   const [selected, setSelected] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const [noCanvas, setNoCanvas] = useState<string | null>(null);
+  const [fps, setFps] = useState<number | null>(null);
+  const [query, setQuery] = useState('');
+  const [info, setInfo] = useState(false);
 
   /**
    * The district the reader has gone into, and the room being read inside it.
@@ -85,10 +100,15 @@ export default function City() {
   const [entered, setEntered] = useState<string | null>(null);
   const [reading, setReading] = useState<string | null>(null);
 
+  /** The camera, as the buttons in the corner drive it. Filled by the canvas. */
+  const api = useRef<CityApi | null>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+
   // Stable, or the canvas would tear itself down and rebuild on every repaint.
   const onSelect = useCallback((room: string | null) => setSelected(room), []);
   const onHover = useCallback((room: string | null) => setHovered(room), []);
   const onUnavailable = useCallback((reason: string) => setNoCanvas(reason), []);
+  const onFps = useCallback((next: number) => setFps(next), []);
 
   const zones = city.layout.zones;
   const zone = entered ? zones.find((entry) => entry.district.id === entered) ?? null : null;
@@ -122,7 +142,9 @@ export default function City() {
    *
    * So the two gestures land in the same place: the ground takes you to the
    * district's busiest room, a building takes you to that one. Neither is a
-   * different kind of arrival.
+   * different kind of arrival. The search field and the busiest list both end
+   * here as well — there is one way into a room on this page, whatever you
+   * touched to get there.
    */
   const enterRoom = useCallback(
     (name: string) => {
@@ -137,15 +159,24 @@ export default function City() {
 
   // ESCAPE LEAVES, from anywhere on the page. A view you can get into with one
   // click and out of only by finding a button is a trap, and this one covers the
-  // whole viewport.
+  // whole viewport. It closes the legend first, because that is the thing most
+  // recently opened when both are.
   useEffect(() => {
-    if (!entered) return;
+    if (!entered && !info) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') leave();
+      if (event.key !== 'Escape') return;
+      if (info) setInfo(false);
+      else leave();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [entered, leave]);
+  }, [entered, info, leave]);
+
+  const reset = useCallback(() => {
+    leave();
+    setSelected(null);
+    api.current?.reset();
+  }, [leave]);
 
   const shown = selected ?? hovered;
   const room = shown ? city.rooms.find((entry) => entry.room === shown) ?? null : null;
@@ -154,10 +185,12 @@ export default function City() {
   const lag = city.surveyLag.ms != null ? formatAge(city.surveyLag.ms) : null;
   /** Rooms the survey counts and does not name. The one label about absence. */
   const overflow = Math.max(0, (survey?.totalRooms ?? 0) - city.rooms.length);
+  /** Rooms with a reading in hand — the live half of the picture, counted. */
+  const open = city.rooms.filter((entry) => entry.watched && entry.readAt != null).length;
 
   return (
     <Shell page="city" variant="bleed">
-      <div className="city" data-canvas-stage>
+      <div className="city" data-canvas-stage ref={stageRef}>
         {noCanvas === null && (
           <Suspense fallback={<div className="city__stage" />}>
             <CityCanvas
@@ -173,275 +206,314 @@ export default function City() {
               onHover={onHover}
               reducedMotion={reducedMotion}
               onUnavailable={onUnavailable}
+              api={api}
+              onFps={onFps}
             />
           </Suspense>
         )}
 
-        <aside className="panel" data-canvas-panel aria-label="What the network is doing">
-          <section className="panel__answer">
-            {city.watchedRate == null ? (
-              <>
-                <p className="answer answer--waiting">Measuring</p>
-                <p className="panel__caption">
-                  A rate needs two readings of the same room. The first arrives in under a
-                  minute.
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="answer">{num.format(Math.round(city.watchedRate))}</p>
-                <p className="panel__caption">
-                  messages a minute, counted across the{' '}
-                  {plural(measured, 'room')} Foolscap is reading directly — not the network,
-                  which is {survey?.totalRooms ? `${num.format(survey.totalRooms)} rooms` : 'far larger'}.
-                </p>
-              </>
-            )}
+        <div className="city__over">
+          <div className="city__left" data-canvas-inset="left">
+            <section className="cpanel chead" aria-label="What this is">
+              <FeedPill state={state} paused={paused} resumeAt={resumeAt} now={now} />
 
-            <FeedLine state={state} resumeAt={resumeAt} paused={paused} now={now} error={lastError} />
+              <h1 className="chead__title">{page?.title}</h1>
+              <p className="chead__line">{page?.line}</p>
 
-            {/* LIT IS THE HEADLINE COUNT, because it is the one the accent is
-                spent on. Live-but-unsigned is folded into the quiet count with
-                its own word, so a reader can see how much of the live traffic
-                carries no proof at all — which on this network is most of it. */}
-            <p className="panel__counts">
-              <StateChip state="live" n={lit} label="lit" />{' '}
-              <StateChip state="quiet" n={live - lit + quiet} label="watched, unlit" />{' '}
-              {failing > 0 && <StateChip state="failing" n={failing} label="failing" />}
-            </p>
-          </section>
+              <ul className="cstats">
+                <Stat
+                  n={survey?.totalRooms ?? null}
+                  label="public rooms"
+                  title="What the directory says exists. One figure, from a reply the edge caches for up to a day."
+                />
+                <Stat
+                  n={city.rooms.length}
+                  label="in the city"
+                  title="Rooms drawn on the plan: the busiest the directory will name, plus the ones Foolscap reads."
+                />
+                <Stat
+                  n={city.watchedRate == null ? null : Math.round(city.watchedRate)}
+                  label="msg/min"
+                  title="Measured across the rooms Foolscap reads directly. Not the network's rate — nobody has that."
+                />
+                <Stat
+                  n={open}
+                  label="in live windows"
+                  title={`Rooms Foolscap is holding a current reading of, out of the ${WATCHED.length} it rotates through.`}
+                />
+                <Stat
+                  n={fps}
+                  label="fps"
+                  title="Frames a second the loop is keeping. It draws only when something moved, so this is the rate available rather than work being done."
+                />
+              </ul>
 
-          {zone ? (
-            <DistrictView
-              zone={zone}
-              rooms={inZone}
-              reading={reading}
-              onRead={setReading}
-              onLeave={leave}
+              <Find
+                query={query}
+                onQuery={setQuery}
+                rooms={city.rooms}
+                total={survey?.totalRooms ?? null}
+                onPick={enterRoom}
+              />
+
+              <Districts
+                zones={zones}
+                entered={entered}
+                onEnter={onEnter}
+                loading={survey == null && surveyError == null}
+                error={surveyError}
+              />
+            </section>
+
+            <Busiest
+              rooms={city.rooms}
+              lit={lit}
+              open={open}
+              failing={failing}
+              live={state === 'reading' && !paused}
+              onPick={enterRoom}
             />
-          ) : room ? (
-            <RoomDetail room={room} now={now} pinned={selected != null} onClear={() => setSelected(null)} />
-          ) : (
-            <Legend
-              surveyed={survey?.rooms.length ?? 0}
-              lag={lag}
-              total={survey?.totalRooms ?? null}
-              zones={zones}
-            />
+          </div>
+
+          {(zone || room) && (
+            <div className="city__right">
+              {zone ? (
+                <DistrictView
+                  zone={zone}
+                  rooms={inZone}
+                  reading={reading}
+                  onRead={setReading}
+                  onLeave={leave}
+                />
+              ) : (
+                room && (
+                  <RoomDetail
+                    room={room}
+                    now={now}
+                    pinned={selected != null}
+                    onClear={() => setSelected(null)}
+                  />
+                )
+              )}
+            </div>
           )}
 
-          <section className="panel__list">
-            <h2 className="panel__title">
-              {plural(city.rooms.length, 'room')}
-              <span className="panel__title-note">tallest first</span>
-            </h2>
-            <ul className="rooms">
-              {city.rooms.map((entry) => (
-                <li key={entry.room}>
-                  <button
-                    type="button"
-                    className="rooms__row"
-                    aria-pressed={selected === entry.room || reading === entry.room}
-                    onClick={() =>
-                      entered ? enterRoom(entry.room) : setSelected(selected === entry.room ? null : entry.room)
-                    }
-                    onDoubleClick={() => enterRoom(entry.room)}
-                    onMouseEnter={() => setHovered(entry.room)}
-                    onMouseLeave={() => setHovered(null)}
-                  >
-                    <span
-                      className={`rooms__dot rooms__dot--${
-                        entry.alarming ? 'failing' : entry.lit ? 'live' : entry.watched ? 'quiet' : 'unwatched'
-                      }`}
-                      aria-hidden="true"
-                    />
-                    <span className="rooms__name mono">{entry.room}</span>
-                    <span className="rooms__volume">{num.format(entry.volume)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {city.rooms.length === 0 && (
-              <p className="panel__caption">
-                {surveyError ?? 'Reading the survey…'}
-              </p>
+          <div className="city__tools">
+            {info && (
+              <Legend
+                surveyed={survey?.rooms.length ?? 0}
+                lag={lag}
+                total={survey?.totalRooms ?? null}
+                live={live}
+                quiet={quiet}
+                failing={failing}
+                measured={measured}
+                onClose={() => setInfo(false)}
+              />
             )}
-          </section>
+            <Tools
+              info={info}
+              onInfo={() => setInfo((was) => !was)}
+              onZoom={(factor) => api.current?.zoomBy(factor)}
+              onReset={reset}
+              stage={stageRef}
+              disabled={noCanvas !== null}
+            />
+          </div>
+        </div>
 
-          {noCanvas !== null && (
-            <p className="panel__caption panel__caption--warn">
-              The map needs WebGL and this browser did not provide it — {noCanvas} Everything the
-              map would show is in the list above.
-            </p>
-          )}
-        </aside>
+        <Band
+          total={survey?.totalRooms ?? null}
+          drawn={city.rooms.length}
+          lag={lag}
+          noCanvas={noCanvas}
+          error={state === 'failed' ? lastError : null}
+        />
       </div>
     </Shell>
   );
 }
 
 // ---------------------------------------------------------------------------
+// The head panel
+// ---------------------------------------------------------------------------
 
-function StateChip({ state, n, label }: { state: CityRoom['state']; n: number; label: string }) {
-  if (n === 0 && state !== 'live') return null;
-  return (
-    <span className={`chip chip--${state}`}>
-      <span className="chip__dot" aria-hidden="true" />
-      {n} {label}
-    </span>
-  );
-}
-
-function FeedLine({
+/**
+ * Whether Foolscap is reading, as a pill.
+ *
+ * It says "Live" only while that is true. A pill that read Live whatever was
+ * happening would be the smallest possible version of the mistake this whole
+ * page is arranged against — a light that is always on, saying nothing. The
+ * other four states are the four things that can actually be going on, and each
+ * one says which.
+ */
+function FeedPill({
   state,
-  resumeAt,
   paused,
+  resumeAt,
   now,
-  error,
 }: {
   state: string;
-  resumeAt: number | null;
   paused: boolean;
+  resumeAt: number | null;
   now: number;
-  error: string | null;
 }) {
+  let tone = 'live';
+  let word = 'Live';
+  let why = 'Foolscap is reading one room every four seconds, in rotation.';
+
   if (paused) {
-    return (
-      <p className="feed">
-        Reading stopped while this tab is in the background. It restarts when you come back.
-      </p>
-    );
-  }
-  if (state === 'backing-off') {
+    tone = 'idle';
+    word = 'Paused';
+    why =
+      'This tab is in the background, so Foolscap has stopped reading. It restarts when you come back.';
+  } else if (state === 'backing-off') {
     const wait = resumeAt != null ? formatAge(Math.max(0, resumeAt - now)) : null;
-    return (
-      <p className="feed feed--warn">
-        technocore.chat rate-limited Foolscap, so it has stopped reading
-        {wait ? ` for about ${wait}` : ''}. The figures above are the last ones it got.
-      </p>
-    );
+    tone = 'warn';
+    word = 'Backing off';
+    why = `technocore.chat rate-limited Foolscap, so it has stopped reading${
+      wait ? ` for about ${wait}` : ''
+    }. The figures are the last ones it got.`;
+  } else if (state === 'failed') {
+    tone = 'alarm';
+    word = 'Not reading';
+    why = 'Nothing could be read.';
+  } else if (state === 'starting') {
+    tone = 'idle';
+    word = 'Opening';
+    why = 'The first reading is a few seconds away.';
   }
-  if (state === 'failed') {
-    return <p className="feed feed--alarm">{error ?? 'Nothing could be read.'}</p>;
-  }
+
   return (
-    <p className="feed">
-      One room every four seconds, in rotation — about a quarter of a request a second, and
-      never a burst.
+    <p className={`lpill lpill--${tone}`} title={why} role="status">
+      <span className="lpill__dot" aria-hidden="true" />
+      {word}
     </p>
   );
 }
 
-function Legend({
-  surveyed,
-  lag,
-  total,
-  zones,
-}: {
-  surveyed: number;
-  lag: string | null;
-  total: number | null;
-  zones: Zone[];
-}) {
+function Stat({ n, label, title }: { n: number | null; label: string; title: string }) {
   return (
-    <section className="panel__legend">
-      <h2 className="panel__title">
-        The districts
-        <span className="panel__title-note">busiest at the centre</span>
-      </h2>
-      {/* The key to the numbers on the plan. Ordered exactly as the rings are —
-          which is what makes "1 is innermost" a rule a reader can check rather
-          than a claim they have to take. */}
-      <ol className="key">
-        {zones.map((zone) => (
-          <li className="key__row" key={zone.district.id}>
-            <span className="key__n">{zone.index}</span>
-            <span className="key__label">{zone.district.label}</span>
-            <span className="key__form">{FORM_SHORT[zone.form]}</span>
-            <span className="key__count">{plural(zone.count, 'room')}</span>
-          </li>
-        ))}
-      </ol>
-
-      <h2 className="panel__title">How to read it</h2>
-      <dl className="legend">
-        <dt>Distance from the centre</dt>
-        <dd>
-          the district&rsquo;s rank by messages carried — busiest innermost. A rank, not a
-          quantity: the counts are in the list below. The compass bearing means nothing at all
-          and is only packing.
-        </dd>
-        <dt>Shape</dt>
-        <dd>
-          each district is arranged by its own character — a ring of peers, a stepped sequence, a
-          plain grid, a dense stack — so one can be told from another without spending a colour
-          on it.
-        </dd>
-        <dt>Height</dt>
-        <dd>
-          messages the room has carried, on a log scale — every {HEIGHT_PER_DECADE.toFixed(2)}{' '}
-          units of height is ten times the traffic.
-        </dd>
-        <dt>
-          <span className="legend__swatch legend__swatch--live" aria-hidden="true" /> Lit
-        </dt>
-        <dd>
-          the room is one Foolscap reads, it is live, <em>and</em> its newest message verified
-          against the key that message names — checked here, in this browser. All three, or it
-          stays grey. A room can be taking twenty messages a second that nobody signed, and
-          lighting it would claim something about traffic nothing can vouch for.
-        </dd>
-        <dt>
-          <span className="legend__swatch legend__swatch--failing" aria-hidden="true" /> Marked
-        </dt>
-        <dd>
-          the read failed, or the newest message did <em>not</em> verify. An unsigned message is
-          neither of those and is never drawn as a problem — most traffic here carries no
-          signature, and that is ordinary.
-        </dd>
-        <dt>Grey with a cap</dt>
-        <dd>a room Foolscap reads that is quiet, or live and unsigned. Watched, not lit.</dd>
-        <dt>Grey, no cap</dt>
-        <dd>
-          a room from the survey only. Foolscap knows its size, not its state, and does not
-          guess.
-        </dd>
-        <dt>Districts</dt>
-        <dd>
-          grouped by what the room is <em>called</em>. A name is a string its creator chose, so a
-          district is a rough sort and never a claim about who runs a room.
-        </dd>
-      </dl>
-
-      <p className="panel__caption">
-        The survey is one request that returns the busiest{' '}
-        {surveyed ? num.format(surveyed) : 'few dozen'} rooms
-        {total ? ` of ${num.format(total)}` : ''}. The server caches it hard and it carries no
-        timestamp
-        {lag
-          ? `; measured against the rooms Foolscap reads directly, it is running about ${lag} behind`
-          : ''}
-        . Nothing current is derived from it.
-      </p>
-
-      <p className="panel__caption">
-        Click a district&rsquo;s ground to go into it and watch its traffic arrive, checked as it
-        lands. Click a building for one room. Drag to orbit, scroll to zoom.
-      </p>
-
-      <p className="panel__caption">
-        Waiting on a sonnet-2 receipt? <Link to="/track">The Tracker</Link> reads the contest
-        rooms in full and checks every receipt against the pinned referee key.
-      </p>
-    </section>
+    <li className="cstat" title={title}>
+      <span className="cstat__n">{n == null ? '—' : num.format(n)}</span>
+      <span className="cstat__k">{label}</span>
+    </li>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Inside a district
-// ---------------------------------------------------------------------------
+/** A did:key, near enough. Enough to tell a key from a room name and no more. */
+const looksLikeDid = (value: string) => /^did:key:z[1-9A-HJ-NP-Za-km-z]{6,}$/.test(value.trim());
 
-/** One word each, for the district key. */
+/**
+ * Find a room.
+ *
+ * Six matches and a count, not a directory: the plan holds two hundred rooms of
+ * fifty thousand, and a field that listed everything it could find would be the
+ * room list this page just took out with a text box on top of it.
+ *
+ * A did:key gets an answer rather than no matches, because pasting one here is a
+ * reasonable thing to try and "nothing found" would be a lie about why. Foolscap
+ * has no index from keys to rooms — nothing on this network does — so the honest
+ * reply is to say so and point at the page that checks a key against a message.
+ */
+function Find({
+  query,
+  onQuery,
+  rooms,
+  total,
+  onPick,
+}: {
+  query: string;
+  onQuery: (value: string) => void;
+  rooms: CityRoom[];
+  total: number | null;
+  onPick: (room: string) => void;
+}) {
+  const trimmed = query.trim();
+  const did = looksLikeDid(trimmed);
+  const matches = useMemo(
+    () => (trimmed === '' || did ? [] : matchRooms(trimmed, rooms)),
+    [trimmed, did, rooms]
+  );
+
+  return (
+    <div className="csearch">
+      <form
+        role="search"
+        autoComplete="off"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (matches.length > 0) onPick(matches[0].room);
+        }}
+      >
+        <input
+          className="csearch__input mono"
+          id="city-find"
+          type="search"
+          aria-label="Find a room, or paste a did:key"
+          inputMode="text"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="Find a room, or paste a did:key…"
+          value={query}
+          onChange={(event) => onQuery(event.target.value)}
+        />
+      </form>
+
+      {did && (
+        <div className="cfound__did">
+          <Glyph did={trimmed} size={22} />
+          <p className="cfound__note">
+            That is a key, and nothing here is indexed by one — the City reads rooms, not senders.{' '}
+            <Link to="/lens">The Lens</Link> checks a key against the messages that name it.
+          </p>
+        </div>
+      )}
+
+      {!did && trimmed !== '' && matches.length === 0 && (
+        <p className="cfound__note">
+          No room on the plan is called that. It holds the {num.format(rooms.length)} the directory
+          names{total ? ` of ${num.format(total)}` : ''}, so a room can exist and not be here.
+        </p>
+      )}
+
+      {matches.length > 0 && (
+        <>
+          <ul className="cfound">
+            {matches.slice(0, MATCHES).map((entry) => (
+              <li key={entry.room}>
+                <button type="button" className="cfound__row" onClick={() => onPick(entry.room)}>
+                  <span
+                    className={`cdot cdot--${
+                      entry.alarming
+                        ? 'failing'
+                        : entry.lit
+                          ? 'live'
+                          : entry.watched
+                            ? 'quiet'
+                            : 'unwatched'
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span className="cfound__name mono">{entry.room}</span>
+                  <span className="cfound__n">{num.format(entry.volume)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {matches.length > MATCHES && (
+            <p className="cfound__note">
+              and {num.format(matches.length - MATCHES)} more on the plan that match.
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** One word each, for the district list and the plan's key. */
 const FORM_SHORT: Record<Form, string> = {
   ring: 'ring',
   stepped: 'stepped',
@@ -455,6 +527,483 @@ const FORM_WORD: Record<Form, string> = {
   grid: 'a grid — regular, and claiming nothing more than that',
   stack: 'a stack — a few rooms carrying an enormous amount between them',
 };
+
+/**
+ * The key to the numbers on the plan, and the way into a district without
+ * having to find its ground with a pointer.
+ *
+ * Ordered exactly as the rings are, which is what makes "1 is innermost" a rule
+ * a reader can check by looking rather than a claim they have to take on trust.
+ * A row rather than a card each: seven cards is a stack taller than the panel,
+ * and there is nothing on one of them that needs more than a line.
+ */
+function Districts({
+  zones,
+  entered,
+  onEnter,
+  loading,
+  error,
+}: {
+  zones: Zone[];
+  entered: string | null;
+  onEnter: (id: string) => void;
+  loading: boolean;
+  error: string | null;
+}) {
+  return (
+    <section className="cdist">
+      <h2 className="ctitle">
+        The districts
+        <span className="ctitle__note">busiest at the centre</span>
+      </h2>
+
+      {error && zones.length === 0 ? (
+        <PaneState
+          state="failed"
+          title="The directory could not be read."
+          detail={`${error} Nothing is drawn from a survey that did not arrive.`}
+        />
+      ) : loading && zones.length === 0 ? (
+        <PaneState state="loading" title="Reading the directory…" />
+      ) : zones.length === 0 ? (
+        <PaneState
+          state="empty"
+          title="The directory named no rooms."
+          detail="It answered, and the list in it was empty."
+        />
+      ) : (
+        <ol className="drows">
+          {zones.map((zone) => (
+            <li key={zone.district.id}>
+              <button
+                type="button"
+                className="drow"
+                aria-current={zone.district.id === entered ? 'true' : undefined}
+                onClick={() => onEnter(zone.district.id)}
+              >
+                <span className="drow__n">{zone.index}</span>
+                <span className="drow__name">{zone.district.label}</span>
+                <span className="drow__form">{FORM_SHORT[zone.form]}</span>
+                <span className="drow__count">{num.format(zone.count)}</span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Busiest now
+// ---------------------------------------------------------------------------
+
+/**
+ * A room's rate between each pair of reads, drawn.
+ *
+ * Deliberately unlabelled and deliberately not a chart: it has no axis, no
+ * scale and no gridlines, because it is not making a quantitative claim — the
+ * figure beside it is. What it says is the shape of the last few minutes, which
+ * is the one thing a figure cannot say. Scaled to its own maximum, so two
+ * sparklines side by side are two shapes and never a comparison.
+ */
+function Spark({ series }: { series: number[] }) {
+  if (series.length < 2) return <span className="spark spark--flat" aria-hidden="true" />;
+  const top = Math.max(...series, 1);
+  const step = 100 / (series.length - 1);
+  const points = series
+    .map((value, i) => `${(i * step).toFixed(1)},${(100 - (value / top) * 100).toFixed(1)}`)
+    .join(' ');
+  return (
+    <svg className="spark" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <polyline points={points} vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+/**
+ * The six rooms with the most arriving, right now.
+ *
+ * ONLY ROOMS FOOLSCAP READS CAN BE IN HERE, which is the whole caveat and it is
+ * on the panel rather than under it: a rate is two readings of the same room,
+ * and the directory provides neither. So this is the busiest of eight, not the
+ * busiest of fifty thousand, and the difference is worth the line it costs.
+ */
+function Busiest({
+  rooms,
+  lit,
+  open,
+  failing,
+  live,
+  onPick,
+}: {
+  rooms: CityRoom[];
+  lit: number;
+  open: number;
+  failing: number;
+  /** Whether Foolscap is reading at this moment. The tag is drawn only if so. */
+  live: boolean;
+  onPick: (room: string) => void;
+}) {
+  const measured = rooms
+    .filter((entry) => entry.ratePerMin != null)
+    .sort((a, b) => (b.ratePerMin ?? 0) - (a.ratePerMin ?? 0));
+  const shown = measured.slice(0, BUSIEST);
+  const rest = measured.slice(BUSIEST);
+  const restRate = Math.round(rest.reduce((n, entry) => n + (entry.ratePerMin ?? 0), 0));
+
+  return (
+    <section className="cpanel cbusy" aria-label="Busiest now">
+      <h2 className="ctitle">
+        Busiest now
+        {/* THE TAG IS ABSENT WHEN IT WOULD NOT BE TRUE, which is the only
+            reason it is allowed to be the accent. A tag reading LIVE over a
+            table of figures from before a rate limit is the one thing this
+            page must never do. */}
+        {live && <span className="ctag">live</span>}
+        <span className="ctitle__note">msg/min</span>
+      </h2>
+
+      {shown.length === 0 ? (
+        <PaneState
+          state="loading"
+          title={open === 0 ? 'Opening the first rooms…' : 'Measuring the rate…'}
+        />
+      ) : (
+        <ul className="brows">
+          {shown.map((entry) => (
+            <li key={entry.room}>
+              <button type="button" className="brow" onClick={() => onPick(entry.room)}>
+                <span className="brow__name mono">{entry.room}</span>
+                <span className="brow__n">
+                  {(entry.ratePerMin ?? 0) < 10
+                    ? (entry.ratePerMin ?? 0).toFixed(1)
+                    : num.format(Math.round(entry.ratePerMin ?? 0))}
+                </span>
+                <Spark series={entry.series} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {rest.length > 0 && (
+        <p className="cbusy__more">
+          +{num.format(restRate)} more messages a minute in {plural(rest.length, 'other room')}
+        </p>
+      )}
+
+      {shown.length > 0 && (
+        <p className="cbusy__foot">
+          {lit === 0 ? 'None' : num.format(lit)} of {num.format(open)} lit — live <em>and</em>{' '}
+          signing.
+          {failing > 0 ? ` ${num.format(failing)} would not read.` : ''}
+        </p>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The camera's own controls
+// ---------------------------------------------------------------------------
+
+/**
+ * Zoom, reset, full screen — and the legend.
+ *
+ * Icon-only, because the labels would be four times the size of the things they
+ * name and this corner is the least important thing on the page. Every one of
+ * them carries a real label for anyone not reading with their eyes; the icon is
+ * the shorthand, not the name.
+ *
+ * The wheel and the drag do the same two jobs and always did. This is for the
+ * reader who will not discover that a picture on a page can be dragged, which is
+ * most readers.
+ */
+function Tools({
+  info,
+  onInfo,
+  onZoom,
+  onReset,
+  stage,
+  disabled,
+}: {
+  info: boolean;
+  onInfo: () => void;
+  onZoom: (factor: number) => void;
+  onReset: () => void;
+  stage: { current: HTMLDivElement | null };
+  disabled: boolean;
+}) {
+  const [full, setFull] = useState(false);
+  /**
+   * Whether full screen is on offer at all.
+   *
+   * TWO CHECKS, BECAUSE ONE IS NOT ENOUGH. `fullscreenEnabled` is false where
+   * the document is not permitted it, and that catches most of it — but an
+   * embedded frame can report true and then refuse the request, which is what
+   * this page does inside the preview pane it was built in: "Permissions check
+   * failed", thrown, caught, and nothing visibly happening. A button that does
+   * nothing when pressed is worse than no button, so the first refusal takes it
+   * away.
+   */
+  const [refused, setRefused] = useState(false);
+  const canFull = typeof document !== 'undefined' && document.fullscreenEnabled && !refused;
+
+  useEffect(() => {
+    const onChange = () => setFull(document.fullscreenElement != null);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  const toggleFull = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void stage.current?.requestFullscreen().catch(() => setRefused(true));
+  };
+
+  return (
+    <div className="ctools" role="group" aria-label="The view">
+      <button
+        type="button"
+        className="ctool"
+        aria-pressed={info}
+        onClick={onInfo}
+        title="How to read the plan"
+        aria-label="How to read the plan"
+      >
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <circle cx="10" cy="10" r="7.25" />
+          <path d="M10 9.2v4.6" />
+          <path d="M10 6.2v.9" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        className="ctool"
+        onClick={() => onZoom(1 / 1.35)}
+        disabled={disabled}
+        title="Zoom out"
+        aria-label="Zoom out"
+      >
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M4.6 10h10.8" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        className="ctool"
+        onClick={() => onZoom(1.35)}
+        disabled={disabled}
+        title="Zoom in"
+        aria-label="Zoom in"
+      >
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M4.6 10h10.8" />
+          <path d="M10 4.6v10.8" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        className="ctool"
+        onClick={onReset}
+        disabled={disabled}
+        title="Back to the whole plan"
+        aria-label="Back to the whole plan"
+      >
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <circle cx="10" cy="10" r="3.4" />
+          <path d="M10 2.6v2.4M10 15v2.4M2.6 10h2.4M15 10h2.4" />
+        </svg>
+      </button>
+      {canFull && (
+        <button
+          type="button"
+          className="ctool"
+          onClick={toggleFull}
+          title={full ? 'Leave full screen' : 'Full screen'}
+          aria-label={full ? 'Leave full screen' : 'Full screen'}
+        >
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            {full ? (
+              <path d="M8.2 3.4v4.8H3.4M11.8 16.6v-4.8h4.8" />
+            ) : (
+              <path d="M3.4 8.2V3.4h4.8M16.6 11.8v4.8h-4.8" />
+            )}
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// How to read it
+// ---------------------------------------------------------------------------
+
+function Legend({
+  surveyed,
+  lag,
+  total,
+  live,
+  quiet,
+  failing,
+  measured,
+  onClose,
+}: {
+  surveyed: number;
+  lag: string | null;
+  total: number | null;
+  live: number;
+  quiet: number;
+  failing: number;
+  measured: number;
+  onClose: () => void;
+}) {
+  return (
+    <section className="cpanel cinfo" aria-label="How to read the plan">
+      <div className="cinfo__head">
+        <h2 className="ctitle">How to read it</h2>
+        <button type="button" className="cinfo__close" onClick={onClose}>
+          Close <kbd>Esc</kbd>
+        </button>
+      </div>
+
+      <dl className="legend">
+        <dt>Distance from the centre</dt>
+        <dd>
+          the district&rsquo;s rank by messages carried — busiest innermost. A rank, not a
+          quantity. The compass bearing means nothing at all and is only packing.
+        </dd>
+        <dt>Shape</dt>
+        <dd>
+          each district is arranged by its own character — a ring of peers, a stepped sequence, a
+          plain grid, a dense stack — so one can be told from another without spending a colour on
+          it.
+        </dd>
+        <dt>Height</dt>
+        <dd>
+          messages the room has carried, on a log scale — every {HEIGHT_PER_DECADE.toFixed(2)}{' '}
+          units of height is ten times the traffic.
+        </dd>
+        <dt>
+          <span className="cdot cdot--live" aria-hidden="true" /> Lit
+        </dt>
+        <dd>
+          the room is one Foolscap reads, it is live, <em>and</em> its newest message verified
+          against the key that message names — checked here, in this browser. All three, or it
+          stays grey. A room can be taking twenty messages a second that nobody signed, and
+          lighting it would claim something about traffic nothing can vouch for.
+        </dd>
+        <dt>
+          <span className="cdot cdot--failing" aria-hidden="true" /> Marked
+        </dt>
+        <dd>
+          the read failed, or the newest message did <em>not</em> verify. An unsigned message is
+          neither of those and is never drawn as a problem — most traffic here carries no
+          signature, and that is ordinary.
+        </dd>
+        <dt>Grey with a cap</dt>
+        <dd>a room Foolscap reads that is quiet, or live and unsigned. Watched, not lit.</dd>
+        <dt>Grey, no cap</dt>
+        <dd>
+          a room from the directory only. Foolscap knows its size, not its state, and does not
+          guess.
+        </dd>
+        <dt>fps</dt>
+        <dd>
+          frames a second the loop is keeping. It draws only when something moved, so this is the
+          rate available rather than work being done.
+        </dd>
+      </dl>
+
+      <p className="ccaption">
+        Right now: {num.format(live)} live, {num.format(quiet)} quiet, {num.format(failing)}{' '}
+        failing, of {plural(measured, 'room')} with a measured rate.
+      </p>
+
+      <p className="ccaption">
+        The directory is one request that returns the busiest{' '}
+        {surveyed ? num.format(surveyed) : SURVEY_ROOMS} rooms
+        {total ? ` of ${num.format(total)}` : ''}. The server caches it hard and it carries no
+        timestamp
+        {lag
+          ? `; measured against the rooms Foolscap reads directly, it is running about ${lag} behind`
+          : ''}
+        . Nothing current is derived from it.
+      </p>
+
+      <p className="ccaption">
+        Click a district&rsquo;s ground to go into it and watch its traffic arrive, checked as it
+        lands. Click a building for one room. Drag to orbit, scroll to zoom.
+      </p>
+
+      <p className="ccaption">
+        Waiting on a sonnet-2 receipt? <Link to="/track">The Tracker</Link> reads the contest rooms
+        in full and checks every receipt against the pinned referee key.
+      </p>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The band
+// ---------------------------------------------------------------------------
+
+/**
+ * The caveat, across the bottom, always.
+ *
+ * It was in the legend, which meant it was behind a click, which meant most
+ * people reading this page never saw the three things that qualify everything on
+ * it. None of them is small print: the shape of the city is a snapshot that can
+ * be a day old, the districts are guesses made from names strangers chose, and
+ * the only current thing here is eight rooms wide.
+ */
+function Band({
+  total,
+  drawn,
+  lag,
+  noCanvas,
+  error,
+}: {
+  total: number | null;
+  drawn: number;
+  lag: string | null;
+  noCanvas: string | null;
+  error: string | null;
+}) {
+  if (noCanvas !== null) {
+    return (
+      <p className="cband cband--alarm" data-canvas-inset="bottom" role="alert">
+        <span className="cband__what">No plan</span>
+        The drawing needs WebGL and this browser did not provide it — {noCanvas} Every figure on
+        this page is measured and shown without it; the picture is the part that is missing.
+      </p>
+    );
+  }
+
+  return (
+    <p className="cband" data-canvas-inset="bottom">
+      <span className="cband__what">What this is not</span>
+      The directory is edge-cached for up to a day, so the {num.format(drawn)} rooms drawn
+      {total ? ` of ${num.format(total)}` : ''}, and every size on the plan, are a snapshot
+      {lag ? ` running about ${lag} behind` : ''} rather than a reading.{' '}
+      <span className="cband__sep" aria-hidden="true">
+        ·
+      </span>{' '}
+      Districts are inferred from room names, and a name is a string its creator chose.{' '}
+      <span className="cband__sep" aria-hidden="true">
+        ·
+      </span>{' '}
+      Only the {WATCHED.length} rooms Foolscap reads itself can be live. It reads one every four
+      seconds, and posts nothing, ever.
+      {error ? ` · ${error}` : ''}
+    </p>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inside a district
+// ---------------------------------------------------------------------------
 
 /** How many message cards the pane holds. Everything is checked; this is drawn. */
 const CARDS = 40;
@@ -494,7 +1043,7 @@ function DistrictView({
   const shown = feed.messages.slice(-CARDS).reverse();
 
   return (
-    <section className="inside">
+    <section className="cpanel inside" aria-label={`Inside ${zone.district.label}`}>
       <div className="inside__head">
         <p className="inside__eyebrow">
           <span className="inside__n">{zone.index}</span>
@@ -526,7 +1075,7 @@ function DistrictView({
           ))}
           {rooms.length > 8 && (
             <span className="inside__more">
-              and {num.format(rooms.length - 8)} more, in the list below
+              and {num.format(rooms.length - 8)} more in this district, by name in the field above
             </span>
           )}
         </div>
@@ -571,7 +1120,7 @@ function Cards({
       <PaneState
         state="empty"
         title="No room picked."
-        detail="Every room in this district is in the list; pick one and Foolscap will read it here."
+        detail="Every room in this district is above; pick one and Foolscap will read it here."
       />
     );
   }
@@ -669,7 +1218,7 @@ function RoomDetail({
   const isContest = room.districtId === 'contest';
 
   return (
-    <section className="panel__detail">
+    <section className="cpanel detail" aria-label={room.room}>
       <div className="detail__head">
         <p className={`detail__state detail__state--${room.state}`}>{STATE_WORD[room.state]}</p>
         {pinned && (
@@ -685,7 +1234,7 @@ function RoomDetail({
         <dd>
           {num.format(room.volume)}
           <span className="facts__note">
-            {room.volumeRead ? 'read directly just now' : 'from the survey'}
+            {room.volumeRead ? 'read directly just now' : 'from the directory'}
           </span>
         </dd>
 
@@ -737,15 +1286,15 @@ function RoomDetail({
         <div className="detail__topic">
           <p className="detail__topic-label">Topic, as set on the room</p>
           <p className="detail__topic-text mono">{room.topic}</p>
-          <p className="panel__caption">
-            A topic can be set on any room by any caller, without ever posting to it. Shown
-            because it is there, not because it is true.
+          <p className="ccaption">
+            A topic can be set on any room by any caller, without ever posting to it. Shown because
+            it is there, not because it is true.
           </p>
         </div>
       )}
 
       {isContest && (
-        <p className="panel__caption">
+        <p className="ccaption">
           A sonnet-2 contest room. <Link to="/track">The Tracker</Link> reads this one in full and
           checks every receipt in it against the pinned referee key.
         </p>

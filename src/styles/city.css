@@ -1,0 +1,1282 @@
+/* city.css — the one page that is a picture rather than a document.
+ *
+ * It was a page containing a canvas: a canvas on the left, a tall scrolling
+ * column on the right, and a header floating in the corner. That arrangement
+ * spends most of a 1440-wide screen on a list nobody reads and leaves the thing
+ * the page is actually for squeezed into what is left of it.
+ *
+ * So: A CANVAS WITH PANELS ON IT. The drawing runs to every edge under the nav,
+ * and everything else floats over it as a small panel in a corner — head and
+ * search top left, what is moving bottom left, the camera's own controls bottom
+ * right, and the caveat in a band across the bottom where it cannot be missed.
+ * Every panel is the same object: --s1, one border, 16px radius, 16px padding,
+ * and a blurred backdrop, which is what makes text legible over a lit city
+ * without painting a second ground over the picture.
+ *
+ * Under 62rem none of that is possible — a floating panel at 375 is the whole
+ * screen — so the panels stop floating and stack under the canvas in one
+ * scrolling column. Same panels, same order, no second design.
+ *
+ * Everything here was in foolscap.css, which is the site's design system and not
+ * the place for one page's furniture. It moved rather than being rewritten in
+ * two places; the parts of it other pages use — .facts, .pstate, .mono — stayed
+ * where they were.
+ */
+
+.shell--bleed {
+  max-width: none;
+  /* Out past the body's gutter and up to the very top, so the canvas runs to
+   * every edge and the nav floats over it.
+   *
+   * No negative top margin: the nav is fixed in both its states and takes no
+   * space in the flow, so there is nothing to pull back under. The padding
+   * .shell gained for that nav is cancelled here for the same reason. */
+  margin-inline: calc(var(--space) * -1);
+  height: 100dvh;
+  min-height: 32rem;
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Two rows: the picture with its floating panels, and the band under them.
+ *
+ * The band is a row rather than another floating panel because it is the one
+ * thing here that is full width, and because a row cannot be covered by a panel
+ * that grew — which for the sentence saying what the page is NOT showing is the
+ * property that matters.
+ *
+ * The ground is set explicitly: this element is the one that goes full screen,
+ * and a full-screen element is painted against nothing rather than against the
+ * page it came from. Without it the canvas's own transparency shows through to
+ * whatever the browser uses as a backdrop. */
+.city {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  background: var(--bg);
+}
+
+/* Under everything, including the panels: the city carries on behind them. */
+.city__stage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.city__gl {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* The wheel zooms the city rather than scrolling the page. */
+  touch-action: none;
+}
+
+.city__labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* The layer the panels are positioned in. Inert itself, so a drag that starts
+ * in the gap between two panels orbits the city rather than hitting a div. */
+.city__over {
+  position: relative;
+  z-index: 1;
+  min-height: 0;
+  pointer-events: none;
+}
+
+.city__left,
+.city__right,
+.city__tools {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+  pointer-events: none;
+}
+
+.city__left > *,
+.city__right > *,
+.city__tools > * {
+  pointer-events: auto;
+}
+
+.city__left {
+  top: calc(var(--nav-height) + var(--space-half));
+  left: var(--space);
+  bottom: var(--space-half);
+  width: 22.5rem;
+  max-width: calc(100% - var(--space) * 2);
+}
+
+/* THE LIST INSIDE IT SCROLLS, NOT THE PANEL. At 1440x900 the left column has
+ * about 730px in it and the two panels want 900, so something has to give, and
+ * which thing gives is a design decision rather than an accident: if the panel
+ * scrolls, the districts disappear below a fold nobody can see, and the page
+ * looks like it has four districts. If the row list scrolls, every fixed part
+ * stays put and the list is visibly a list with more in it. A window tall
+ * enough shows all seven and scrolls nothing.
+ *
+ * The panel keeps a scrollbar of its own as a backstop, for a window short
+ * enough that even the fixed parts do not fit. */
+.chead {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cdist {
+  display: flex;
+  flex-direction: column;
+  /* Four rows and the heading. Below this the list stops giving ground and the
+   * panel takes over the scrolling, because a list showing one row is not a
+   * list, it is a hint that something got cut off. */
+  min-height: 8.5rem;
+}
+
+.drows {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cbusy {
+  margin-top: auto;
+  flex: 0 0 auto;
+}
+
+/* Stops short of the control row rather than running to the bottom edge: the
+ * controls are on top of it in the paint order, and a panel that a button sits
+ * on is a panel with a button you cannot read the text under. */
+.city__right {
+  top: calc(var(--nav-height) + var(--space-half));
+  right: var(--space);
+  bottom: calc(var(--space-half) + 3rem);
+  width: 25rem;
+  max-width: calc(100% - var(--space) * 2);
+}
+
+.city__right > * {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.city__tools {
+  right: var(--space);
+  bottom: var(--space-half);
+  align-items: flex-end;
+  max-width: calc(100% - var(--space) * 2);
+}
+
+/* ------------------------------------------------------------- the panels */
+
+/* ONE OBJECT, five places. --s1 over a blurred and darkened backdrop: the tint
+ * alone is white at four hundredths, which is a surface over a black page and
+ * nothing at all over a lit building. The backdrop filter is what makes it a
+ * panel — the blur separates it from the drawing, the brightness drop gives the
+ * tint something to be four hundredths lighter than. Where the filter is not
+ * supported the fallback is the ground itself at nine tenths, which is the same
+ * intent with none of the glass. */
+.cpanel {
+  background: var(--s1);
+  border: 1px solid var(--s-border);
+  border-radius: var(--r-panel);
+  padding: 16px;
+  backdrop-filter: blur(20px) brightness(0.5) saturate(1.05);
+  -webkit-backdrop-filter: blur(20px) brightness(0.5) saturate(1.05);
+  font-size: var(--t-small);
+  line-height: 1.55;
+  color: var(--ink-mid);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .cpanel {
+    background: rgba(var(--bg-rgb), 0.9);
+  }
+}
+
+.ctitle {
+  margin: 0 0 var(--space-half);
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+  font-size: var(--t-micro);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+}
+
+.ctitle__note {
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* THE LIST IS BEING MEASURED RIGHT NOW, and the tag is not drawn at all when it
+ * is not — which is the only reason it may be the accent. See City.tsx. */
+.ctag {
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+}
+
+.ccaption {
+  margin: var(--space-half) 0 0;
+  font-size: var(--t-micro);
+  line-height: 1.6;
+  color: var(--ink-faint);
+}
+
+.ccaption a {
+  color: inherit;
+}
+
+/* ----------------------------------------------------------- the head panel */
+
+/* Whether Foolscap is reading, in the smallest form that can say it. The dot is
+ * the only thing that carries the state; the word repeats it, because a colour
+ * on its own is not a message. */
+.lpill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: max-content;
+  margin: 0;
+  padding: 3px 11px 3px 9px;
+  background: var(--s2);
+  border: 1px solid var(--s-border);
+  border-radius: 999px;
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-mid);
+}
+
+.lpill__dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--ink-faint);
+}
+
+/* Reading, right now. The one thing on this panel that earns the accent. */
+.lpill--live .lpill__dot {
+  background: var(--accent);
+}
+
+.lpill--warn .lpill__dot {
+  background: var(--warn);
+}
+
+.lpill--alarm .lpill__dot {
+  background: var(--alarm);
+}
+
+.lpill--idle .lpill__dot {
+  background: transparent;
+  border: 1px solid var(--ink-faint);
+}
+
+/* The page's own title, which lives in this panel rather than floating loose
+ * over the drawing. At --t-h2 rather than --t-h1: it is a heading on a panel
+ * 22rem wide, and the page's one big figure is the city itself. */
+.chead__title {
+  margin: 7px 0 0;
+  font-family: var(--display);
+  font-stretch: 108%;
+  font-size: var(--t-h2);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.chead__line {
+  margin: 6px 0 0;
+  font-size: var(--t-small);
+  line-height: 1.5;
+  color: var(--ink-mid);
+}
+
+/* --------------------------------------------------------------- stat pills */
+
+.cstats {
+  list-style: none;
+  margin: var(--space-half) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cstat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--s2);
+  border: 1px solid var(--s-border);
+  border-radius: 999px;
+  cursor: default;
+}
+
+.cstat__n {
+  font-family: var(--display);
+  font-stretch: 108%;
+  font-size: var(--t-small);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.cstat__k {
+  font-size: var(--t-micro);
+  color: var(--ink-faint);
+}
+
+/* ------------------------------------------------------------- finding one */
+
+.csearch {
+  margin-top: var(--space-half);
+}
+
+.csearch__input {
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--s2);
+  border: 1px solid var(--s-border);
+  border-radius: 10px;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: calc(var(--t-small) * var(--mono-optical));
+}
+
+.csearch__input::placeholder {
+  font-family: var(--body);
+  font-size: var(--t-small);
+  color: var(--ink-faint);
+}
+
+.csearch__input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.cfound {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--s-divider);
+  border: 1px solid var(--s-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.cfound__row {
+  display: grid;
+  grid-template-columns: 0.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6em;
+  width: 100%;
+  padding: 7px 11px;
+  background: var(--s1);
+  border: 0;
+  color: var(--ink-mid);
+  font-family: var(--body);
+  font-size: var(--t-small);
+  text-align: left;
+  cursor: pointer;
+}
+
+.cfound__row:hover {
+  background: var(--s2);
+  color: var(--ink);
+}
+
+.cfound__row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.cfound__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfound__n {
+  font-size: var(--t-micro);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.cfound__did {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.cfound__note {
+  margin: 8px 0 0;
+  font-size: var(--t-micro);
+  line-height: 1.6;
+  color: var(--ink-faint);
+}
+
+.cfound__did .cfound__note {
+  margin-top: 0;
+}
+
+/* A 6px square, and the only place a state colour appears in a panel other than
+ * on the state word itself. State is marked, never used as decoration. */
+.cdot {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: 0 0 auto;
+  align-self: center;
+  background: var(--ink-faint);
+}
+
+/* Live AND verifying, which is the only thing on this page that is lit. */
+.cdot--live {
+  background: var(--accent);
+}
+
+.cdot--failing {
+  background: var(--alarm);
+}
+
+/* WATCHED AND UNLIT. Not amber: a quiet room is not a warning, it is a room with
+ * nothing to report, and colouring it put the ordinary case in the same register
+ * as the one that wants attention. Hollow with a solid rim — the same shape as a
+ * lit dot, plainly not filled. */
+.cdot--quiet {
+  background: transparent;
+  border: 1px solid var(--ink-faint);
+}
+
+.cdot--unwatched {
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+}
+
+/* --------------------------------------------------------- the district list */
+
+/* The key to the numbers on the plan, and the way into a district for a reader
+ * who is not going to go hunting for its ground with a pointer. Ordered exactly
+ * as the rings are, which is what makes "1 is innermost" a rule that can be
+ * checked by looking rather than a claim to be taken on trust. */
+.cdist {
+  margin-top: var(--space);
+}
+
+.drows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--s-divider);
+  border: 1px solid var(--s-border);
+  border-radius: 10px;
+}
+
+.drow {
+  display: grid;
+  grid-template-columns: 17px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 11px 5px 9px;
+  background: var(--s1);
+  border: 0;
+  border-left: 2px solid transparent;
+  color: var(--ink-mid);
+  font-family: var(--body);
+  font-size: var(--t-small);
+  text-align: left;
+  cursor: pointer;
+}
+
+.drow:hover {
+  background: var(--s2);
+  color: var(--ink);
+}
+
+/* WHERE YOU ARE IS STATE. A 2px edge rather than a fill: the row is already on
+ * --s2, and the accent marks which one rather than colouring it. */
+.drow[aria-current='true'] {
+  background: var(--s2);
+  border-left-color: var(--accent);
+  color: var(--ink);
+}
+
+.drow:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.drow__n {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  font-size: var(--t-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.drow__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drow__form {
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+}
+
+.drow__count {
+  min-width: 2.2em;
+  text-align: right;
+  font-size: var(--t-micro);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------- busiest now */
+
+.brows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.brow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name figure'
+    'spark spark';
+  align-items: baseline;
+  gap: 0 10px;
+  width: 100%;
+  padding: 3px 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ink-mid);
+  font-family: var(--body);
+  font-size: var(--t-small);
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+
+.brow:hover {
+  background: var(--s2);
+  color: var(--ink);
+}
+
+.brow:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.brow__name {
+  grid-area: name;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brow__n {
+  grid-area: figure;
+  font-family: var(--display);
+  font-stretch: 108%;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/* The shape of the last few minutes. No axis and no scale, because it is not
+ * making a quantitative claim — the figure above it is. */
+.spark {
+  grid-area: spark;
+  display: block;
+  width: 100%;
+  height: 9px;
+  overflow: visible;
+}
+
+.spark polyline {
+  fill: none;
+  stroke: var(--rule-bright);
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Fewer than two readings: there is no shape yet, and a straight line would be
+ * a claim that the rate has been flat. */
+.spark--flat {
+  border-bottom: 1px dotted var(--rule);
+}
+
+.cbusy__more {
+  margin: var(--space-half) 0 0;
+  font-size: var(--t-micro);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.cbusy__foot {
+  margin: 5px 0 0;
+  font-size: var(--t-micro);
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
+
+/* ------------------------------------------------------------- the controls */
+
+.ctools {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--s1);
+  border: 1px solid var(--s-border);
+  border-radius: 999px;
+  backdrop-filter: blur(20px) brightness(0.5);
+  -webkit-backdrop-filter: blur(20px) brightness(0.5);
+  pointer-events: auto;
+}
+
+.ctool {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.ctool:hover:not(:disabled),
+.ctool[aria-pressed='true'] {
+  background: var(--s2);
+  color: var(--ink);
+}
+
+.ctool:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.ctool:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.ctool svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* --------------------------------------------------------------- the legend */
+
+/* THE ONE PANEL THAT IS OPAQUE, and the tokens say why: --s3 exists because "a
+ * popover's job is to hide what is under it", and glass resolves against
+ * whatever is behind it — which for this one is another panel, since it opens
+ * over the district view. The other four float over the drawing and are meant
+ * to. */
+.cinfo {
+  background: var(--s3);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  width: 26rem;
+  max-width: 100%;
+  max-height: min(62dvh, 36rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cinfo__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space);
+}
+
+.cinfo__close {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ink-faint);
+  font-family: var(--body);
+  font-size: var(--t-micro);
+  cursor: pointer;
+}
+
+.cinfo__close:hover {
+  color: var(--ink);
+}
+
+.cinfo__close kbd,
+.inside__leave kbd {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  padding: 1px 4px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--ink-faint);
+}
+
+.legend {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  gap: var(--space-half) var(--space);
+  font-size: var(--t-small);
+}
+
+.legend dt {
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.legend dd {
+  margin: 0;
+  color: var(--ink-mid);
+}
+
+/* ----------------------------------------------------------------- the band */
+
+/* The caveat, full width, always on. It was in the legend, which meant it was
+ * behind a click, which meant most people reading this page never saw the three
+ * things that qualify everything on it. --warn rather than --alarm: nothing here
+ * has gone wrong, and the band is not an error. It is the page saying what it
+ * does not know. */
+.cband {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  padding: 8px var(--space) 9px;
+  background: var(--s1);
+  border-top: 1px solid var(--s-border);
+  border-left: 3px solid var(--warn);
+  backdrop-filter: blur(20px) brightness(0.5);
+  -webkit-backdrop-filter: blur(20px) brightness(0.5);
+  font-size: var(--t-micro);
+  line-height: 1.6;
+  color: var(--ink-faint);
+}
+
+.cband--alarm {
+  border-left-color: var(--alarm);
+  color: var(--ink-mid);
+}
+
+.cband__what {
+  margin-right: 0.7em;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--warn);
+}
+
+.cband--alarm .cband__what {
+  color: var(--alarm);
+}
+
+.cband__sep {
+  color: var(--rule-strong);
+  padding: 0 0.2em;
+}
+
+/* ------------------------------------------- a district's number on the plan */
+
+/* A district's number and name, at the end of its leader line outside the wall.
+ *
+ * NUMBER FIRST AND BOXED, because the number is what ties the label to the plan
+ * and the name is what ties it to the panel — a reader coming from the drawing
+ * needs the digit to find the row, and one coming from the panel needs the name
+ * to be sure they have the right line. Both, in that order, at a size where the
+ * pair is still one object. */
+.city__mark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--t-micro);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  transition: opacity 180ms ease;
+}
+
+.city__mark-n {
+  display: grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 3px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.city__mark-name {
+  color: var(--ink-mid);
+}
+
+/* The one label about what is NOT drawn. Quieter than the districts and wider,
+ * because it is a sentence rather than a name, and it must not read as another
+ * district sitting off the edge of the plan. */
+.city__mark--overflow {
+  max-width: 15rem;
+  white-space: normal;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--ink-faint);
+  opacity: 0.85;
+}
+
+/* ------------------------------------------------------------- room detail */
+
+.detail__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space);
+}
+
+.detail__state {
+  margin: 0;
+  font-size: var(--t-h2);
+  color: var(--ink-faint);
+}
+
+.detail__state--live {
+  color: var(--accent);
+}
+
+.detail__state--quiet {
+  color: var(--warn);
+}
+
+.detail__state--failing {
+  color: var(--alarm);
+}
+
+.detail__clear {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--ink-faint);
+  font-family: var(--body);
+  font-size: var(--t-small);
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+  cursor: pointer;
+}
+
+.detail__name {
+  margin: var(--space-half) 0 var(--space);
+  color: var(--ink);
+}
+
+.detail__problem {
+  margin: var(--space) 0 0;
+  color: var(--alarm);
+}
+
+.detail__topic {
+  margin-top: var(--space);
+  padding: var(--space-half) var(--space);
+  background: var(--paper-sunk);
+  border-left: 2px solid var(--rule-strong);
+}
+
+.detail__topic-label {
+  margin: 0;
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+}
+
+.detail__topic-text {
+  margin: var(--space-half) 0 0;
+  color: var(--ink-mid);
+}
+
+/* ---------------------------------------------------------- inside a district */
+
+.inside__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-half);
+  margin-bottom: var(--space-half);
+}
+
+.inside__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--t-h2);
+  font-family: var(--display);
+  color: var(--ink);
+}
+
+.inside__n {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  font-size: var(--t-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-mid);
+}
+
+.inside__leave {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--s2);
+  border: 1px solid var(--s-border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  color: var(--ink-mid);
+  font-family: var(--body);
+  font-size: var(--t-micro);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.inside__leave:hover {
+  color: var(--ink);
+  border-color: var(--rule-bright);
+}
+
+.inside__basis {
+  margin: 0 0 var(--space);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-mid);
+}
+
+.inside__rooms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--space);
+}
+
+.inside__room {
+  appearance: none;
+  background: var(--s1);
+  border: 1px solid var(--s-border);
+  border-radius: 999px;
+  padding: 5px 11px;
+  color: var(--ink-mid);
+  font-size: var(--t-micro);
+  cursor: pointer;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.inside__room:hover {
+  color: var(--ink);
+  border-color: var(--rule-bright);
+}
+
+/* The room being read. --s2 and a brighter rim rather than the accent: which
+ * room you are looking at is navigation, and the accent on this page is spent
+ * on whether the traffic verifies. */
+.inside__room[aria-pressed='true'] {
+  background: var(--s2);
+  border-color: var(--ink-faint);
+  color: var(--ink);
+}
+
+.inside__more {
+  align-self: center;
+  font-size: var(--t-micro);
+  color: var(--ink-faint);
+}
+
+.inside__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px var(--space-half);
+  margin: 0 0 var(--space-half);
+  font-size: var(--t-small);
+  color: var(--ink);
+}
+
+.inside__tally {
+  font-size: var(--t-micro);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* -------------------------------------------------------------- message cards */
+
+.cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+/* A card rather than a log row, because these are arriving rather than being
+ * scrolled through. The state rule is on the left edge, which is the shape
+ * /lens uses for the same fact — one verdict, drawn the same way twice. */
+.card3 {
+  background: var(--s1);
+  border: 1px solid var(--s-border);
+  border-left: 2px solid var(--rule-strong);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.card3--verified {
+  border-left-color: var(--ink-faint);
+}
+
+.card3--failed {
+  border-left-color: var(--alarm);
+  border-color: rgba(224, 103, 79, 0.4);
+}
+
+.card3__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.card3__did {
+  font-size: var(--t-micro);
+  color: var(--ink-mid);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card3__seq {
+  margin-left: auto;
+  font-size: var(--t-micro);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+.card3__text {
+  margin: 0;
+  font-size: var(--t-small);
+  line-height: 1.55;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.card3__foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-half);
+  margin: 8px 0 0;
+  font-size: var(--t-micro);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.card3__verdict {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The one place on this page other than a lit roof where the accent is spent,
+ * and it is the same claim: this signature verified, here, in this browser. */
+.card3__verdict--verified {
+  color: var(--accent);
+}
+
+.card3__verdict--failed {
+  color: var(--alarm);
+}
+
+.cards__cap {
+  margin: var(--space) 0 0;
+  font-size: var(--t-micro);
+  line-height: 1.6;
+  color: var(--ink-faint);
+}
+
+/* --------------------------------------------------------------- narrow */
+
+/* Under 62rem a floating panel is the whole screen, so nothing floats. The
+ * canvas takes the top of the page and the panels stack under it in one
+ * scrolling column, in the order they are in the markup — which is the order
+ * they are in at 1440 as well, read left to right. */
+@media (max-width: 62rem) {
+  /* THE PAGE SCROLLS, NOT A BOX INSIDE IT. The first build of this made .city
+   * its own scroll container, and the nav never found out: it watches
+   * window.scrollY to decide whether to collapse into its pill, so it stayed in
+   * its tall three-row top state while the panels slid up underneath its links,
+   * which have no fill because they are supposed to be over the page's own
+   * ground. Handing the scroll back to the document fixes the nav, and brings
+   * the footer back within reach at the same time. */
+  .shell--bleed {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .city {
+    position: static;
+    display: flex;
+    flex-direction: column;
+    padding-top: var(--nav-height);
+  }
+
+  .city__stage {
+    position: relative;
+    inset: auto;
+    flex: none;
+    height: 42dvh;
+    min-height: 13rem;
+  }
+
+  /* flex: none on both of these, or the column squeezes them: .city is a fixed
+   * height here and a flex child shrinks to fit by default, so the panel stack
+   * was compressed to 156px and drawn spilling out under the band. It scrolls
+   * instead — which is what the overflow on .city is for. */
+  .city__over {
+    position: static;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-half);
+    padding: var(--space-half) var(--space);
+    pointer-events: auto;
+  }
+
+  .city__left,
+  .city__right,
+  .city__tools {
+    position: static;
+    width: auto;
+    max-width: none;
+    pointer-events: auto;
+  }
+
+  .city__tools {
+    align-items: flex-start;
+  }
+
+  .chead {
+    overflow: visible;
+  }
+
+  .cbusy {
+    margin-top: 0;
+  }
+
+  .cinfo {
+    width: auto;
+    max-height: none;
+  }
+
+  .city__right > * {
+    overflow: visible;
+  }
+
+  .cband {
+    position: static;
+    flex: none;
+    border-top: 1px solid var(--s-border);
+  }
+
+  .legend {
+    grid-template-columns: 6.5rem 1fr;
+  }
+}
+
+@media (max-width: 26rem) {
+  .cpanel {
+    padding: 14px;
+  }
+
+  .legend {
+    grid-template-columns: 1fr;
+    gap: 2px var(--space);
+  }
+
+  .legend dd {
+    margin-bottom: var(--space-half);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  /* The canvas honours this itself — no entry animation, no transitions between
+   * readings, no damping on the controls. Nothing here can reach into WebGL, so
+   * this block is only the DOM half; see CityCanvas.tsx for the rest. */
+  .city__mark {
+    transition: none;
+  }
+}

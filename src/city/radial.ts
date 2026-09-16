@@ -88,8 +88,9 @@ export const OVERFLOW_ANGLE = Math.PI / 2;
  * shape, and a shape that was assigned rather than derived would be decoration
  * pretending to be information.
  *
- *   ring     rooms evenly on a circle. Says PEERS: no room is first, and the
- *            arrangement has no centre to be at.
+ *   ring     rooms evenly on a circle, or on concentric ones once a single
+ *            circle would be wider than the plan. Says PEERS: no room is first,
+ *            and the arrangement has no centre to be at.
  *   stepped  concentric square rings, volume-sorted outward from the middle, so
  *            the district reads as a ziggurat. Says ORDERED STAGES.
  *   grid     regular rows and columns. Says REGULAR and claims nothing else.
@@ -100,6 +101,16 @@ export type Form = 'ring' | 'stepped' | 'grid' | 'stack';
 
 /** At or above this many rooms, a district is drawn as peers on a circle. */
 export const RING_MIN = 10;
+
+/**
+ * How wide a single ring is allowed to get before it becomes concentric ones.
+ *
+ * Thirteen world units is about thirty-seven rooms at one lot each, and it is
+ * set against the band the districts are placed in rather than picked for
+ * roundness: BAND_OUTER is 26, so a single ring wider than this is a district
+ * whose empty middle is larger than half the plan it sits in.
+ */
+const RING_SPAN_MAX = 13;
 
 /**
  * The form a district takes, from its own character.
@@ -134,11 +145,51 @@ function offsetsFor(form: Form, count: number): Array<[number, number]> {
     case 'ring': {
       // A radius that gives each room a lot of arc to itself. Floored, or three
       // rooms on a circle would sit closer than three in a row.
-      const radius = Math.max(LOT, (count * LOT) / (2 * Math.PI));
-      return Array.from({ length: count }, (_, i) => {
-        const angle = (i / count) * Math.PI * 2;
-        return [Math.cos(angle) * radius, Math.sin(angle) * radius] as [number, number];
-      });
+      const single = Math.max(LOT, (count * LOT) / (2 * Math.PI));
+      if (single <= RING_SPAN_MAX) {
+        return Array.from({ length: count }, (_, i) => {
+          const angle = (i / count) * Math.PI * 2;
+          return [Math.cos(angle) * single, Math.sin(angle) * single] as [number, number];
+        });
+      }
+
+      // BEYOND THAT IT BECOMES A ROSETTE — concentric rings rather than one
+      // enormous one. The survey lists two hundred rooms and a hundred and
+      // thirty of them are two-party mailboxes; on a single circle that
+      // district is a thirty-five-unit hoop with nothing inside it, wider than
+      // the whole band the districts are laid out in, and every other district
+      // has to be pushed out to make room for the hole in the middle of it.
+      //
+      // FILLED ROUND-ROBIN, ring by ring, which is the part that matters. The
+      // members arrive volume-sorted, so filling the inner ring first would put
+      // the busiest rooms at the centre and make position mean rank — and rank
+      // is exactly what this form is supposed not to claim. Dealing them out
+      // one per ring spreads them, so where a room sits in a rosette carries
+      // nothing, which is what "peers" has to mean if it means anything.
+      const capacity: number[] = [];
+      for (let ring = 1, held = 0; held < count && ring <= 64; ring++) {
+        const fits = Math.max(1, Math.floor(2 * Math.PI * ring));
+        capacity.push(fits);
+        held += fits;
+      }
+      const used = capacity.map(() => 0);
+      const out: Array<[number, number]> = [];
+      let ring = 0;
+      for (let i = 0; i < count; i++) {
+        // The next ring with room in it, which is only ever a wait once the
+        // inner ones have filled.
+        for (let guard = 0; used[ring] >= capacity[ring] && guard <= capacity.length; guard++) {
+          ring = (ring + 1) % capacity.length;
+        }
+        const slot = used[ring]++;
+        const radius = (ring + 1) * LOT;
+        // Every other ring is offset half a slot, so neighbouring rings do not
+        // line their rooms up into spokes the plan does not mean.
+        const angle = ((slot + (ring % 2) * 0.5) / capacity[ring]) * Math.PI * 2;
+        out.push([Math.cos(angle) * radius, Math.sin(angle) * radius]);
+        ring = (ring + 1) % capacity.length;
+      }
+      return out;
     }
     case 'stepped': {
       // Concentric square rings: 1 at the centre, then 8, then 16, then 24.
@@ -299,16 +350,53 @@ export function layoutRadial(rooms: { room: string; volume: number }[]): RadialL
   const last = Math.max(1, ranked.length - 1);
   const radii = ranked.map((_, rank) => BAND_INNER + (rank / last) * (BAND_OUTER - BAND_INNER));
 
-  // --- 2. the arc each one needs at that radius ----------------------------
-  const needed = ranked.map((block, i) => (2 * block.plotRadius) / radii[i]);
-  const reserved = OVERFLOW_SPAN + ZONE_GAP;
-  const total = needed.reduce((n, arc) => n + arc, 0) + ZONE_GAP * ranked.length + reserved;
-
-  // --- 3. one scale factor, so the ring closes and the ranks survive -------
+  // --- 2 and 3. the arc each one needs, and one factor that makes them fit --
+  //
+  // THE ARC IS EXACT AND USED TO BE APPROXIMATE. A disc of radius p centred at
+  // radius r needs an arc of 2*asin(p/r); the small-angle form this used, 2p/r,
+  // is close only while p is small against r. It stopped being close the day
+  // the survey was asked for two hundred rooms instead of fifty. Two thirds of
+  // them are two-party mailboxes, so the Pairs rosette came out WIDER THAN ITS
+  // OWN RADIUS — and a disc wider than its radius does not fit in any sector at
+  // all, because it contains the centre. The plan drew that district over the
+  // core and through its neighbour, and the arc arithmetic reported no overlap
+  // the whole time.
+  //
+  // So two conditions now, and both are met the same way: by moving every
+  // radius out by the same factor, which is the one move that cannot reorder
+  // the ranks.
+  //
+  //   clear the core   radius >= plotRadius + CORE_RADIUS, so a zone's ground
+  //                    never reaches the middle of the plan
+  //   close the ring   the arcs and the gaps fit in a turn
+  //
+  // Pushing everything out shrinks the arcs faster than it grows the radii, so
+  // alternating the two adjustments converges in a few passes. The loop is
+  // bounded and takes whatever it has if it does not.
   const turn = Math.PI * 2;
-  const scale = total > turn ? total / turn : 1;
+  const gaps = ZONE_GAP * ranked.length + OVERFLOW_SPAN + ZONE_GAP;
+  const arcsAt = (factor: number) =>
+    ranked.map((block, i) =>
+      2 * Math.asin(Math.min(0.999, block.plotRadius / (radii[i] * factor)))
+    );
+
+  let scale = 1;
+  for (let pass = 0; pass < 16; pass++) {
+    const clear = Math.max(
+      1,
+      ...ranked.map((block, i) => (block.plotRadius + CORE_RADIUS) / (radii[i] * scale))
+    );
+    if (clear > 1.0001) {
+      scale *= clear;
+      continue;
+    }
+    const total = arcsAt(scale).reduce((n, arc) => n + arc, 0) + gaps;
+    if (total <= turn) break;
+    scale *= total / turn;
+  }
+
   const scaled = radii.map((radius) => radius * scale);
-  const spans = needed.map((arc) => arc / scale);
+  const spans = arcsAt(scale);
 
   // --- 4. walk the circle --------------------------------------------------
   // Starting a half-gap past the reserved overflow slot, so the first zone does

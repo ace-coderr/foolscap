@@ -6,6 +6,7 @@ import './styles/foolscap.css';
 // every page, so the stylesheet that draws it has to be there on every page.
 import './styles/hero.css';
 import './styles/bench.css';
+import './styles/city.css';
 import './styles/lens.css';
 import './styles/vault.css';
 import './styles/retention.css';

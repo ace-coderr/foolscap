@@ -223,6 +223,86 @@ describe('built form', () => {
   });
 });
 
+/**
+ * A ring of a hundred and thirty rooms.
+ *
+ * The survey names two hundred rooms and two thirds of them are two-party
+ * mailboxes, so this district is not a hypothetical: it is what /city draws
+ * every time it loads. On one circle it is a thirty-five unit hoop with nothing
+ * inside it, wider than the whole band the districts sit in.
+ */
+describe('a ring that got too big', () => {
+  const many = Array.from({ length: 134 }, (_, i) => ({
+    room: `mb-pair-${String(i).padStart(4, '0')}`,
+    // Volumes spread across three orders of magnitude, so a layout that put the
+    // busiest anywhere in particular would be visible below.
+    volume: (i + 1) * 37,
+  }));
+
+  const layout = layoutRadial(many);
+  const zone = layout.zones[0];
+  const at = (room: string) => layout.placements.get(room)!;
+  const local = (room: string) => Math.hypot(at(room).x - zone.x, at(room).z - zone.z);
+
+  it('wraps into concentric rings rather than one enormous one', () => {
+    assert.equal(zone.form, 'ring');
+    // One ring would be 134 * LOT / 2pi, about 47 units across.
+    const single = (many.length * LOT) / (2 * Math.PI);
+    assert.ok(zone.plotRadius < single * 0.55, `${zone.plotRadius} vs ${single}`);
+  });
+
+  it('gives every room its own ground', () => {
+    const seen = new Set(many.map((entry) => `${at(entry.room).x.toFixed(3)},${at(entry.room).z.toFixed(3)}`));
+    assert.equal(seen.size, many.length);
+  });
+
+  /**
+   * THE ONE THAT MATTERS. A rosette has an inside and an outside, and filling it
+   * in volume order would make position mean rank — which is the one thing this
+   * form is supposed not to claim. The members are dealt out one per ring, so
+   * the busiest rooms land at every radius.
+   */
+  it('does not put the busiest in the middle, because peers have no middle', () => {
+    const busiest = [...many].sort((a, b) => b.volume - a.volume).slice(0, 12);
+    const radii = busiest.map((entry) => local(entry.room));
+    const spread = Math.max(...radii) - Math.min(...radii);
+    assert.ok(spread > LOT * 3, `the top twelve sit within ${spread.toFixed(2)} of each other`);
+  });
+
+  /**
+   * The failure this found, which the arc arithmetic could not see.
+   *
+   * A district whose ground is wider than its own radius contains the centre of
+   * the plan, and no sector can hold it however much arc it is given. The old
+   * small-angle formula reported an arc for it anyway and the layout passed its
+   * own overlap test while drawing Pairs straight through the core and across
+   * its neighbour. Every zone now has to clear the middle, which is a thing that
+   * can be asserted rather than eyeballed.
+   */
+  it('keeps its ground out of the middle of the plan, however big it gets', () => {
+    const mixed = layoutRadial([
+      ...many,
+      { room: 'lobby', volume: 52_000_000 },
+      { room: 'mb-sonnet-2-registration', volume: 95_000 },
+      { room: 'zk_proofs', volume: 4_000 },
+    ]);
+    const spans = mixed.zones.reduce((n, entry) => n + entry.span, 0);
+    assert.ok(spans <= Math.PI * 2 + 1e-6, `${spans} radians of zone in a turn`);
+    for (const entry of mixed.zones) {
+      assert.ok(
+        entry.radius - entry.plotRadius >= CORE_RADIUS - 1e-6,
+        `${entry.district.label} reaches to ${(entry.radius - entry.plotRadius).toFixed(1)}`
+      );
+      // ...and its disc fits the sector it was given, which is what the exact
+      // arc buys: the half-angle is asin(plot / radius), not plot / radius.
+      assert.ok(
+        Math.abs(entry.span / 2 - Math.asin(entry.plotRadius / entry.radius)) < 1e-6,
+        entry.district.label
+      );
+    }
+  });
+});
+
 describe('height', () => {
   it('is logarithmic, so forty million does not flatten everything else', () => {
     const lobby = heightFor(41_000_000);
@@ -370,6 +450,28 @@ describe('survey lag', () => {
     });
     assert.equal(city.surveyLag.ms, 60_000, 'the outlier should not move the median');
     assert.equal(city.surveyLag.samples, 3);
+  });
+
+  /**
+   * The failure that put "363 hours behind" in front of a reader: a room taking
+   * a message every twenty minutes, with a couple of thousand of backlog, dates
+   * the snapshot to a fortnight ago. The arithmetic is right and the premise —
+   * that the room has always run at the rate it is running now — is furthest
+   * from true for exactly the rooms that have gone quiet.
+   */
+  it('will not date a backlog by a trickle', () => {
+    const city = buildCity({
+      ...base,
+      survey: [summary('quiet', 1_000), summary('busy', 1_000)],
+      readings: new Map([
+        ['quiet', reading('quiet', { lastSeq: 3_000, ratePerMin: 0.05, rateSpanMs: 300_000 })],
+        ['busy', reading('busy', { lastSeq: 3_000, ratePerMin: 500, rateSpanMs: 300_000 })],
+      ]),
+      watched: ['quiet', 'busy'],
+      now: 1_700_000_000_000,
+    });
+    assert.equal(city.surveyLag.samples, 1, 'only the busy room can date anything');
+    assert.equal(city.surveyLag.ms, (2_000 / 500) * 60_000);
   });
 
   it('says nothing rather than guessing, with no rate to convert with', () => {

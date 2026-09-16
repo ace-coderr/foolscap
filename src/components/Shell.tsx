@@ -440,20 +440,23 @@ export function Shell({
         {/* Straight off PAGES, so the nav label and the page title cannot drift
             apart — the rule that one link cannot exist on four of six pages
             holds because nothing is written twice, not because this component
-            is the only thing allowed to render it. */}
-        {/* data-canvas-header: a floating header sits OVER the canvas, and the
-            canvas has to know how much of its top edge is covered so it can
-            move the drawing out from under it. Marked by attribute rather than
-            found by class, for the same reason the panel is — the renderer
-            should not have to know the name of the page it is drawing for. */}
-        <header
-          className={bleed ? 'page-header page-header--float' : 'page-header'}
-          data-canvas-header={bleed ? '' : undefined}
-        >
-          <p className="page-header__eyebrow">{current.eyebrow}</p>
-          <h1 className="page-header__title">{current.title}</h1>
-          <p className="page-header__line">{current.line}</p>
-        </header>
+            is the only thing allowed to render it.
+
+            A BLEED PAGE PLACES ITS OWN, and PAGES is still where it comes
+            from. The City is a canvas with panels floating on it, and its
+            title belongs inside the first panel, above the figures — a header
+            floating separately over the drawing was a second panel with no
+            edges, and the canvas had to measure it and shift the whole city
+            out from underneath. The rule this is under is that the words come
+            from PAGES, not that this component is the only thing allowed to
+            print them; see City.tsx, which reads the same entry. */}
+        {!bleed && (
+          <header className="page-header">
+            <p className="page-header__eyebrow">{current.eyebrow}</p>
+            <h1 className="page-header__title">{current.title}</h1>
+            <p className="page-header__line">{current.line}</p>
+          </header>
+        )}
         {children}
       </main>
       <Footer />

@@ -811,6 +811,9 @@ function summaryFrom(raw: Record<string, unknown>): RoomSummary | null {
   };
 }
 
+/** What the server will list at most, however large a `limit` is asked for. */
+export const ROOMS_MAX = 200;
+
 /**
  * Read the survey: every room the server chooses to list, in one request.
  *
@@ -820,12 +823,24 @@ function summaryFrom(raw: Record<string, unknown>): RoomSummary | null {
  * request on the origin for all fifty rooms every time anyone opened the page.
  * The cost of taking the cached copy is staleness, which is measurable; the cost
  * of the alternative is being the reason the endpoint gets a rate limit.
+ *
+ * `limit` ASKS FOR A LONGER LIST AND NOTHING ELSE. Without it the server returns
+ * its own default of fifty rooms; with it, up to two hundred, which is a ceiling
+ * the server enforces — asking for five thousand returns the same two hundred.
+ * The larger reply is about 42 kB against 11 kB, and it is cached exactly as hard
+ * as the short one: the URL is a different edge key, and that key answers with
+ * `CF-Cache-Status: HIT` and the same day-long `s-maxage`. So this costs one
+ * cached read of a few tens of kilobytes, on a page that takes one every three
+ * minutes, and it buys the difference between a picture of fifty rooms and a
+ * picture of two hundred.
  */
 export async function readRoomsIndex({
   signal,
   fetchImpl,
-}: { signal?: AbortSignal; fetchImpl?: typeof fetch } = {}): Promise<RoomsIndex> {
-  const res = await request(`${BASE}/rooms?format=json`, {
+  limit,
+}: { signal?: AbortSignal; fetchImpl?: typeof fetch; limit?: number } = {}): Promise<RoomsIndex> {
+  const asked = limit != null ? `&limit=${Math.max(1, Math.min(ROOMS_MAX, Math.floor(limit)))}` : '';
+  const res = await request(`${BASE}/rooms?format=json${asked}`, {
     signal,
     fetchImpl,
     accept: 'application/json',

@@ -60,6 +60,25 @@ export const WATCHED = [
 const WATCH_TICK_MS = 4_000;
 const SURVEY_INTERVAL_MS = 180_000;
 
+/**
+ * How many rooms to ask the survey for, which is the city's density.
+ *
+ * The server's own default is fifty, and fifty rooms spread over seven districts
+ * is a handful of buildings on a lot of empty ground — the plan reads as a
+ * diagram of districts rather than as a city. Two hundred is the most the server
+ * will list however large a number is asked for, and it is still one request on
+ * a three-minute timer answered from the edge; the cost is about thirty extra
+ * kilobytes a visit. See readRoomsIndex for the cache measurements.
+ *
+ * It does not make the city any more current. Two hundred rooms from a snapshot
+ * are two hundred rooms from a snapshot, and every one of them that Foolscap is
+ * not reading directly is drawn unlit for exactly that reason.
+ */
+export const SURVEY_ROOMS = 200;
+
+/** Points kept for a room's rate sparkline. Ten reads is about five minutes. */
+const SERIES_MAX = 10;
+
 /** Rate is measured over a window, not between two adjacent reads. */
 const RATE_WINDOW_MS = 300_000;
 /** Too short a span makes a rate that is mostly rounding. */
@@ -156,7 +175,7 @@ export function useCity(): CityFeed {
       if (!hidden() && Date.now() >= standDownUntil) {
         surveyAttemptedAt = Date.now();
         try {
-          const index = await readRoomsIndex({ signal: controller.signal });
+          const index = await readRoomsIndex({ signal: controller.signal, limit: SURVEY_ROOMS });
           if (stopped) return;
           haveSurvey = true;
           setSurvey(index);
@@ -178,17 +197,40 @@ export function useCity(): CityFeed {
 
     // --- the watch ----------------------------------------------------------
 
-    function rateFor(room: string, seq: number, at: number): Pick<Reading, 'ratePerMin' | 'rateSpanMs'> {
+    function rateFor(
+      room: string,
+      seq: number,
+      at: number
+    ): Pick<Reading, 'ratePerMin' | 'rateSpanMs' | 'series'> {
       const samples = samplesRef.current.get(room) ?? [];
       samples.push({ seq, at });
       // Keep the window, and always at least the two a rate needs.
       while (samples.length > 2 && at - samples[0].at > RATE_WINDOW_MS) samples.shift();
       samplesRef.current.set(room, samples);
 
+      // THE SPARKLINE IS THE SAME SAMPLES, READ PAIRWISE. The headline rate is
+      // measured across the whole window because a rate over thirty seconds is
+      // mostly rounding; the series is measured between adjacent reads because
+      // the shape is the point of it, and a series smoothed over five minutes
+      // would be a flat line however the room behaved. Two readings of the same
+      // numbers, each at the span its own claim needs.
+      const series: number[] = [];
+      for (let i = 1; i < samples.length; i++) {
+        const span = samples[i].at - samples[i - 1].at;
+        if (span <= 0) continue;
+        series.push(Math.max(0, ((samples[i].seq - samples[i - 1].seq) / span) * 60_000));
+      }
+
       const first = samples[0];
       const span = at - first.at;
-      if (samples.length < 2 || span < RATE_MIN_SPAN_MS) return { ratePerMin: null, rateSpanMs: null };
-      return { ratePerMin: ((seq - first.seq) / span) * 60_000, rateSpanMs: span };
+      if (samples.length < 2 || span < RATE_MIN_SPAN_MS) {
+        return { ratePerMin: null, rateSpanMs: null, series: series.slice(-SERIES_MAX) };
+      }
+      return {
+        ratePerMin: ((seq - first.seq) / span) * 60_000,
+        rateSpanMs: span,
+        series: series.slice(-SERIES_MAX),
+      };
     }
 
     async function readOne() {
@@ -261,6 +303,7 @@ export function useCity(): CityFeed {
                     readAt: Date.now(),
                     ratePerMin: null,
                     rateSpanMs: null,
+                    series: [],
                     proof: null,
                     error: message,
                   }

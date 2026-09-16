@@ -41,6 +41,16 @@ export interface Reading {
   /** How long the rate was measured over. A short span is a rough number. */
   rateSpanMs: number | null;
   /**
+   * Rate between each pair of adjacent reads, oldest first, messages a minute.
+   *
+   * NOT THE SAME MEASUREMENT AS `ratePerMin`, deliberately: that one is taken
+   * across the whole window because a rate over half a minute is mostly
+   * rounding, and this one is taken between adjacent reads because it is drawn
+   * as a shape and a smoothed series has no shape. Empty until a room has been
+   * read twice.
+   */
+  series: number[];
+  /**
    * What happened when the newest message in the room was checked, here, in
    * this browser, against the key it names. Null where there was nothing to
    * check or the check has not run.
@@ -113,6 +123,8 @@ export interface CityRoom {
   watched: boolean;
   ratePerMin: number | null;
   rateSpanMs: number | null;
+  /** See Reading.series. Empty for a room Foolscap has not read twice. */
+  series: number[];
   newestTsMs: number | null;
   readAt: number | null;
   error: string | null;
@@ -272,6 +284,7 @@ export function buildCity({ survey, readings, watched, now, layout: given }: Bui
       watched: isWatched,
       ratePerMin: reading?.ratePerMin ?? null,
       rateSpanMs: reading?.rateSpanMs ?? null,
+      series: reading?.series ?? [],
       newestTsMs: reading?.newestTsMs ?? null,
       readAt: reading?.readAt ?? null,
       error: reading?.error ?? null,
@@ -328,12 +341,24 @@ export function buildCity({ survey, readings, watched, now, layout: given }: Bui
  * The median across rooms, not the mean — one room that burst since the snapshot
  * would drag an average badly, and the answer is only ever offered as an order of
  * magnitude anyway.
+ *
+ * A TRICKLE CANNOT DATE A BACKLOG. Dividing by a rate near zero is where this
+ * estimate falls apart: a room reporting a twentieth of a message a minute, with
+ * two thousand messages of backlog, says the snapshot is a fortnight old — and
+ * the page printed exactly that, "363 hours behind", for the few seconds before
+ * the busier rooms had been read twice. The arithmetic is not wrong; the premise
+ * is. It assumes the room has always run at the rate it is running now, which is
+ * least true of a room that has gone quiet. Under a message a minute the sample
+ * is dropped rather than softened: there is nothing to soften, the number is
+ * simply not evidence.
  */
+const LAG_MIN_RATE_PER_MIN = 1;
+
 export function estimateSurveyLag(rooms: CityRoom[]): SurveyLag {
   const estimates: number[] = [];
   for (const room of rooms) {
     if (room.surveyLastSeq == null || !room.volumeRead) continue;
-    if (room.ratePerMin == null || room.ratePerMin <= 0) continue;
+    if (room.ratePerMin == null || room.ratePerMin < LAG_MIN_RATE_PER_MIN) continue;
     const behind = room.volume - room.surveyLastSeq;
     if (behind <= 0) continue;
     estimates.push((behind / room.ratePerMin) * 60_000);
