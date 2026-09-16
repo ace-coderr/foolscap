@@ -49,6 +49,7 @@ import {
   checkNonce,
   highestNonce,
   isReceiptedType,
+  placeholders,
   readText,
   requestId,
   shapeFor,
@@ -101,6 +102,19 @@ const BENCH_QUESTIONS: Question[] = [
         highest nonce you have used there. Nothing else — not the text, not the signature, not the
         request Foolscap builds. There is no server behind this page to send it to. Posting is
         yours to do, with the URL at the bottom.
+      </p>
+    ),
+  },
+  {
+    q: 'Why will it not build the request while the text has a placeholder in it?',
+    a: (
+      <p>
+        Because a room takes no edits and no deletions. A template slot like{' '}
+        <span className="mono">&lt;your note&gt;</span> that gets signed and posted is in that room
+        until the ring forgets it on its own schedule, and there is nothing anyone can do in the
+        meantime. The guard is on every shape rather than the one it happened to, and it names the
+        exact text it objected to so a reader who really did mean to write angle brackets can see
+        what to change.
       </p>
     ),
   },
@@ -240,7 +254,19 @@ export default function Bench() {
     }
   }, [room, lookedUp]);
 
-  const ready = verdict === 'yes' && roomOk;
+  /**
+   * Unfilled template slots, checked against the SWEPT text.
+   *
+   * The swept text and not the typed one, because the swept text is what gets
+   * signed, sent and stored — a placeholder that survives the sweep is the one
+   * that ends up in a room, and the sweep only ever collapses whitespace, so
+   * nothing it does could hide one.
+   */
+  const unfilled = useMemo(() => placeholders(built.text), [built.text]);
+
+  // NO PLACEHOLDER, NO REQUEST. See the note on placeholders() — a template slot
+  // that reaches a room stays there until the ring forgets it.
+  const ready = verdict === 'yes' && roomOk && unfilled.length === 0;
   const url = ready
     ? saySignedUrl({ room, did: did.trim(), sig: sig.trim(), nonce, text: built.text })
     : null;
@@ -368,6 +394,22 @@ export default function Bench() {
               onChange={(e) => setText(e.target.value)}
             />
             {reading.problem && <p className="field__hint field__hint--warn">{reading.problem}</p>}
+            {/* BEFORE the type line, because it is the one that stops the
+                request being built and the type line is only ever a remark. */}
+            {unfilled.length > 0 && (
+              <p className="field__hint field__hint--warn">
+                Still a template:{' '}
+                {unfilled.map((slot, i) => (
+                  <span key={slot}>
+                    {i > 0 ? ', ' : ''}
+                    <span className="mono">{slot}</span>
+                  </span>
+                ))}
+                . Nothing is built while one is in the text — a room takes no edits and no
+                deletions, so a placeholder posted is a placeholder that stays until the ring
+                forgets it.
+              </p>
+            )}
             {reading.type && (
               <p className="field__hint">
                 {isReceiptedType(reading.type)
@@ -461,8 +503,19 @@ export default function Bench() {
           {!ready ? (
             <PaneState
               state="empty"
-              title="No request yet."
-              detail="It appears once the signature above verifies against the string at the top. Foolscap builds it and hands it over — it does not post anything on your behalf, here or anywhere else on this site."
+              title={unfilled.length > 0 ? 'The template is not filled in.' : 'No request yet.'}
+              detail={
+                unfilled.length > 0 ? (
+                  <>
+                    Replace {unfilled.length === 1 ? 'the placeholder' : 'the placeholders'} in the
+                    text above and this appears. The guard is on every shape: a message cannot be
+                    edited or withdrawn once it is posted, so an unfilled slot is permanent in
+                    whatever room it lands in, for as long as that room holds it.
+                  </>
+                ) : (
+                  'It appears once the signature above verifies against the string at the top. Foolscap builds it and hands it over — it does not post anything on your behalf, here or anywhere else on this site.'
+                )
+              }
             />
           ) : (
             <>

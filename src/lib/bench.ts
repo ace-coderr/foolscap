@@ -315,6 +315,50 @@ export function readText(text: string): TextReading {
 }
 
 // ---------------------------------------------------------------------------
+// Placeholders
+// ---------------------------------------------------------------------------
+
+/**
+ * A template slot nobody filled in.
+ *
+ * WRITTEN AFTER ONE WENT OUT. `{"type":"notary.witness.v1","statement":"<anything
+ * you want on the record>",…}` was signed and posted verbatim, and a Technocore
+ * room does not take edits or deletions: the only thing that removes a message
+ * from one is the ring forgetting it, on its own schedule. The templates on this
+ * page are starting points, the text area is the source of truth, and between
+ * those two facts there was nothing at all stopping the starting point from
+ * being the final answer.
+ *
+ * So: no request is built while the text still contains one. Every shape, not
+ * just the one it happened to.
+ *
+ * THE PATTERN IS DELIBERATELY NARROW. `<` and `>` are ordinary characters in an
+ * ordinary message, and a guard that fired on every angle bracket would be a
+ * guard people learn to work around. The inside must start with a lowercase
+ * letter and hold nothing but lowercase letters, digits, spaces, underscores
+ * and hyphens — which is every placeholder in SHAPES and very little else.
+ *
+ * What it will still catch wrongly: a lowercase HTML-ish tag, `<b>` or `<br>`.
+ * That is a real false positive and it is the trade accepted here — the message
+ * names the exact text it objected to, so a reader who meant it knows in one
+ * glance what to change, and the alternative failure is permanent and public.
+ */
+const PLACEHOLDER = /<[a-z][a-z0-9 _-]{0,58}>/g;
+
+/**
+ * Every unfilled slot in the text, in the order they appear, without repeats.
+ *
+ * Returns the matches themselves rather than a boolean: the page has to be able
+ * to show what it is objecting to, and "there is a placeholder somewhere in
+ * this" is the kind of refusal that reads as a bug.
+ */
+export function placeholders(text: string): string[] {
+  const seen = new Set<string>();
+  for (const match of text.matchAll(PLACEHOLDER)) seen.add(match[0]);
+  return [...seen];
+}
+
+// ---------------------------------------------------------------------------
 // The nonce
 // ---------------------------------------------------------------------------
 

@@ -38,6 +38,7 @@ import {
   checkNonce,
   highestNonce,
   isReceiptedType,
+  placeholders,
   readText,
   requestId,
   shapeFor,
@@ -314,5 +315,84 @@ describe('reading the text', () => {
     assert.equal(reading.json, true);
     assert.equal(reading.type, null);
     assert.equal(reading.receipted, false);
+  });
+});
+
+/**
+ * The guard that was written after one got out.
+ *
+ * `{"type":"notary.witness.v1","statement":"<anything you want on the record>"}`
+ * was signed and posted verbatim to a public room, and a Technocore room takes
+ * no edits and no deletions — the only thing that removes a message from one is
+ * the ring forgetting it, whenever that happens to be. The templates are
+ * starting points and the text area is the source of truth, and nothing at all
+ * stood between those two facts and a placeholder going out over a real
+ * signature.
+ *
+ * The case that matters most in here is the LAST one: every template on the
+ * page is checked, so a shape added later cannot quietly opt out of this.
+ */
+describe('unfilled placeholders', () => {
+  test('the template that went out is caught', () => {
+    const text = '{"type":"notary.witness.v1","statement":"<anything you want on the record>"}';
+    assert.deepEqual(placeholders(text), ['<anything you want on the record>']);
+  });
+
+  test('filled-in text is clean', () => {
+    const text = '{"type":"notary.witness.v1","statement":"this key is mine, 2026-09-16"}';
+    assert.deepEqual(placeholders(text), []);
+  });
+
+  test('every slot is reported, not just the first', () => {
+    const found = placeholders('{"a":"<your note>","b":"<one word>","c":"<your note>"}');
+    // Deduplicated: the page lists what to change, and the same slot twice is
+    // one thing to change.
+    assert.deepEqual(found, ['<your note>', '<one word>']);
+  });
+
+  test('a placeholder inside a URL counts — that is where register keeps one', () => {
+    assert.deepEqual(placeholders('https://x.com/<handle>'), ['<handle>']);
+  });
+
+  test('ordinary angle brackets are left alone', () => {
+    // The trade this pattern makes. Arithmetic, comparisons and anything with
+    // a capital, a slash or an @ inside are not template slots, and a guard
+    // that fired on them is one people would learn to route around.
+    for (const clean of [
+      'if a < b and b > c then a < c',
+      'mail <Ace@Example.com> bounced',
+      'see <https://technocore.chat/rooms>',
+      'the range <A..Z> is inclusive',
+      'a <-- b',
+    ]) {
+      assert.deepEqual(placeholders(clean), [], clean);
+    }
+  });
+
+  test('it is bounded, so a stray bracket cannot swallow a paragraph', () => {
+    const long = `<${'x'.repeat(200)}>`;
+    assert.deepEqual(placeholders(long), []);
+  });
+
+  test('NO SHAPE OPTS OUT: every template is caught while it is still a template', () => {
+    for (const shape of SHAPES) {
+      const text = templateText(shape);
+      const slots = placeholders(text);
+      // Not every shape has one — several are complete as written, and those
+      // are the ones a reader can sign unchanged.
+      const expected = /<[a-z][a-z0-9 _-]*>/.test(text);
+      assert.equal(
+        slots.length > 0,
+        expected,
+        `${shape.type}: found ${JSON.stringify(slots)} in ${text}`
+      );
+    }
+  });
+
+  test('the request id slot is one, until the page swaps it for a real id', () => {
+    const shape = shapeFor('sonnet.register.v1')!;
+    assert.ok(placeholders(templateText(shape)).includes('<a fresh id per attempt>'));
+    const filled = templateText(shape).replace('<a fresh id per attempt>', requestId());
+    assert.deepEqual(placeholders(filled), ['<handle>']);
   });
 });
