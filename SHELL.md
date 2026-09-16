@@ -1,6 +1,6 @@
 # Foolscap — shell spec
 
-One system, six pages, each a distinct tool. This defines the shell everything is built
+One system, one page per tool. This defines the shell everything is built
 into: tokens, navigation, layout, and the boundary between pages.
 
 Build this before any new page. Retro-fit `track.html` onto it last.
@@ -15,13 +15,13 @@ question, one of them is wrong.
 | page | question it answers |
 |---|---|
 | **City** (`/`) | What is the network doing right now? |
-| **Notary** (`/notary`) | When was this key active, and can I prove it? |
 | **Tracker** (`/track`) | What happened to my request? |
 | **Bench** (`/bench`) | How do I sign and post a message without handing over my key? |
 | **Lens** (`/lens`) | Who actually said what in this room? |
 | **Vault** (`/vault`) | What notes exist, who owns them, and when do they expire? |
 
-The shell must not assume six is final.
+The shell must not assume this list is final. It has been six and it has been five; PAGES
+is the only place the count is written down, and that is what makes changing it cheap.
 
 Shared plumbing lives in `js/`: `did.js`, `technocore.js`, `contest.js`. Pages own their own
 view logic and nothing else. If two pages need the same logic, it moves into `js/`, it does
@@ -126,31 +126,27 @@ of six pages is the bug this prevents.
 The city is the exception: full-bleed canvas, the header floating over it, content in a
 panel rather than a column.
 
-The colophon is fixed copy on every page: reads only, no keys, no backend except Notary's
-archive, referee DID pinned from LAUNCH.md, source on GitHub, Apache-2.0.
+The colophon is fixed copy on every page: reads only, no keys, nothing posted on your
+behalf, no backend of any kind, referee DID pinned from LAUNCH.md, source on GitHub,
+Apache-2.0.
 
 ---
 
-## Where the backend enters
+## There is no backend
 
-Only Notary has one. Everything else is a static page calling `technocore.chat` directly —
-CORS is open, no proxy, no server.
+Every page is a static file calling `technocore.chat` directly — CORS is open, no proxy, no
+server, nothing of ours on the request path.
 
-Notary's page reads **both**:
+This was once qualified: Notary, a durable archive, was the one part of Foolscap with a
+server behind it, and the sentence above read "no backend except Notary's archive". That
+service is gone — it failed on storage arithmetic, and the account is in `docs/NOTARY.md`.
+The claim is now unconditional, which is a better claim than the one it replaced and is
+worth defending: **if a page here needs a server, the page is wrong.**
 
-- **Live** — the browser reads the rooms directly, same as every other page. Covers the last
-  few hours, which is all the rings hold.
-- **Notary** — the archive API, for anything the rings have dropped.
-
-The page must label which answer came from where. Notary **witnesses rather than watches**:
-it holds signed messages that were submitted to it, checked and stamped with its own clock,
-and it does not crawl rooms and will not go looking for a key. So absence there is never
-evidence a key was inactive — it means nothing was ever submitted, which is a fact about
-Notary and not about the key. The page says so in those words, and tells a reader how to
-have a key witnessed rather than leaving them to wonder why it is not already.
-
-This is the honest version of the product and it is also the resilient one: with Notary
-unreachable, the page still works for recent activity.
+What that costs is real and has to be said rather than hidden. Foolscap can only report what
+the rings still hold, which on a busy room is minutes. It cannot answer a question about last
+week. A page that would like to must say so in its own words rather than implying coverage it
+does not have.
 
 ## Rules that apply to every page
 
@@ -159,6 +155,8 @@ unreachable, the page still works for recent activity.
   evidence in hand. Warn on the former only.
 - No private key input anywhere except Bench, and there only behind an explicit opt-in that
   defaults to paste-your-signature.
+- No request is built from a template with an unfilled `<placeholder>` still in it. A room
+  takes no edits and no deletions; see `placeholders()` in `src/lib/bench.ts`.
 - Poll with `limit=200`, detect holes from `first_seq`, recover by re-export. The read
   endpoint skips rather than queues — this is not optional.
 - No localStorage or sessionStorage, with two stated exceptions. The second is the theme: one
@@ -182,6 +180,6 @@ unreachable, the page still works for recent activity.
 1. Tokens, nav partial, page shell, colophon. Nothing else.
 2. Retro-fit `track.html` onto it — proves the shell holds a real page.
 3. City.
-4. Notary, Bench, Lens, Vault.
+4. Bench, Lens, Vault.
 
 Ship 1 and 2 together. A shell with no page in it is untested.

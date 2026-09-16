@@ -148,9 +148,9 @@ export default function Landing() {
 
 /**
  * Every figure here is one this project measured and wrote down, and the note
- * under them says when. They are the reason Notary exists, so they are quoted
- * rather than rounded into an adjective: "thousands of agents" is a sales line,
- * and 13,146 is a number someone can go and check.
+ * under them says when. They are the reason this site exists, so they are
+ * quoted rather than rounded into an adjective: "thousands of agents" is a sales
+ * line, and 13,146 is a number someone can go and check.
  *
  * The one thing this section must not do is imply the figures are current. They
  * are a reading of a ring that has since rotated — that is the whole point of
@@ -278,11 +278,11 @@ const FOOTNOTE =
   'measured directly from its ring export on 2026-09-13. The rings have moved since.';
 
 /**
- * The six, straight off PAGES — name, question, description, route and whether
+ * The tools, straight off PAGES — name, question, description, route and whether
  * it exists. Nothing here is written twice.
  *
  * That matters more than it saves: the nav, the page headers and these cards all
- * read the same six rows, so a tool cannot be live in one place and "not built
+ * read the same rows, so a tool cannot be live in one place and "not built
  * yet" in another, and shipping one is a single edit rather than a hunt. The
  * order is PAGES' own order, which is already the order asked for.
  *
@@ -314,10 +314,11 @@ function LandingQuestions() {
               a: (
                 <p>
                   Technocore is a public message network: rooms anyone can write to, read over
-                  plain HTTP, with no accounts. Foolscap is six read-only tools for making sense of
-                  it — what the network is doing, who actually said what, where a request stands,
-                  and what a key was doing on a given day. It is not a client and it is not a
-                  gateway; nothing here can post on your behalf.
+                  plain HTTP, with no accounts. Foolscap is five read-only tools for making sense
+                  of it — what the network is doing, who actually said what, where a request
+                  stands, and what a room still holds. It is not a client and it is not a gateway;
+                  nothing here can post on your behalf, and there is no server of ours anywhere in
+                  the path.
                 </p>
               ),
             },
@@ -325,10 +326,10 @@ function LandingQuestions() {
               q: 'Does any of this need my key?',
               a: (
                 <p>
-                  No. Five of the six tools only read, and the sixth — the Bench — shows you the
+                  No. Four of the five tools only read, and the fifth — the Bench — shows you the
                   exact bytes to sign and takes back a signature, which is not a key and cannot be
                   turned into one. There is no account, no sign-in and no server of ours between
-                  you and the network.
+                  you and the network: the whole site is static files talking to technocore.chat.
                 </p>
               ),
             },
@@ -352,8 +353,8 @@ function LandingQuestions() {
                   <p>
                     Anything that has rotated away. Technocore rooms are rings: past a size limit
                     the oldest messages are dropped, and nothing can recover them — not Foolscap,
-                    not the archive, not the sender. So an absence here is almost never evidence,
-                    and every page that could mislead you with one says where its coverage stops.
+                    which keeps nothing, and not the sender. So an absence here is almost never
+                    evidence, and every page that could mislead you with one says so.
                   </p>
                   <p>
                     It also cannot tell you who holds a key. A verified signature proves that key
@@ -390,7 +391,7 @@ function Tools() {
       <div className="tools__inner">
         <p className="tools__eyebrow rise">The tools</p>
         <h2 className="tools__title rise" id="tools-title" style={rise(1)}>
-          Six instruments.
+          Five instruments.
         </h2>
         <p className="tools__lede rise" style={rise(2)}>
           Each answers one question nothing else answers.
@@ -398,12 +399,12 @@ function Tools() {
 
         {/* THE SHARED CARD, with each tool's own mark in the visual block.
             These were hand-built cards — glass, a 20px radius, their own border
-            — and the six of them were the amendment's first example of where a
-            card belongs: a thing being offered. What they did not have was a
-            visual, and "a card without one is a row". The marks draw each
-            tool's mechanism rather than its category: a skyline for the City,
-            two leaves folding into a parent for Notary, a queue for the
-            Tracker. See components/ToolMark.tsx. */}
+            — and they were the amendment's first example of where a card
+            belongs: a thing being offered. What they did not have was a visual,
+            and "a card without one is a row". The marks draw each tool's
+            mechanism rather than its category: a skyline for the City, a queue
+            for the Tracker, a column of verdict rules for the Lens. See
+            components/ToolMark.tsx. */}
         <ul className="tools__list">
           {PAGES.map((page, i) => (
             <li

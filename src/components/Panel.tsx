@@ -101,8 +101,8 @@ export function PaneState({
   action?: ReactNode;
 }) {
   if (state === 'loading') {
-    // The sweeping rule from /notary, which is the one loading treatment on
-    // this site that reads as work happening rather than as a caption.
+    // A sweeping rule: the one loading treatment on this site that reads as
+    // work happening rather than as a caption.
     return (
       <p className="pstate pstate--loading" role="status">
         {title}

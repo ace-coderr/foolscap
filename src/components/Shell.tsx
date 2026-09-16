@@ -259,6 +259,12 @@ function useSectionReveals(deps: unknown): void {
  * for a call to action would be trading the one claim Foolscap has to make for
  * the one it has to sell.
  *
+ * THE CLAIM GOT SHORTER AND STRONGER when the archive came out. It used to read
+ * "no backend except Notary's archive", and an exception in a trust statement is
+ * the part a sceptical reader stops at. There is no exception now: nothing here
+ * has a server behind it, and that is worth saying plainly because it is the
+ * kind of thing that is easy to say and hard to go back on.
+ *
  * The links are PAGES again — the same six rows as the nav, the page headers and
  * the landing's tool cards — so an unbuilt tool is grey and unlinked here for
  * exactly the reason it is there, and shipping one still changes a single line.
@@ -279,7 +285,7 @@ export function Footer() {
 
       <div className="footer__inner">
         <div className="footer__call">
-          <p className="footer__headline rise">Keep what the network drops.</p>
+          <p className="footer__headline rise">Read it while it is still there.</p>
           <p className="footer__sub rise" style={{ '--rise-i': 1 } as CSSProperties}>
             Paste a <span className="footer__mono">request_id</span> or a{' '}
             <span className="footer__mono">did:key</span> and see where it actually stands —
@@ -320,9 +326,10 @@ export function Footer() {
           </div>
 
           <p className="footer__trust">
-            Foolscap reads and nothing else: it holds no key, asks for none, and posts nothing on
-            your behalf. Every signature that decides what you are shown is checked in your
-            browser.
+            Foolscap reads and nothing else: it holds no key, asks for none, posts nothing on your
+            behalf, and runs no server. The whole site is static files; every request goes from
+            your browser to technocore.chat with nothing of ours in between, and every signature
+            that decides what you are shown is checked on your own machine.
           </p>
 
           <div className="footer__refs">
@@ -357,14 +364,17 @@ export function Footer() {
  *
  * `column` is the default: a measure-wide column under the header. `bleed` is
  * the City and, so far, only the City — a canvas under everything with the
- * header floating over it and the content in a panel. `bands` is the landing's
- * composition applied to a tool: full-width sections, each with its own inner
- * measure, and the page opening with a hero rather than a header.
+ * header floating over it and the content in a panel. `console` is DESIGN.md's
+ * pattern B: the page capped at 62rem and centred, header included.
+ *
+ * There was a fourth, `bands` — full-width sections each with their own inner
+ * measure, the landing's composition applied to a tool. It went with the only
+ * page that used it. The frame is in the history if a page wants it again.
  *
  * The variant changes the frame the page sits in and nothing else; the nav and
- * the footer are the same parts from the same source in all three.
+ * the footer are the same parts from the same source in all of them.
  */
-export type ShellVariant = 'column' | 'bleed' | 'bands' | 'console';
+export type ShellVariant = 'column' | 'bleed' | 'console';
 
 /**
  * Wrap a route in the shell.
@@ -396,7 +406,6 @@ export function Shell({
   }
 
   const bleed = variant === 'bleed';
-  const bands = variant === 'bands';
   // Pattern B caps its content at 62rem and centres it, and the page header has
   // to be capped and centred with it or the page has two left edges.
   const console_ = variant === 'console';
@@ -427,24 +436,16 @@ export function Shell({
 
       <HeroNav action={navAction(current.id)} currentId={current.id} />
 
-      <main
-        className={`shell${bleed ? ' shell--bleed' : ''}${bands ? ' shell--bands' : ''}${
-          console_ ? ' shell--console' : ''
-        }`}
-      >
-        {/* A banded page opens with a hero that carries this header's three
-            parts at its own scale, so rendering the header here as well would
-            put the eyebrow and the title on the page twice. It reads the same
-            row of PAGES to do it — the rule that one link cannot exist on four
-            of six pages holds because nothing is written twice, not because
-            this component is the only thing allowed to render it. */}
-        {!bands && (
-          <header className={bleed ? 'page-header page-header--float' : 'page-header'}>
-            <p className="page-header__eyebrow">{current.eyebrow}</p>
-            <h1 className="page-header__title">{current.title}</h1>
-            <p className="page-header__line">{current.line}</p>
-          </header>
-        )}
+      <main className={`shell${bleed ? ' shell--bleed' : ''}${console_ ? ' shell--console' : ''}`}>
+        {/* Straight off PAGES, so the nav label and the page title cannot drift
+            apart — the rule that one link cannot exist on four of six pages
+            holds because nothing is written twice, not because this component
+            is the only thing allowed to render it. */}
+        <header className={bleed ? 'page-header page-header--float' : 'page-header'}>
+          <p className="page-header__eyebrow">{current.eyebrow}</p>
+          <h1 className="page-header__title">{current.title}</h1>
+          <p className="page-header__line">{current.line}</p>
+        </header>
         {children}
       </main>
       <Footer />

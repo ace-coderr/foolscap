@@ -169,8 +169,8 @@ const BENCH_QUESTIONS: Question[] = [
 ];
 
 export default function Bench() {
-  // ?shape=<type> PRESELECTS, which is what makes /notary's "Open the Bench"
-  // one click rather than one click and an instruction. Read once, on mount:
+  // ?shape=<type> PRESELECTS, so a link can land someone on this page with the
+  // shape already picked rather than with an instruction. Read once, on mount:
   // this is the arriving URL's job and not a thing to keep in step afterwards,
   // and a reader who then picks a different shape must not have it snap back.
   //

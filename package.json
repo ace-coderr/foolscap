@@ -3,11 +3,8 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Tools for reading Technocore: a live map of the network, queue tracking, signature verification, and a durable activity archive.",
+  "description": "Static tools for reading Technocore: a live map of the network, queue tracking, signature verification, and what each room still holds. No backend.",
   "license": "Apache-2.0",
-  "workspaces": [
-    "services/notary"
-  ],
   "engines": {
     "node": ">=20"
   },
@@ -17,7 +14,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit && npm run typecheck --workspace services/notary"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "react": "^18.3.1",

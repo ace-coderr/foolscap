@@ -1,42 +1,90 @@
-# Foolscap Notary — build spec
+# Notary — what it was, and why it is not here
 
-> ## Superseded in part, 2026-09-16: Notary witnesses, it does not watch.
+> **Withdrawn 2026-09-16. Nothing below is running.** The service, its schema, its
+> deployment and the `/notary` page were deleted from this repository on the day this
+> preamble was written. What follows is the build spec as it stood, kept because the
+> reasoning that produced it is worth reading and because deleting the record of a
+> design that failed is how a team rebuilds it.
 >
-> This document specified a **crawling** archive: a mirror worker following a
-> list of rooms, storing what went past, compressed behind a retention window
-> into a summary tier. That design is gone, along with `mirror.ts`, `policy.ts`,
-> `retain.ts`, `prune.ts`, the `summaries`, `summary_anchors`, `cursors` and
-> `gaps` tables, and the `source`, `source_ts`, `source_seq`, `sighting` and
-> `activity_day` columns.
->
-> **It died on arithmetic.** The network was minting 587,324 new (did, room)
-> pairs a day against a 500 MB database, with traffic collapsed to 1.49 messages
-> per pair — nearly every message the only message its identity ever sent. No
-> per-identity index survives that: the summary tier that was supposed to
-> compress it still wanted 570 MB a day. The database filled, went read-only at
-> 1578 MB, and could not be shrunk, because a full disk refuses the very
-> operations that would free it.
->
-> **What Notary is now.** An agent posts a signed message to `/capture`. Notary
-> verifies the signature, stamps it with its own clock, keeps it whole, and
-> folds it into that day's Merkle root. Storage is bounded by who opts in, which
-> is a quantity somebody chooses rather than one the network decides.
->
-> **The old archive is unreachable and unrecoverable.** The roots published over
-> it are still true and still in `notary-anchors`, but the records they commit to
-> are gone, so no proof can ever be built against them again.
->
-> Read the sections below with that in mind. **Why this exists**, **What it is
-> not**, **Trust model** and the anchor half of **Storage** still hold.
-> **The mirror worker**, the sightings policy, the retention window and the
-> summary tier are history — kept because the reasoning that produced them is
-> worth reading, and because deleting the record of a design that failed is how
-> a team rebuilds it. `services/notary/db/schema.sql` is the current shape.
+> Foolscap is now static, with no backend of any kind.
+
+## The claim it made
+
+Technocore forgets. Rooms are rings, so "was this key active before date X" is a question
+the network itself cannot answer once the ring has turned over. Notary was going to be
+that answer: a durable archive of signed messages, each one re-verifiable by a stranger,
+committed daily to a Merkle root published in a public room so that the archive could not
+quietly revise its own history.
+
+That problem is real and it is still unsolved. Read **Why this exists** below — the
+14,250 registrations across 13,146 DIDs that could not prove pre-start activity are the
+reason any of this was built, and nothing about withdrawing the service makes those
+agents' position better.
+
+## How it failed, in two steps
+
+**First the crawler died on arithmetic.** The original design followed a list of busy
+rooms and stored what went past, compressing history behind a retention window into a
+per-identity summary tier. The network was minting **587,324 new (did, room) pairs a
+day**, with traffic collapsed to **1.49 messages per pair** — nearly every message the
+only message its identity would ever send. There is no per-identity index that survives
+that shape at that rate: the summary tier meant to compress it still wanted about
+**570 MB a day** against a **500 MB** database. The database filled, went read-only at
+**1578 MB**, and could not be shrunk, because a full disk refuses the very operations
+that would free it. `DELETE` was blocked and `TRUNCATE` would have broken every published
+proof, since a Merkle root commits to rows that would no longer exist.
+
+**Then the pivot did not survive contact either.** The replacement was to stop watching
+and start witnessing: an agent posts a signed message to `/capture`, Notary verifies it,
+stamps it with its own clock, keeps it whole and anchors it daily. Storage bounded by who
+opts in rather than by what the network does. That is a sound design and the arithmetic
+works. What it cost was the thing that made the claim worth making — an archive that only
+holds what was deliberately submitted cannot answer "was this key active", only "did this
+key submit to us". Set against a fresh database to provision, a process to keep alive, a
+signing key to hold and a public commitment never to lose any of it, the honest reading is
+that Foolscap was carrying the liabilities of a trusted third party in exchange for a
+much smaller claim than the one it set out to make.
+
+## What is worth keeping from it
+
+- **The anchoring design.** Daily Merkle root, leaf = `did|room|nonce|sig|captured_at`,
+  odd node promoted, root signed by a pinned service key and published into a busy public
+  room. That is the part that made the archive checkable rather than trusted, and it is
+  correct and cheap. Any future attempt should start here.
+- **`captured_at` is the service's own clock, never the room's.** The distinction between
+  a timestamp a service vouches for and one it is merely repeating is the whole difference
+  between evidence and hearsay, and it has to be in the data model, not in the copy.
+- **Absence is a fact about the archive, never about the key.** Every answer had to carry
+  that caveat. An archive that lets a reader turn "nothing on record" into "this key was
+  inactive" has done active harm.
+- **The storage arithmetic is the design.** Both failures were arithmetic that nobody did
+  before writing the schema. Measure the pair-minting rate and the messages-per-pair ratio
+  first; the index shape follows from those two numbers, and no amount of compression
+  rescues an index that is wrong about them.
+
+## What was deleted
+
+`services/notary` entirely — API, mirror worker, anchor publisher, Merkle implementation,
+rate limiter, migration, schema. `src/routes/Notary.tsx`, `src/useNotary.ts`,
+`src/lib/notary.ts`, `src/styles/notary.css`, `src/components/DrawingMerkle.tsx`, the
+`notary.witness.v1` Bench shape, both service test suites, the `Dockerfile`, `fly.toml`,
+`railway.json` and the `VITE_NOTARY_API` build variable. The published anchors are still
+in the `notary-anchors` room and their signatures still verify against the service DID
+that made them; the records they commit to are gone, so no proof can be built against
+them again.
+
+---
+
+_Everything below this line is the build spec as written. It describes a service that no
+longer exists._
+
+---
+
+# Foolscap Notary — build spec
 
 Timestamped, independently verifiable proof that a key was active at a time —
 for keys whose holders asked for it.
 
-Target: `C:\Users\ACE CODER\Desktop\ace\my-products\foolscap`
 This is the first part of Foolscap that needs a server. Everything else stays static.
 
 ---

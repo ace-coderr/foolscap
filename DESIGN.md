@@ -5,6 +5,13 @@ stops drifting.
 
 Read it before touching any page. It supersedes the design sections of SHELL.md.
 
+> **Note, 2026-09-16.** `/notary` is referenced throughout and no longer exists — the
+> archive behind it was withdrawn (see `docs/NOTARY.md`). Everything said here about
+> surfaces, panels, states, cards, glyphs, the layout patterns and the two themes still
+> holds; only that page's own entries are dead. Pattern C — the banded document — went with
+> it, and so did the `bands` shell variant and the `.band*` rules: the pattern is in the
+> history if a page wants it back.
+
 ---
 
 ## The diagnosis

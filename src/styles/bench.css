@@ -11,7 +11,7 @@
  * bytes", not "this is technical".
  *
  * One accent, on one word: a signature that verified, checked in this browser.
- * Same meaning it has on /notary. --warn twice: a nonce the server will refuse,
+ * Same meaning it has everywhere on this site. --warn twice: a nonce the server will refuse,
  * and the local-key panel while it is switched on. Nothing else takes colour. */
 
 /* --------------------------------------------------------------------- page */
@@ -250,7 +250,7 @@
 /* ------------------------------------------------------------- the verdict */
 
 /* The one accent on this page, on one word. A signature that verified, checked
- * here, against the DID above it — the same thing teal means on /notary.
+ * here, against the DID above it — the same thing teal means everywhere else.
  *
  * And the URL below simply does not exist until this says yes. Absence is the
  * signal; a disabled button with a red badge beside it would be the kit. */

@@ -1,7 +1,8 @@
 # Foolscap
 
 Tools for reading Technocore — a network whose rooms are rings and drop what they hold
-within hours. Everything here reads; nothing here holds a key.
+within hours. Everything here reads; nothing here holds a key; there is no backend of any
+kind. The whole site is static files talking to `technocore.chat`.
 
 **[foolscap-xi.vercel.app](https://foolscap-xi.vercel.app/)**
 
@@ -114,29 +115,27 @@ across the last few hundred receipts. The rate is a trimmed one — a sliding wi
 as quartiles — because the referee bursts and stalls, and a first-to-last slope is wrong in
 both directions. The ETA is always a range and always labelled an estimate.
 
-## Notary — was this key active before a date?
+## What is not here: a durable archive
 
-The sonnet-2 question, generalised. On 2026-09-11 the contest required agents to prove their
-DID was active before the opening; 13,146 of them could not, and there was no way to tell a
-key with no history from one whose history the ring had already eaten. Notary is the attempt
-to make that distinguishable in future, which is why the archive had to start existing before
-the product around it did.
+Technocore forgets, and the obvious response is to keep a copy. This repository held one —
+**Notary**, a Postgres archive of signed messages with a daily Merkle root published into a
+public room so the archive could not quietly revise its own history. It was deleted on
+2026-09-16 and nothing replaced it.
 
-`/notary` reads **two sources and never blends them**:
+It failed on arithmetic, twice. The crawling version needed a per-identity index over a
+network minting 587,324 new (did, room) pairs a day at 1.49 messages per pair; the summary
+tier meant to compress that still wanted 570 MB a day against a 500 MB database, which
+filled, went read-only at 1578 MB, and could not be shrunk, because a full disk refuses the
+operations that would free it. The replacement — witness only what is submitted — has sound
+arithmetic and a much smaller claim: an archive holding only deliberate submissions can say
+"this key submitted to us", which is not the question anyone was asking.
 
-- **Live** — the rings, read in your browser, every signature checked here. It sees minutes.
-- **Archive** — the Notary API, back to the minute capture started, with its holes recorded.
+The reasoning is written up in **[docs/NOTARY.md](docs/NOTARY.md)**, at length and with the
+numbers, because the problem is real and still unsolved and somebody will otherwise build
+the same thing again. The anchoring design in particular is worth stealing.
 
-The answer is three-valued, not a boolean. **Witnessed** means Notary's own clock held a
-signed message from that key before the cutoff. **Claimed** means the archive holds one the
-*room* dates before it — the signature is real and re-verifiable, the timestamp is the room's
-word rather than Notary's. **Nothing on record** is a fact about the archive and never about
-the key: absence is not evidence, and no rendering path on that page says otherwise.
-
-Every answer states the coverage start, the recorded gaps and which rooms are sampled. The
-archive is `services/notary`: a mirror worker that follows the busy rooms, a Postgres schema
-that keeps originals rather than assertions, and a daily Merkle root that makes Notary's own
-timestamps tamper-evident. Deployment is in [NOTARY.md](NOTARY.md).
+The question that outlived it — *how long does a room actually remember?* — is measurable
+from the browser, and that is what the rings are read for now rather than copied.
 
 ## Trust
 
@@ -180,10 +179,12 @@ Deployed on Vercel from this repository:
 It is a React app built with Vite, so there is a build step — what Vercel serves is compiled
 from the TypeScript in `src/`, not the files themselves. Three.js is most of what the City
 weighs and none of what the Tracker needs, so it loads in its own chunk, on that route only. What that does not change is the part
-that matters: there is still **no server-side code on the request path**. Every read goes from
-your browser straight to `technocore.chat`, and every signature that decides what you are shown
-is checked on your machine. The only backend anywhere in Foolscap is the Notary archive, which
-is a separate service that stores what the rings are about to drop.
+that matters, and it is now true without qualification: **Foolscap has no backend at all.**
+Not a proxy, not a cache, not an API of its own. What Vercel serves is a directory of static
+files. Every read goes from your browser straight to `technocore.chat`, every signature that
+decides what you are shown is checked on your machine, and there is nothing in between that
+could be down, be subpoenaed, or quietly start lying. That claim used to carry an exception
+for the Notary archive; the exception is gone with the service.
 
 If you would rather not take the deployment's word for it, the source is here and the build is
 reproducible:
@@ -226,21 +227,18 @@ src/
     contest.ts      classification, receipt index, intake stats, lookup, liveness
   city/             districts.ts and model.ts are pure and tested; CityCanvas.tsx
                     is the only file in the project that knows about WebGL
-  components/       Shell: nav, page header, colophon — every page, one source
-  routes/           City, Notary, Track
+  components/       Shell: nav, page header, footer — every page, one source
+  routes/           City, Track, Bench, Lens, Vault
   pages.ts          the map of the site: nav label, route, header, availability
   useCity.ts        the read budget: survey, watch rotation, 429 backoff
   useTracker.ts     two-pass verification, hole recovery
-  useNotary.ts      the two sources behind /notary, kept apart
   styles/
-services/
-  notary/           the archive: API, mirror worker, schema, policy, anchors.
-                    Node + TypeScript, one long-lived process. Not serverless.
 test/               the suite and its recorded fixtures
+docs/               NOTARY.md — the archive that was here, and why it is not
 ```
 
-`src/lib` is the part worth auditing. It has no framework in it, it is imported unchanged by
-both the browser and the Notary worker, and its tests run offline.
+`src/lib` is the part worth auditing. It has no framework in it, nothing outside it imports
+a DOM, and its tests run offline.
 
 ## Licence
 

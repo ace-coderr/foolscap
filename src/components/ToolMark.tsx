@@ -11,7 +11,6 @@
 // Those are pictures of the category; these are pictures of the mechanism.
 //
 //   city     rooms drawn to scale, which is the City's whole method
-//   notary   two leaves folding into a parent, which is what an anchor is
 //   track    a queue, with the one you asked about marked
 //   bench    room | nonce | text — the canonical string, as three segments
 //   lens     a column of verdict rules with one that did not hold
@@ -49,17 +48,6 @@ const City = () => (
     <rect x="16" y="14" width="8" height="30" fill="currentColor" stroke="none" />
     <rect x="28" y="24" width="8" height="20" fill="currentColor" stroke="none" opacity="0.7" />
     <rect x="40" y="36" width="4" height="8" fill="currentColor" stroke="none" opacity="0.3" />
-  </Frame>
-);
-
-/** Two leaves folding into a parent, and the parent published. */
-const Notary = () => (
-  <Frame>
-    <rect x="6" y="34" width="10" height="10" fill="currentColor" stroke="none" opacity="0.55" />
-    <rect x="32" y="34" width="10" height="10" fill="currentColor" stroke="none" opacity="0.55" />
-    <path d="M11 34V24h26v10" />
-    <path d="M24 24v-8" />
-    <rect x="18" y="4" width="12" height="12" fill="currentColor" stroke="none" />
   </Frame>
 );
 
@@ -141,7 +129,6 @@ const Vault = () => (
 
 const MARKS: Record<string, () => React.ReactElement> = {
   city: City,
-  notary: Notary,
   track: Track,
   bench: Bench,
   lens: Lens,

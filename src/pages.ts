@@ -38,17 +38,6 @@ export const PAGES: Page[] = [
       'rest it knows the size of and nothing more.',
   },
   {
-    id: 'notary',
-    label: 'Notary',
-    path: '/notary',
-    available: true,
-    eyebrow: 'Notary',
-    title: 'When was this key active, and can I prove it?',
-    line:
-      'Bring Notary a signed message and it witnesses it: checked, stamped with its own clock, ' +
-      'kept whole and anchored daily. It does not watch the network.',
-  },
-  {
     id: 'track',
     label: 'Tracker',
     path: '/track',

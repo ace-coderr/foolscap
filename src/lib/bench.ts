@@ -41,43 +41,7 @@ export interface Shape {
 
 const RID = '<a fresh id per attempt>';
 
-/**
- * Where a witnessing submission goes.
- *
- * It matches NOTARY_ROOM in services/notary/src/api.ts, which is what /capture
- * defaults to when a caller does not name a room. Written here as a literal
- * rather than imported: the service is a separate workspace with its own
- * deployment, and a browser bundle that reached into it for one string would
- * be a build dependency on a thing that is not built.
- */
-const NOTARY_ROOM = 'foolscap-notary';
-
 export const SHAPES: Shape[] = [
-  {
-    // FIRST, BECAUSE IT IS THE ONE SHAPE THAT ANSWERS TO FOOLSCAP ITSELF.
-    // Everything else here is a message to the sonnet-2 referee, which may or
-    // may not still be listening; this one is a submission to Notary, and
-    // Notary is the reason /bench and /notary are one flow rather than two
-    // pages that happen to be on the same site.
-    type: 'notary.witness.v1',
-    label: 'notary.witness.v1 — have Notary witness this key',
-    room: NOTARY_ROOM,
-    summary:
-      'Submits a signed message to Notary, which checks the signature, stamps it with its own ' +
-      'clock, keeps it whole and folds it into that day’s Merkle root. Not receipted — the ' +
-      'referee has nothing to do with this one; Notary answers it directly with a record id.',
-    note:
-      'Notary does not watch rooms and will not come and find your key — this is how a key gets ' +
-      'on the record at all. One submission is enough to give it a witnessed origin; submit ' +
-      'again whenever you want another moment on the record. It is idempotent on ' +
-      '(did, room, nonce), so a retry returns the original rather than minting a second record. ' +
-      'The text is yours: Notary vouches for the key and the moment, never for what it says.',
-    template: {
-      type: 'notary.witness.v1',
-      statement: '<anything you want on the record>',
-      request_id: RID,
-    },
-  },
   {
     type: 'sonnet.register.v1',
     label: 'sonnet.register.v1 — register for the contest',
@@ -321,10 +285,10 @@ export function readText(text: string): TextReading {
 /**
  * A template slot nobody filled in.
  *
- * WRITTEN AFTER ONE WENT OUT. `{"type":"notary.witness.v1","statement":"<anything
- * you want on the record>",…}` was signed and posted verbatim, and a Technocore
- * room does not take edits or deletions: the only thing that removes a message
- * from one is the ring forgetting it, on its own schedule. The templates on this
+ * WRITTEN AFTER ONE WENT OUT. A template was signed and posted with
+ * `"<anything you want on the record>"` still in it, and a Technocore room does
+ * not take edits or deletions: the only thing that removes a message from one is
+ * the ring forgetting it, on its own schedule. The templates on this
  * page are starting points, the text area is the source of truth, and between
  * those two facts there was nothing at all stopping the starting point from
  * being the final answer.

@@ -1,10 +1,11 @@
 // drawing.ts — the pen and the loop behind every figure that draws itself.
 //
 // This was all inside DrawingAgent.tsx, which was correct while the robot was
-// the only figure on the site. /notary now has one too — a Merkle tree, which
-// is literally what that page does — and a second copy of this would have been
-// two copies of the one part that has already been got wrong once. So the
-// mechanism moved here and the figures kept only their own geometry.
+// the only figure on the site. A second figure — a Merkle tree, on the page that
+// built one — would have meant two copies of the one part that has already been
+// got wrong once, so the mechanism moved here and the figures kept only their
+// own geometry. That second figure has since gone with the page it belonged to;
+// the split stays, because the next figure is cheaper to draw than to re-derive.
 //
 // Nothing in this file names a colour. The ink is passed in, which is also what
 // keeps the accent allowlist in test/accent.test.ts meaningful: the robot's

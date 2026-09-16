@@ -1,8 +1,8 @@
 // Card.tsx — a thing being offered.
 //
 // DESIGN.md's amendment: cards go "on the landing tools grid, the Lens room
-// list, the Vault namespace list, the Notary anchor entries, and anywhere else a
-// thing is being offered rather than tabulated."
+// list, the Vault namespace list, and anywhere else a thing is being offered
+// rather than tabulated."
 //
 // THE LAST FOUR WORDS ARE THE RULE. A card is for something the reader might
 // choose; a row is for something they are reading down a column of. A list of

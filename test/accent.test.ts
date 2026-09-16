@@ -74,18 +74,6 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
   { selector: '.card--attention .card__status', why: 'the word of that status' },
   { selector: '.row__status--attention', why: 'the same, in a list' },
 
-  // --- verified ------------------------------------------------------------
-  // The one answer /notary gives in the affirmative, and it is only reached
-  // when a signature verified — here in the browser, or in Notary's capture.
-  // The qualifier line under it carries whether the TIMESTAMP is Notary's clock
-  // or the room's claim, because that is a distinction words can make and a hue
-  // cannot. "Nothing on record" and "No answer" stay white: an absence is not a
-  // state, and colouring one would claim exactly what this page refuses to.
-  {
-    selector: '.nverdict__word--yes',
-    why: 'a key whose signature verified before the cutoff asked about',
-  },
-
   // --- the current one in a list -------------------------------------------
   // Where you are is state, and a list you navigate with has a current row the
   // same way the nav has a current page. A 2px edge rather than a fill: the row
@@ -105,17 +93,11 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
   { selector: '.rhead__verified', why: 'signatures that verified, counted live as they check' },
 
   // --- in flight -----------------------------------------------------------
-  // A read is happening right now. It is the narrowest kind of state there is —
+  // A read is happening right now. It is the narrowest kind of state there is:
   // it exists only while the request is open and is gone the instant it
-  // resolves, either way — and it is the only thing on screen while /notary
-  // waits on an archive it does not control. The sweep is what separates
-  // "loading" from "gave up", which no amount of grey text can say.
-  {
-    selector: '.nloading__rule::after',
-    why: 'a read is in flight, for as long as it is and no longer',
-  },
-  // The same sweep, in the shared pane-state component, so every page's
-  // loading state says the same thing in the same way.
+  // resolves, either way. The sweep is what separates "loading" from "gave up",
+  // which no amount of grey text can say — in the shared pane-state component,
+  // so every page's loading state says it the same way.
   { selector: '.pstate__rule::after', why: 'a read is in flight, in any panel on any page' },
 
   // --- verified, on the write lane ------------------------------------------

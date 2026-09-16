@@ -9,9 +9,9 @@
 // or one arc — no construction lines, no detail for its own sake. The whole
 // figure is a dozen shapes a child would recognise.
 //
-// The pen, the dasharray sweep and the loop all live in drawing.ts now, shared
-// with /notary's Merkle tree. What is left here is this figure's geometry and
-// its ink, which is the part that is actually about a robot.
+// The pen, the dasharray sweep and the loop all live in drawing.ts now. What is
+// left here is this figure's geometry and its ink, which is the part that is
+// actually about a robot.
 
 import { useEffect, useRef } from 'react';
 import { box, q, runDrawLoop, stroke, type Stroke } from './drawing';
