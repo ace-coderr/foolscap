@@ -127,6 +127,7 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
   { selector: '.cfound__row:focus-visible', why: 'the found room keyboard focus is on' },
   { selector: '.brow:focus-visible', why: 'the busy room keyboard focus is on' },
   { selector: '.drow:focus-visible', why: 'the district keyboard focus is on' },
+  { selector: '.dmore:focus-visible', why: 'the show-all control keyboard focus is on' },
   { selector: '.ctool:focus-visible', why: "the camera control keyboard focus is on" },
   { selector: '.csearch__input:focus-visible', why: 'the room field keyboard focus is on, in the City' },
   { selector: '.hero__pill:focus-visible', why: 'the pill keyboard focus is on' },

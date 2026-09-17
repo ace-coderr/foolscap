@@ -39,24 +39,48 @@ import { formatAge, formatUtc, num, plural } from '../format';
  */
 const CityCanvas = lazy(() => import('../city/CityCanvas'));
 
-/** Matches the media query the canvas honours, and re-reads it if it changes. */
-function usePrefersReducedMotion(): boolean {
-  const query = useMemo(
-    () =>
-      typeof window !== 'undefined' && window.matchMedia
-        ? window.matchMedia('(prefers-reduced-motion: reduce)')
-        : null,
-    []
+/** A media query, as a boolean that re-reads itself when it changes. */
+function useMediaQuery(query: string): boolean {
+  const list = useMemo(
+    () => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(query) : null),
+    [query]
   );
-  const [reduced, setReduced] = useState(() => query?.matches ?? false);
+  const [matches, setMatches] = useState(() => list?.matches ?? false);
   useEffect(() => {
-    if (!query) return;
-    const listener = (event: MediaQueryListEvent) => setReduced(event.matches);
-    query.addEventListener('change', listener);
-    return () => query.removeEventListener('change', listener);
-  }, [query]);
-  return reduced;
+    if (!list) return;
+    // AND A RESIZE LISTENER, because the change event is not reliable enough to
+    // be the only one. A height query under viewport emulation updates
+    // `matches` without ever firing `change`, which left the district list open
+    // on a window that had shrunk under it — and this hook is the thing
+    // deciding whether that list fits. Re-reading on resize costs a boolean
+    // comparison that React drops when it has not moved.
+    const read = () => setMatches(list.matches);
+    read();
+    list.addEventListener('change', read);
+    window.addEventListener('resize', read);
+    return () => {
+      list.removeEventListener('change', read);
+      window.removeEventListener('resize', read);
+    };
+  }, [list]);
+  return matches;
 }
+
+/**
+ * When the district list can be open without anything having to scroll.
+ *
+ * MEASURED, NOT CHOSEN FOR ROUNDNESS. The left column is the window less the
+ * nav and the band; the head panel is what is left of that once the busiest
+ * panel has taken its six rows. Closed, it fits a 900-tall window with about
+ * thirty pixels to spare; open, it needs sixty more than that and about thirty
+ * fewer than a 1000-tall window has. So a thousand, where all seven rows fit
+ * with room either side of the measurement.
+ *
+ * The second clause is the narrow layout, where the panels stack and the page
+ * itself scrolls. There is no fixed column to fit there and so nothing to
+ * ration: the list is open because it can be.
+ */
+const ROOMY = '(min-height: 1000px), (max-width: 62rem)';
 
 const STATE_WORD: Record<CityRoom['state'], string> = {
   live: 'Live',
@@ -79,7 +103,8 @@ const MATCHES = 6;
 
 export default function City() {
   const { city, survey, surveyError, state, resumeAt, lastError, paused, now } = useCity();
-  const reducedMotion = usePrefersReducedMotion();
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
+  const roomy = useMediaQuery(ROOMY);
   const page = pageById('city');
 
   const [selected, setSelected] = useState<string | null>(null);
@@ -260,6 +285,7 @@ export default function City() {
                 zones={zones}
                 entered={entered}
                 onEnter={onEnter}
+                roomy={roomy}
                 loading={survey == null && surveyError == null}
                 error={surveyError}
               />
@@ -267,9 +293,7 @@ export default function City() {
 
             <Busiest
               rooms={city.rooms}
-              lit={lit}
               open={open}
-              failing={failing}
               live={state === 'reading' && !paused}
               onPick={enterRoom}
             />
@@ -308,6 +332,7 @@ export default function City() {
                 quiet={quiet}
                 failing={failing}
                 measured={measured}
+                lit={lit}
                 onClose={() => setInfo(false)}
               />
             )}
@@ -528,6 +553,9 @@ const FORM_WORD: Record<Form, string> = {
   stack: 'a stack — a few rooms carrying an enormous amount between them',
 };
 
+/** How many rows a closed list shows. The top of a ranked list, not a sample. */
+const DISTRICTS_SHUT = 3;
+
 /**
  * The key to the numbers on the plan, and the way into a district without
  * having to find its ground with a pointer.
@@ -536,20 +564,40 @@ const FORM_WORD: Record<Form, string> = {
  * a reader can check by looking rather than a claim they have to take on trust.
  * A row rather than a card each: seven cards is a stack taller than the panel,
  * and there is nothing on one of them that needs more than a line.
+ *
+ * IT CLOSES RATHER THAN SCROLLS. There is not room for seven rows and six
+ * busiest rooms in a 900-tall window, and the first answer to that was to let
+ * the list scroll inside itself — which showed three districts, looked like a
+ * list of three, and hid the fact that there were four more behind a scrollbar
+ * most people never see. A list that is cut and does not look cut is worse than
+ * a shorter one. So it shows the top three by rank and says, in a control you
+ * can press, exactly how many there are: "7 districts — show all".
+ *
+ * Above ROOMY it is open to begin with, because everything fits and closing it
+ * would be hiding four rows for no reason. Once the reader decides either way
+ * their choice holds, whatever the window then does.
  */
 function Districts({
   zones,
   entered,
   onEnter,
+  roomy,
   loading,
   error,
 }: {
   zones: Zone[];
   entered: string | null;
   onEnter: (id: string) => void;
+  /** Whether the window is tall enough to hold every row without scrolling. */
+  roomy: boolean;
   loading: boolean;
   error: string | null;
 }) {
+  /** null while it is following the window; a boolean once someone has chosen. */
+  const [chosen, setChosen] = useState<boolean | null>(null);
+  const open = chosen ?? roomy;
+  const shown = open ? zones : zones.slice(0, DISTRICTS_SHUT);
+
   return (
     <section className="cdist">
       <h2 className="ctitle">
@@ -572,23 +620,41 @@ function Districts({
           detail="It answered, and the list in it was empty."
         />
       ) : (
-        <ol className="drows">
-          {zones.map((zone) => (
-            <li key={zone.district.id}>
-              <button
-                type="button"
-                className="drow"
-                aria-current={zone.district.id === entered ? 'true' : undefined}
-                onClick={() => onEnter(zone.district.id)}
-              >
-                <span className="drow__n">{zone.index}</span>
-                <span className="drow__name">{zone.district.label}</span>
-                <span className="drow__form">{FORM_SHORT[zone.form]}</span>
-                <span className="drow__count">{num.format(zone.count)}</span>
-              </button>
-            </li>
-          ))}
-        </ol>
+        <>
+          <ol className="drows">
+            {shown.map((zone) => (
+              <li key={zone.district.id}>
+                <button
+                  type="button"
+                  className="drow"
+                  aria-current={zone.district.id === entered ? 'true' : undefined}
+                  onClick={() => onEnter(zone.district.id)}
+                >
+                  <span className="drow__n">{zone.index}</span>
+                  <span className="drow__name">{zone.district.label}</span>
+                  <span className="drow__form">{FORM_SHORT[zone.form]}</span>
+                  <span className="drow__count">{num.format(zone.count)}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+
+          {zones.length > DISTRICTS_SHUT && (
+            <button
+              type="button"
+              className="dmore"
+              aria-expanded={open}
+              onClick={() => setChosen(!open)}
+            >
+              {open
+                ? `The busiest ${DISTRICTS_SHUT} only`
+                : `${plural(zones.length, 'district')} — show all`}
+              <svg className="dmore__v" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M3.5 6.2 8 10.4l4.5-4.2" />
+              </svg>
+            </button>
+          )}
+        </>
       )}
     </section>
   );
@@ -631,16 +697,13 @@ function Spark({ series }: { series: number[] }) {
  */
 function Busiest({
   rooms,
-  lit,
   open,
-  failing,
   live,
   onPick,
 }: {
   rooms: CityRoom[];
-  lit: number;
+  /** Rooms Foolscap is holding a reading of, for the loading state's wording. */
   open: number;
-  failing: number;
   /** Whether Foolscap is reading at this moment. The tag is drawn only if so. */
   live: boolean;
   onPick: (room: string) => void;
@@ -693,13 +756,6 @@ function Busiest({
         </p>
       )}
 
-      {shown.length > 0 && (
-        <p className="cbusy__foot">
-          {lit === 0 ? 'None' : num.format(lit)} of {num.format(open)} lit — live <em>and</em>{' '}
-          signing.
-          {failing > 0 ? ` ${num.format(failing)} would not read.` : ''}
-        </p>
-      )}
     </section>
   );
 }
@@ -848,6 +904,7 @@ function Legend({
   quiet,
   failing,
   measured,
+  lit,
   onClose,
 }: {
   surveyed: number;
@@ -857,6 +914,7 @@ function Legend({
   quiet: number;
   failing: number;
   measured: number;
+  lit: number;
   onClose: () => void;
 }) {
   return (
@@ -916,9 +974,21 @@ function Legend({
         </dd>
       </dl>
 
+      {/* The count of the thing the accent is spent on, next to the rule that
+          decides it. It was a line on the busiest panel, which is where a
+          reader sees the rates and not where they can find out what lit means.
+          Two sentences rather than one list: the states and the rate are
+          counted over different things, and joining them with an "of" said
+          "5 live, of 0 rooms with a measured rate" for the first half minute
+          of every visit. */}
       <p className="ccaption">
-        Right now: {num.format(live)} live, {num.format(quiet)} quiet, {num.format(failing)}{' '}
-        failing, of {plural(measured, 'room')} with a measured rate.
+        Right now, of the {plural(live + quiet + failing, 'room')} Foolscap has read:{' '}
+        {num.format(live)} live, {num.format(quiet)} quiet
+        {failing > 0 ? `, ${num.format(failing)} failing` : ''}, and {num.format(lit)} lit — live{' '}
+        <em>and</em> verifying.{' '}
+        {measured === 0
+          ? 'None has a rate measured yet; that needs two reads of the same room.'
+          : `${plural(measured, 'room')} with a rate measured.`}
       </p>
 
       <p className="ccaption">

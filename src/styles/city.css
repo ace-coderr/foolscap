@@ -107,39 +107,24 @@
 .city__left {
   top: calc(var(--nav-height) + var(--space-half));
   left: var(--space);
-  bottom: var(--space-half);
+  bottom: 6px;
   width: 22.5rem;
   max-width: calc(100% - var(--space) * 2);
 }
 
-/* THE LIST INSIDE IT SCROLLS, NOT THE PANEL. At 1440x900 the left column has
- * about 730px in it and the two panels want 900, so something has to give, and
- * which thing gives is a design decision rather than an accident: if the panel
- * scrolls, the districts disappear below a fold nobody can see, and the page
- * looks like it has four districts. If the row list scrolls, every fixed part
- * stays put and the list is visibly a list with more in it. A window tall
- * enough shows all seven and scrolls nothing.
+/* NOTHING IN HERE SCROLLS SILENTLY. At 1440x900 the left column has about
+ * 730px in it and an open district list wants more, and the first answer to
+ * that was to let the list scroll inside itself: three rows visible, four
+ * behind a scrollbar, and a panel that looked like a complete list of three.
+ * A list that is cut and does not look cut is worse than a shorter one.
  *
- * The panel keeps a scrollbar of its own as a backstop, for a window short
- * enough that even the fixed parts do not fit. */
+ * So the list closes instead — see Districts in City.tsx — and what is left
+ * here is a panel that fits its own contents. The scrollbar stays as a
+ * backstop for a window short enough that even the fixed parts do not fit,
+ * which is the one case where clipping would be worse. */
 .chead {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.cdist {
-  display: flex;
-  flex-direction: column;
-  /* Four rows and the heading. Below this the list stops giving ground and the
-   * panel takes over the scrolling, because a list showing one row is not a
-   * list, it is a hint that something got cut off. */
-  min-height: 8.5rem;
-}
-
-.drows {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -202,7 +187,7 @@
 }
 
 .ctitle {
-  margin: 0 0 var(--space-half);
+  margin: 0 0 7px;
   display: flex;
   align-items: baseline;
   gap: 0.6em;
@@ -293,7 +278,7 @@
  * over the drawing. At --t-h2 rather than --t-h1: it is a heading on a panel
  * 22rem wide, and the page's one big figure is the city itself. */
 .chead__title {
-  margin: 7px 0 0;
+  margin: 6px 0 0;
   font-family: var(--display);
   font-stretch: 108%;
   font-size: var(--t-h2);
@@ -304,9 +289,9 @@
 }
 
 .chead__line {
-  margin: 6px 0 0;
+  margin: 5px 0 0;
   font-size: var(--t-small);
-  line-height: 1.5;
+  line-height: 1.45;
   color: var(--ink-mid);
 }
 
@@ -325,7 +310,7 @@
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
-  padding: 4px 10px;
+  padding: 3px 9px;
   background: var(--s2);
   border: 1px solid var(--s-border);
   border-radius: 999px;
@@ -481,8 +466,11 @@
  * who is not going to go hunting for its ground with a pointer. Ordered exactly
  * as the rings are, which is what makes "1 is innermost" a rule that can be
  * checked by looking rather than a claim to be taken on trust. */
+/* Tighter than a --space between sections, and deliberately so: this list and
+ * the search above it are one block, and the gap that would separate them is
+ * three district rows the reader could be looking at instead. */
 .cdist {
-  margin-top: var(--space);
+  margin-top: var(--space-half);
 }
 
 .drows {
@@ -494,6 +482,54 @@
   background: var(--s-divider);
   border: 1px solid var(--s-border);
   border-radius: 10px;
+  overflow: hidden;
+}
+
+/* The count is the point of this control: a closed list has to say how much of
+ * itself it is not showing, in figures, in the thing you press to see the rest.
+ * Quiet, because it is a disclosure and not an action. */
+.dmore {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-half);
+  width: 100%;
+  margin-top: 4px;
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid var(--s-border);
+  border-radius: 8px;
+  color: var(--ink-faint);
+  font-family: var(--body);
+  font-size: var(--t-micro);
+  text-align: left;
+  cursor: pointer;
+}
+
+.dmore:hover {
+  color: var(--ink);
+  border-color: var(--rule-bright);
+}
+
+.dmore:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.dmore__v {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 160ms ease;
+}
+
+.dmore[aria-expanded='true'] .dmore__v {
+  transform: rotate(180deg);
 }
 
 .drow {
@@ -502,7 +538,7 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 5px 11px 5px 9px;
+  padding: 4px 11px 4px 9px;
   background: var(--s1);
   border: 0;
   border-left: 2px solid transparent;
@@ -583,14 +619,14 @@
   align-items: baseline;
   gap: 0 10px;
   width: 100%;
-  padding: 3px 8px;
+  padding: 2px 8px 3px;
   background: transparent;
   border: 0;
   border-radius: 8px;
   color: var(--ink-mid);
   font-family: var(--body);
   font-size: var(--t-small);
-  line-height: 1.25;
+  line-height: 1.2;
   text-align: left;
   cursor: pointer;
 }
@@ -626,7 +662,7 @@
   grid-area: spark;
   display: block;
   width: 100%;
-  height: 9px;
+  height: 8px;
   overflow: visible;
 }
 
@@ -651,12 +687,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.cbusy__foot {
-  margin: 5px 0 0;
-  font-size: var(--t-micro);
-  line-height: 1.5;
-  color: var(--ink-faint);
-}
 
 /* ------------------------------------------------------------- the controls */
 
@@ -1276,7 +1306,8 @@
   /* The canvas honours this itself — no entry animation, no transitions between
    * readings, no damping on the controls. Nothing here can reach into WebGL, so
    * this block is only the DOM half; see CityCanvas.tsx for the rest. */
-  .city__mark {
+  .city__mark,
+  .dmore__v {
     transition: none;
   }
 }

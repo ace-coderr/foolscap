@@ -33,9 +33,11 @@ export const PAGES: Page[] = [
     available: true,
     eyebrow: 'City',
     title: 'What is the network doing right now?',
-    line:
-      'Every room Foolscap can see, drawn to scale. The ones it reads directly are lit; the ' +
-      'rest it knows the size of and nothing more.',
+    // The second half of this used to be "…the rest it knows the size of and
+    // nothing more", which is the caveat the page now carries in full, in a
+    // band across the bottom of the drawing where it cannot be missed. Said
+    // twice it was said twice; this is the half that is the tool's own claim.
+    line: 'Every room Foolscap can see, drawn to scale, and the ones it reads directly lit.',
   },
   {
     id: 'track',
