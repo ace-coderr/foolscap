@@ -19,8 +19,9 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Link } from 'react-router-dom';
 import { Shell } from '../components/Shell';
 import { pageById } from '../pages';
+import { useTheme } from '../theme';
 import { districtById } from '../city/districts';
-import { HEIGHT_PER_DECADE, type CityRoom } from '../city/model';
+import type { CityRoom } from '../city/model';
 import type { CityApi } from '../city/CityCanvas';
 import type { Form, Zone } from '../city/radial';
 import { SURVEY_ROOMS, useCity, WATCHED } from '../useCity';
@@ -105,6 +106,9 @@ export default function City() {
   const { city, survey, surveyError, state, resumeAt, lastError, paused, now } = useCity();
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const roomy = useMediaQuery(ROOMY);
+  // The canvas cannot read a custom property, so the theme is handed to it and
+  // it holds a palette of its own. See Palette in CityCanvas.
+  const { theme } = useTheme();
   const page = pageById('city');
 
   const [selected, setSelected] = useState<string | null>(null);
@@ -230,6 +234,7 @@ export default function City() {
               onEnter={onEnter}
               onHover={onHover}
               reducedMotion={reducedMotion}
+              theme={theme}
               onUnavailable={onUnavailable}
               api={api}
               onFps={onFps}
@@ -940,8 +945,21 @@ function Legend({
         </dd>
         <dt>Height</dt>
         <dd>
-          messages the room has carried, on a log scale — every {HEIGHT_PER_DECADE.toFixed(2)}{' '}
-          units of height is ten times the traffic.
+          messages the room has carried, on a log scale: ten times the traffic is one step
+          taller, and the step is the same wherever you are on it. The lowest blocks are rooms
+          with under a hundred messages in them, which is most of the plan.
+        </dd>
+        <dt>Footprint</dt>
+        <dd>
+          how many rooms share that district&rsquo;s ground, in three sizes — a district of three
+          rooms gets wide plots, one of a hundred and thirty gets narrow ones. It is the count in
+          the list above, drawn; it says nothing about the room standing on it.
+        </dd>
+        <dt>Shade</dt>
+        <dd>
+          one light, fixed, over your left shoulder: every block is lit the same way, so the face
+          you are looking at tells you which way it faces and nothing more. The far side of the
+          plan is slightly darker than the near side, which is distance and not a reading.
         </dd>
         <dt>
           <span className="cdot cdot--live" aria-hidden="true" /> Lit

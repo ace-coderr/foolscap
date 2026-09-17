@@ -85,6 +85,8 @@ export interface CityRoom {
   z: number;
   /** World units. A log scale; the real figure is in `volume`. */
   height: number;
+  /** World units square. From the district's crowding — see footprintFor. */
+  footprint: number;
   /** Messages the room has carried, from the better of the two sources. */
   volume: number;
   /** True where `volume` came from a read Foolscap made itself. */
@@ -164,15 +166,32 @@ export interface SurveyLag {
 
 // --- the height scale -------------------------------------------------------
 //
-// Volumes run from single figures to forty million, so the scale is logarithmic
+// Volumes run from single figures to fifty million, so the scale is logarithmic
 // or it is nothing: linear would make every room but the lobby a paving slab.
 // The floor is deliberate — under a hundred messages a room is a stub, and giving
 // stubs visible height would imply a distinction that is not there.
+//
+// THE FLOOR IS A BUILDING, NOT A TILE, which is what it was. At 0.28 units a
+// stub drew about two pixels tall at the default framing, and two pixels of
+// height on a shape whose top face is fully lit is not a block, it is a
+// diamond — so a city of two hundred rooms, most of them stubs, read as a
+// scatter of flat tiles with eight towers in it. The figures below are set in
+// world units against what they come out as on screen: at 1440 the plan's
+// frustum puts about seven pixels of screen on a world unit of height, so the
+// floor is six pixels and the ceiling ninety.
+//
+// The ceiling is a clamp rather than a compression: nothing on this network is
+// near it — the lobby, at fifty-three million, lands two units under — and a
+// room that did exceed it would be drawn at the same height as the lobby rather
+// than flattening every other building to make room for it.
 
 const HEIGHT_FLOOR_MESSAGES = 100;
-const HEIGHT_MIN = 0.28;
+/** ~6px at the default framing. A stub is a low block, not a tile. */
+const HEIGHT_MIN = 0.85;
+/** ~90px. Nothing reaches it; it is there so nothing ever can run away with it. */
+const HEIGHT_MAX = 12.9;
 /** World units per tenfold increase in messages. */
-export const HEIGHT_PER_DECADE = 1.55;
+export const HEIGHT_PER_DECADE = 2.05;
 
 export function heightFor(volume: number): number {
   // No `+ 1` softening inside the log: Math.max already keeps it defined at zero,
@@ -180,7 +199,37 @@ export function heightFor(volume: number): number {
   // a decade near the top. The whole point of the scale is that the step is the
   // same wherever you are on it.
   const decades = Math.log10(Math.max(1, volume)) - Math.log10(HEIGHT_FLOOR_MESSAGES);
-  return HEIGHT_MIN + HEIGHT_PER_DECADE * Math.max(0, decades);
+  return Math.min(HEIGHT_MAX, HEIGHT_MIN + HEIGHT_PER_DECADE * Math.max(0, decades));
+}
+
+// --- the footprint ----------------------------------------------------------
+
+/**
+ * How much ground one room's building takes, from how many rooms share the
+ * district it stands in.
+ *
+ * NOT A PROPERTY OF THE ROOM, and the legend says so. Three rooms on a plot
+ * this size can each have a wide footprint; a hundred and thirty mailboxes
+ * cannot, and drawing them as if they could would either overlap them or
+ * inflate the district until it swallowed the plan. So the size is the
+ * district's crowding, which is a real figure — it is the count printed in the
+ * list — expressed as how much room each building gets.
+ *
+ * Three sizes rather than a curve: a continuous footprint would look like a
+ * measurement of the room itself, and this is not one. Three sizes read as
+ * three kinds of place.
+ *
+ * Every one is under LOT, which is the spacing the layout uses, and the largest
+ * is under the tightest pitch any form packs at — the stack's, at LOT * 0.78 —
+ * so the caps on two neighbouring buildings cannot touch.
+ */
+export const LOT_ROOMY = 3;
+export const LOT_TIGHT = 16;
+
+export function footprintFor(roomsInDistrict: number): number {
+  if (roomsInDistrict <= LOT_ROOMY) return 1.5;
+  if (roomsInDistrict < LOT_TIGHT) return 1.26;
+  return 1.0;
 }
 
 // --- brightness -------------------------------------------------------------
@@ -227,6 +276,15 @@ export function buildCity({ survey, readings, watched, now, layout: given }: Bui
 
   const largestRing = survey.reduce((n, entry) => Math.max(n, entry.bytes), 0);
 
+  // How many rooms each district holds, which is what a building's footprint is
+  // decided from. Counted before anything is placed, so the first room in a
+  // district is the same size as the last.
+  const perDistrict = new Map<string, number>();
+  for (const name of names) {
+    const id = districtFor(name).id;
+    perDistrict.set(id, (perDistrict.get(id) ?? 0) + 1);
+  }
+
   const rooms: CityRoom[] = [];
   for (const name of names) {
     const summary = surveyByRoom.get(name) ?? null;
@@ -267,12 +325,14 @@ export function buildCity({ survey, readings, watched, now, layout: given }: Bui
     const lit = state === 'live' && proof === 'verified';
     const alarming = state === 'failing' || proof === 'failed';
 
+    const districtId = districtFor(name).id;
     rooms.push({
       room: name,
-      districtId: districtFor(name).id,
+      districtId,
       x: 0,
       z: 0,
       height: heightFor(volume),
+      footprint: footprintFor(perDistrict.get(districtId) ?? 1),
       volume,
       volumeRead: reading != null && reading.lastSeq >= (summary?.lastSeq ?? 0),
       activity,

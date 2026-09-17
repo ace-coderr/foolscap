@@ -178,7 +178,10 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
  * is state.
  */
 const ALLOWED_FILES: Array<{ file: string; why: string }> = [
-  { file: 'city/CityCanvas.tsx', why: "a room's roof, where the City read it and found it live" },
+  {
+    file: 'city/CityCanvas.tsx',
+    why: "a lit room — its roof, its walls, and the pool it throws on its own ground. One claim, painted three ways: the City read it, found it live, and its newest message verified. Both themes' accents are here because the canvas cannot read a custom property and holds a palette per theme.",
+  },
   { file: 'components/DrawingAgent.tsx', why: "the agent's sensor, the live thing in that figure" },
 ];
 

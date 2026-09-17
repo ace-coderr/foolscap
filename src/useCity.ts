@@ -282,7 +282,13 @@ export function useCity(): CityFeed {
             return next;
           });
           recovered();
-          setState((current) => (current === 'starting' ? 'reading' : current));
+          // A READ THAT WORKED CLEARS A FAILURE, which it did not use to: the
+          // state only ever moved off 'failed' through the rate-limit path, so
+          // a session whose very first read missed said "not reading" for as
+          // long as it was open, over a panel filling with figures it had just
+          // read. The page says what is happening now.
+          setState((current) => (current === 'starting' || current === 'failed' ? 'reading' : current));
+          setLastError(null);
         } catch (err) {
           if (stopped || isAbort(err)) return;
           const message = (err as Error).message;

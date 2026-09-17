@@ -25,6 +25,7 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CORE_RADIUS, overflowAnchor, type Zone } from './radial.ts';
+import type { Theme } from '../theme.ts';
 
 // --- palette ---------------------------------------------------------------
 // The tokens from foolscap.css. Duplicated here because WebGL cannot read a CSS
@@ -32,57 +33,183 @@ import { CORE_RADIUS, overflowAnchor, type Zone } from './radial.ts';
 // the scene silently wrong the moment a name changed. If the tokens move, these
 // move with them; the test for it is looking at the page.
 
-/* The two ends of the brightness scale.
+/**
+ * THE PALETTE IS PER THEME, and a theme here is what a theme is everywhere else
+ * on this site: a ground, a tint and an accent. The shading ratios below do not
+ * change between them — a theme is a change of palette, not a change of what
+ * light does — so this block is two sets of colours and nothing else.
  *
- * The dim end has to stay a legible mass, not a shade off the plate. Most of the
- * city sits at it — every room Foolscap has not measured — and the side faces are
- * multiplied down from here by as much as 0.3, so a dark base leaves a building
- * that reads as a flat tile rather than a volume. What tells an unmeasured room
- * from a measured silent one is the roof, not the shade. */
-const BODY_DIM = 0x4a5668;
-const BODY_BRIGHT = 0xc2cfdd;
-const PLATE = 0x141b28;
-const PLATE_EDGE = 0x262e3d; /* --rule */
-const HOVER_EDGE = 0xa4b0bf; /* --ink-mid */
-const SELECT_EDGE = 0xe6ecf2; /* --ink */
+ * The flop set is the same city built out of the flop ground. Its buildings are
+ * navy rather than blue-grey, because #4a5668 on #0A1128 is a grey object on a
+ * blue table: close enough in hue to look like a mistake and far enough to look
+ * dirty. Every value here is the ink one pulled toward the flop ground and
+ * checked on screen against it.
+ */
+interface Palette {
+  /* The two ends of the brightness scale.
+   *
+   * The dim end has to stay a legible mass, not a shade off the plate. Most of
+   * the city sits at it — every room Foolscap has not measured — and the side
+   * faces are multiplied down from here by as much as three quarters, so a dark
+   * base leaves a building that reads as a tile rather than a volume. What tells
+   * an unmeasured room from a measured silent one is the roof, not the shade. */
+  bodyDim: number;
+  bodyBright: number;
+  /** The platform's top face, which everything else on the ground is read against. */
+  plate: number;
+  plateEdge: number;
+  /** The outer wall, and the spokes that meet at the core. */
+  wall: number;
+  spoke: number;
+  /**
+   * The two colours this city is allowed to spend, and what earns them.
+   *
+   * LIT is the accent and it is the whole argument of the page: a room Foolscap
+   * is reading, that is live, whose newest message verified against the key it
+   * names. Not "watched". Not "busy". The model decides it in one place — see
+   * CityRoom.lit — and this file only paints what it is told. `litWall` is the
+   * same claim carried down the building's sides, dark enough that the cap is
+   * still the brightest face on it.
+   *
+   * ALARM is a read that failed or a message that did not verify. Both are
+   * things a reader should go and look at, which is what a state colour is for.
+   *
+   * There is no third. Quiet used to be amber and the result was a city where
+   * almost every roof glowed, so the glow said nothing. A quiet room is the same
+   * grey as an unread one, with a roof to say it is being watched and no colour
+   * on it to say anything more.
+   */
+  lit: number;
+  litWall: number;
+  alarm: number;
+  roofDim: number;
+  /** The hover and selection outlines: --ink-mid and --ink. */
+  hoverEdge: number;
+  selectEdge: number;
+}
+
+const INK: Palette = {
+  bodyDim: 0x52607a,
+  bodyBright: 0xc7d4e2,
+  plate: 0x1a2331,
+  plateEdge: 0x262e3d,
+  wall: 0x39445a,
+  spoke: 0x232b3a,
+  lit: 0x3fb3c4,
+  litWall: 0x24606b,
+  alarm: 0xe0674f,
+  roofDim: 0x6b7a90,
+  hoverEdge: 0xa4b0bf,
+  selectEdge: 0xe6ecf2,
+};
+
+const FLOP: Palette = {
+  bodyDim: 0x465684,
+  bodyBright: 0xc9d2e8,
+  plate: 0x16203f,
+  plateEdge: 0x28334f,
+  wall: 0x3c4a75,
+  spoke: 0x1d2647,
+  lit: 0x00b4d8,
+  litWall: 0x0f5d7e,
+  alarm: 0xe0674f,
+  roofDim: 0x6b7aa0,
+  hoverEdge: 0xb0b9cc,
+  selectEdge: 0xf5f7fa,
+};
+
+const PALETTES: Record<'ink' | 'flop', Palette> = { ink: INK, flop: FLOP };
+
+const LIT_POOL_OPACITY = 0.34;
+/** How far the pool spreads, as a multiple of the building's own footprint. */
+const LIT_POOL_SPREAD = 3.2;
 
 /**
- * The two colours this city is allowed to spend, and what earns them.
+ * Per-face brightness: one light, three visible faces, and the ratios between
+ * them are the whole reason a box reads as a solid rather than as a diamond.
  *
- * LIT is the accent and it is the whole argument of the page: a room Foolscap
- * is reading, that is live, whose newest message verified against the key it
- * names. Not "watched". Not "busy". The model decides it in one place — see
- * CityRoom.lit — and this file only paints what it is told.
+ * TOP 100%, LEFT 62%, RIGHT 38%, as they arrive on screen. The old values were
+ * 100 / 86 / 76 — three faces within a quarter of a stop of each other, which
+ * is a shape with no light on it. Two hundred of those at four pixels tall is
+ * the scatter of tiles this replaces.
  *
- * ALARM is a read that failed or a message that did not verify. Both are things
- * a reader should go and look at, which is what a state colour is for.
+ * WHICH FACE IS WHICH is not a guess: the camera sits at (1,1,1) looking at the
+ * origin, so its screen-right axis is (0.707, 0, -0.707) — +X points right and
+ * +Z points left. The light is therefore over the reader's left shoulder, and
+ * the two faces away from it (−X, −Z) are the shadow side, which is what the
+ * city shows if it is orbited round the back. That is a light in a fixed place
+ * rather than one that follows the camera, which is the point of it.
  *
- * There is no third. Quiet used to be amber and the result was a city where
- * almost every roof glowed, so the glow said nothing. A quiet room is now the
- * same grey as an unread one, with a roof to say it is being watched and no
- * colour on it to say anything more.
+ * WRITTEN AS THE SCREEN VALUE, converted here. These multiply in LINEAR space —
+ * the renderer converts on the way out — so a face wanted at 62% of the top is
+ * written 0.62 and applied as 0.62^2.2. Doing it the other way round is how the
+ * old set ended up flat: 0.55 linear looks like a strong shadow written down and
+ * arrives as 76% brightness.
  */
-const LIT_COLOUR = 0x3fb3c4; /* --accent */
-const ALARM_COLOUR = 0xe0674f; /* --alarm */
-const ROOF_DIM = 0x6b7a90;
+const srgb = (ratio: number) => ratio ** 2.2;
+const FACE_TOP = 1;
+const FACE_LEFT = 0.62;
+const FACE_RIGHT = 0.38;
+/** +X −X +Y −Y +Z −Z, which for BoxGeometry is right, back, top, under, left, back. */
+const FACE_SHADE = [
+  srgb(FACE_RIGHT),
+  srgb(0.3),
+  FACE_TOP,
+  srgb(0.14),
+  srgb(FACE_LEFT),
+  srgb(0.24),
+];
 
-/** The wall, the spokes, and the leader lines out to the labels. */
-const WALL_COLOUR = 0x39445a;
-const SPOKE_COLOUR = 0x232b3a;
-
-/**
- * Per-face brightness, so a box reads as solid from any angle without a light.
- *
- * These multiply in LINEAR space, not sRGB — the renderer converts on the way out
- * — so they look lighter on screen than they read here: 0.55 arrives as about 76%
- * brightness, 0.30 as about 58%. Written linear because that is where they are
- * applied, with the sRGB result noted rather than the other way round.
- */
-const FACE_SHADE = [0.55, 0.3, 1.0, 0.12, 0.72, 0.22]; // +X −X +Y −Y +Z −Z
-
-/** Footprint, in lots. Under one, with LOT for spacing, leaves the street. */
-const FOOTPRINT = 1.32;
 const ROOF_HEIGHT = 0.16;
+
+/**
+ * The platform each district stands on: an extruded disc with a rim wall.
+ *
+ * A flat circle under a set of blocks reads as a sticker printed on the page. A
+ * disc with a visible edge reads as ground with a thickness, and everything on
+ * it inherits that. The top sits at y=0, where the buildings' bases are, and the
+ * wall hangs below — so the spokes and the leader lines, which are drawn at the
+ * same level, run along the top of the plan and meet each platform at its edge.
+ */
+const PLATFORM_H = 0.95;
+/** The rim wall's brightness against the top face. Same argument as FACE_SHADE. */
+const PLATFORM_WALL = srgb(0.46);
+const PLATFORM_UNDER = srgb(0.2);
+/** Far edge of a platform against its near edge — the city's own recession. */
+const PLATFORM_FAR = 1;
+const PLATFORM_NEAR = srgb(0.86);
+
+/** How far a building's contact shadow spreads on the platform, per side. */
+const SKIRT = 0.42;
+/**
+ * How hard that shadow lands, at its darkest.
+ *
+ * BLACK AT AN ALPHA, not a darker copy of the plate. The first build painted the
+ * skirt a fixed fraction of the platform colour, which meant computing the
+ * platform's own gradient a second time to know what fraction of what — and
+ * getting it slightly wrong turned the shadow into a patch that was darker than
+ * the ground on one side of a district and lighter on the other. Black at an
+ * alpha darkens whatever is actually underneath it, gradient and all, and there
+ * is only one gradient because only one thing computes it.
+ */
+const SKIRT_ALPHA = 0.55;
+
+/**
+ * Aerial perspective, so the plan has depth as well as height.
+ *
+ * Everything is one flat colour otherwise, and a hundred buildings in one flat
+ * colour is a texture rather than a city. The far side of the plan loses an
+ * eighth of its brightness and a fifth of its saturation, which is enough to
+ * read as distance and not enough to be mistaken for a state.
+ *
+ * COMPUTED FROM WHERE THE CAMERA IS, not baked into the geometry: the reader can
+ * orbit, and a recession that stayed put while the city turned would be a
+ * smudge painted on the near corner. It is recomputed whenever the controls
+ * move, which is two passes over the room list and costs nothing next to the
+ * draw it is already doing.
+ */
+const DEPTH_DARKEN = 0.12;
+const DEPTH_GREY = 0.2;
 const TRANSITION_MS = 650;
 /** Long enough to read as travel, short enough that nobody waits for it. */
 const FLIGHT_MS = 850;
@@ -105,6 +232,8 @@ export interface Building {
   z: number;
   /** World units tall. Whatever the page has decided height means. */
   height: number;
+  /** World units square. Whatever the page has decided footprint means. */
+  footprint: number;
   /** 0–1. Lerps the body between the dim end and the bright end, and nothing else. */
   activity: number;
   /** Whether this one gets a roof — the cap that says Foolscap reads this room. */
@@ -144,6 +273,8 @@ export interface CityCanvasProps {
   onEnter: (districtId: string) => void;
   onHover: (room: string | null) => void;
   reducedMotion: boolean;
+  /** Which palette to build the city out of. Nothing else changes with it. */
+  theme: Theme;
   /** Called once if WebGL is unavailable, so the page can say so. */
   onUnavailable: (reason: string) => void;
   /** Filled in while the canvas is mounted, emptied when it goes. */
@@ -158,6 +289,111 @@ export interface CityCanvasProps {
    * with, and the page says as much next to it.
    */
   onFps?: (fps: number) => void;
+}
+
+/**
+ * A district's platform: a disc with a rim wall, shaded like everything else.
+ *
+ * Top face at y=0 and the wall below it, so a building placed at y=0 stands on
+ * the surface rather than in it. The shading is vertex colour for the same
+ * reason the buildings' is — one multiply against the instance colour, nothing
+ * in between — and it carries two things: the wall against the top, which is
+ * what gives the disc an edge, and a gentle gradient across the top itself from
+ * its far side to its near one.
+ *
+ * The gradient runs along (x + z), which at this camera is exactly the screen's
+ * vertical. The platforms are never rotated, so it stays that way.
+ */
+function platformGeometry(): THREE.CylinderGeometry {
+  const geometry = new THREE.CylinderGeometry(1, 1, 1, 72, 1, false);
+  geometry.translate(0, -0.5, 0);
+  const position = geometry.attributes.position;
+  const normal = geometry.attributes.normal;
+  const colours = new Float32Array(position.count * 3);
+  for (let vertex = 0; vertex < position.count; vertex++) {
+    const up = normal.getY(vertex);
+    let shade: number;
+    if (up > 0.5) {
+      // Far edge to near edge. (x + z) runs from -sqrt(2) to +sqrt(2) on a unit
+      // disc; the far side is the negative one, which is up the screen.
+      const along = (position.getX(vertex) + position.getZ(vertex)) / 2 / Math.SQRT1_2;
+      const t = (along + 1) / 2;
+      shade = PLATFORM_FAR + (PLATFORM_NEAR - PLATFORM_FAR) * Math.max(0, Math.min(1, t));
+    } else if (up < -0.5) {
+      shade = PLATFORM_UNDER;
+    } else {
+      shade = PLATFORM_WALL;
+    }
+    colours.set([shade, shade, shade], vertex * 3);
+  }
+  geometry.setAttribute('color', new THREE.BufferAttribute(colours, 3));
+  return geometry;
+}
+
+/**
+ * The contact shadow's falloff: solid under the building, gone by its edge.
+ *
+ * A square, because the buildings are square and never turned, and soft, because
+ * a hard-edged rectangle of darkness under a block is a second block. Built
+ * pixel by pixel rather than with a canvas blur: sixty-four squared is four
+ * thousand samples, once, and a blur filter is one more thing to be unsupported
+ * somewhere.
+ */
+function skirtTexture(): THREE.Texture {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext('2d');
+  if (context) {
+    const image = context.createImageData(size, size);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const u = Math.abs(((x + 0.5) / size) * 2 - 1);
+        const v = Math.abs(((y + 0.5) / size) * 2 - 1);
+        // Distance to the centre in the square metric, so the falloff follows
+        // the footprint rather than a circle inside it.
+        const d = Math.max(u, v);
+        const t = Math.max(0, Math.min(1, (d - 0.5) / 0.5));
+        const alpha = 1 - t * t * (3 - 2 * t); // smoothstep, solid to nothing
+        const at = (y * size + x) * 4;
+        image.data[at] = 255;
+        image.data[at + 1] = 255;
+        image.data[at + 2] = 255;
+        image.data[at + 3] = Math.round(alpha * 255);
+      }
+    }
+    context.putImageData(image, 0, 0);
+  }
+  const texture = new THREE.Texture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/**
+ * A soft round pool of light, as a texture rather than as geometry.
+ *
+ * One 64px canvas, drawn once, shared by every lit room. A pool built out of
+ * rings of triangles would be the same picture at twenty times the cost and
+ * would still have an edge on it.
+ */
+function poolTexture(): THREE.Texture {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext('2d');
+  if (context) {
+    const gradient = context.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    gradient.addColorStop(0, 'rgba(255,255,255,1)');
+    gradient.addColorStop(0.45, 'rgba(255,255,255,0.45)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, size, size);
+  }
+  const texture = new THREE.Texture(canvas);
+  texture.needsUpdate = true;
+  return texture;
 }
 
 /** A box whose origin is its base, with face shading baked in as vertex colour. */
@@ -188,14 +424,29 @@ interface Scene {
   /** Roof instance index -> index into `order`, for the rooms that have one. */
   roofOf: Map<number, number>;
   ground: THREE.Object3D[];
-  /** Invisible discs, one per zone, so a click on open ground enters a district. */
-  zoneDiscs: THREE.Mesh | null;
+  /** The platforms, which are also what a click on open ground picks. */
+  zoneDiscs: THREE.InstancedMesh | null;
   zoneOrder: Zone[];
+  /** One darkened patch of platform per building, where it meets the ground. */
+  skirts: THREE.InstancedMesh | null;
+  /** One pool of accent per lit room, scaled to nothing for every other. */
+  pools: THREE.InstancedMesh | null;
   /** Target the camera is easing towards, and how long it has left. */
   flight: { from: THREE.Vector3; to: THREE.Vector3; fromHalf: number; toHalf: number; left: number } | null;
   half: number;
   /** What the panels cover, measured on resize and held between frames. */
   insets: Insets;
+  /** The colours this city is built out of. One per theme; see Palette. */
+  palette: Palette;
+  /**
+   * Materials that hold a palette colour of their own, and which one.
+   *
+   * The instanced meshes do not need this: their colours are written per
+   * instance every time anything is painted, so they pick a new palette up on
+   * the next pass. These are the few that carry one in the material, and a
+   * theme change has to go and find them.
+   */
+  tinted: Array<{ material: THREE.Material & { color: THREE.Color }; of: keyof Palette }>;
   /** True while the camera is inside a district. Hides the other districts' marks. */
   inside: boolean;
   hoverBox: THREE.LineSegments;
@@ -286,6 +537,7 @@ export default function CityCanvas({
   onEnter,
   onHover,
   reducedMotion,
+  theme,
   onUnavailable,
   api,
   onFps,
@@ -350,9 +602,16 @@ export default function CityCanvas({
     const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0));
     const hoverBox = new THREE.LineSegments(
       edges,
-      new THREE.LineBasicMaterial({ color: HOVER_EDGE, transparent: true, opacity: 0.85 })
+      new THREE.LineBasicMaterial({
+        color: PALETTES[theme].hoverEdge,
+        transparent: true,
+        opacity: 0.85,
+      })
     );
-    const selectBox = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: SELECT_EDGE }));
+    const selectBox = new THREE.LineSegments(
+      edges,
+      new THREE.LineBasicMaterial({ color: PALETTES[theme].selectEdge })
+    );
     hoverBox.visible = false;
     selectBox.visible = false;
     hoverBox.renderOrder = 2;
@@ -370,9 +629,13 @@ export default function CityCanvas({
       ground: [],
       zoneDiscs: null,
       zoneOrder: [],
+      skirts: null,
+      pools: null,
       flight: null,
       half: 1,
       insets: { top: 0, right: 0, bottom: 0, left: 0 },
+      palette: PALETTES[theme],
+      tinted: [],
       inside: false,
       hoverBox,
       selectBox,
@@ -608,6 +871,11 @@ export default function CityCanvas({
       if (!(moved || state.dirty || animating)) return;
       state.dirty = false;
 
+      // The recession is a function of where the camera is, so it is recomputed
+      // whenever the camera has moved. Two passes over the rooms and one over
+      // the districts, on frames that were going to redraw anyway.
+      if (moved || state.flight) shade(state);
+
       updateMarkers(state, position, scale);
       renderer.render(scene, camera);
       positionLabels(state, camera, renderer.domElement, screen);
@@ -662,10 +930,12 @@ export default function CityCanvas({
     // is a wall rather than a fade is the overflow label hanging outside it:
     // there has to be an inside for the tens of thousands of unnamed rooms to be
     // outside of.
-    const wall = new THREE.Mesh(
-      new THREE.RingGeometry(wallRadius, wallRadius + 0.5, 128),
-      new THREE.MeshBasicMaterial({ color: WALL_COLOUR, side: THREE.DoubleSide })
-    );
+    const wallMaterial = new THREE.MeshBasicMaterial({
+      color: state.palette.wall,
+      side: THREE.DoubleSide,
+    });
+    state.tinted.push({ material: wallMaterial, of: 'wall' });
+    const wall = new THREE.Mesh(new THREE.RingGeometry(wallRadius, wallRadius + 0.5, 128), wallMaterial);
     wall.rotation.x = -Math.PI / 2;
     wall.position.y = 0.004;
     state.scene.add(wall);
@@ -673,55 +943,46 @@ export default function CityCanvas({
 
     // THE CORE. Nothing is placed inside it and nothing is claimed about it —
     // it is where the spokes meet, which is the only thing a centre has to be.
-    const core = new THREE.Mesh(
-      new THREE.RingGeometry(CORE_RADIUS - 0.4, CORE_RADIUS, 96),
-      new THREE.MeshBasicMaterial({ color: SPOKE_COLOUR, side: THREE.DoubleSide })
-    );
+    const coreMaterial = new THREE.MeshBasicMaterial({
+      color: state.palette.spoke,
+      side: THREE.DoubleSide,
+    });
+    state.tinted.push({ material: coreMaterial, of: 'spoke' });
+    const core = new THREE.Mesh(new THREE.RingGeometry(CORE_RADIUS - 0.4, CORE_RADIUS, 96), coreMaterial);
     core.rotation.x = -Math.PI / 2;
     core.position.y = 0.004;
     state.scene.add(core);
     state.ground.push(core);
 
-    // One disc per district, and they are the click target for entering one.
-    // Invisible would be wrong — a reader needs to see the ground they are
-    // clicking — so they are drawn at the plate colour and picked directly.
-    const discGeometry = new THREE.CircleGeometry(1, 48);
+    // ONE PLATFORM PER DISTRICT, and it is also the click target for entering
+    // one. An extruded disc rather than a flat circle: the rim wall is what
+    // makes it ground with a thickness instead of a shape printed on the page,
+    // and everything standing on it inherits that. Top face at y=0, where the
+    // buildings' bases are; the wall hangs below.
     const discs = new THREE.InstancedMesh(
-      discGeometry,
-      new THREE.MeshBasicMaterial({ color: PLATE }),
+      platformGeometry(),
+      new THREE.MeshBasicMaterial({ vertexColors: true }),
       Math.max(1, zones.length)
     );
     const groundMatrix = new THREE.Matrix4();
-    const groundQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+    const noTurn = new THREE.Quaternion();
     zones.forEach((zone, i) => {
       groundMatrix.compose(
-        new THREE.Vector3(zone.x, 0.002, zone.z),
-        groundQuat,
-        new THREE.Vector3(zone.plotRadius, zone.plotRadius, 1)
+        new THREE.Vector3(zone.x, 0, zone.z),
+        noTurn,
+        new THREE.Vector3(zone.plotRadius, PLATFORM_H, zone.plotRadius)
       );
       discs.setMatrixAt(i, groundMatrix);
     });
     discs.instanceMatrix.needsUpdate = true;
     discs.count = zones.length;
+    // The plate colour per instance, so the platforms recede with everything
+    // else. Written here and rewritten whenever the camera moves.
+    for (let i = 0; i < zones.length; i++) discs.setColorAt(i, scratchColour.setHex(state.palette.plate));
     state.scene.add(discs);
     state.ground.push(discs);
     state.zoneDiscs = discs;
     state.zoneOrder = zones;
-
-    // A hairline around each disc, so a district reads as a place rather than a
-    // smudge of ground.
-    const rims: number[] = [];
-    for (const zone of zones) {
-      const steps = 48;
-      for (let i = 0; i < steps; i++) {
-        const a0 = (i / steps) * Math.PI * 2;
-        const a1 = ((i + 1) / steps) * Math.PI * 2;
-        rims.push(
-          zone.x + Math.cos(a0) * zone.plotRadius, 0.006, zone.z + Math.sin(a0) * zone.plotRadius,
-          zone.x + Math.cos(a1) * zone.plotRadius, 0.006, zone.z + Math.sin(a1) * zone.plotRadius
-        );
-      }
-    }
 
     // SPOKES, from the core out to each district's near edge, and LEADER LINES
     // from its far edge out past the wall to where its number hangs. The two
@@ -739,13 +1000,58 @@ export default function CityCanvas({
     }
 
     const lineGeometry = new THREE.BufferGeometry();
-    lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute([...rims, ...lines], 3));
-    const lineMesh = new THREE.LineSegments(
-      lineGeometry,
-      new THREE.LineBasicMaterial({ color: PLATE_EDGE })
-    );
+    lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3));
+    const lineMaterial = new THREE.LineBasicMaterial({ color: state.palette.plateEdge });
+    state.tinted.push({ material: lineMaterial, of: 'plateEdge' });
+    const lineMesh = new THREE.LineSegments(lineGeometry, lineMaterial);
     state.scene.add(lineMesh);
     state.ground.push(lineMesh);
+
+    // CONTACT SHADOWS, one per building, drawn on the platform it stands on.
+    // The single detail that does most for solidity: without it a block sits in
+    // front of the ground rather than on it, however well the block itself is
+    // shaded. A square patch because the buildings are square and never turned.
+    const skirtGeometry = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    const skirts = new THREE.InstancedMesh(
+      skirtGeometry,
+      new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        alphaMap: skirtTexture(),
+        transparent: true,
+        opacity: SKIRT_ALPHA,
+        depthWrite: false,
+      }),
+      rooms.length
+    );
+    skirts.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    skirts.renderOrder = 1;
+    state.scene.add(skirts);
+    state.ground.push(skirts);
+    state.skirts = skirts;
+
+    // THE POOL A LIT ROOM THROWS, on the same ground. Allocated for every room
+    // and scaled to nothing for the ones that are not lit, so a room lighting up
+    // is a number changing rather than a mesh being built.
+    const poolGeometry = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    const poolMap = poolTexture();
+    const pools = new THREE.InstancedMesh(
+      poolGeometry,
+      new THREE.MeshBasicMaterial({
+        color: state.palette.lit,
+        map: poolMap,
+        transparent: true,
+        opacity: LIT_POOL_OPACITY,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+      rooms.length
+    );
+    pools.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    state.tinted.push({ material: pools.material as THREE.MeshBasicMaterial, of: 'lit' });
+    pools.renderOrder = 2;
+    state.scene.add(pools);
+    state.ground.push(pools);
+    state.pools = pools;
 
     // Bodies and roofs.
     const bodyGeometry = shadedBox();
@@ -906,6 +1212,43 @@ export default function CityCanvas({
     state.dirty = true;
   }, [entered, zones]);
 
+  // --- the palette ---------------------------------------------------------
+  /**
+   * A theme change repaints the city rather than rebuilding it.
+   *
+   * Rebuilding would be four lines instead of these twenty, and it would throw
+   * away the camera's framing and replay the entry animation every time someone
+   * touched the switch — a city that redraws itself from nothing because the
+   * reader changed a colour. Everything here is either an instance colour, which
+   * is rewritten on every paint anyway, or one of the handful of materials that
+   * hold a colour of their own, which is what `tinted` is for.
+   */
+  useEffect(() => {
+    const state = sceneRef.current;
+    if (!state) return;
+    state.palette = PALETTES[theme];
+    for (const { material, of } of state.tinted) material.color.setHex(state.palette[of]);
+    (state.hoverBox.material as THREE.LineBasicMaterial).color.setHex(state.palette.hoverEdge);
+    (state.selectBox.material as THREE.LineBasicMaterial).color.setHex(state.palette.selectEdge);
+
+    if (state.bodies && state.order.length > 0) {
+      setTargets(state, state.order);
+      // Straight there rather than eased: the switch has its own 200ms fade
+      // across every other surface on the page, and a city crossfading on a
+      // different curve underneath it would read as a second, slower switch.
+      state.current.colour.set(state.target.colour);
+      state.current.roof.set(state.target.roof);
+      applyInstances(
+        state,
+        new THREE.Matrix4(),
+        new THREE.Vector3(),
+        new THREE.Vector3(),
+        new THREE.Quaternion()
+      );
+    }
+    state.dirty = true;
+  }, [theme]);
+
   // --- selection -----------------------------------------------------------
   useEffect(() => {
     const state = sceneRef.current;
@@ -951,12 +1294,18 @@ function frame_(state: Scene, width: number, height: number) {
 }
 
 const scratchColour = new THREE.Color();
-const dimColour = new THREE.Color(BODY_DIM);
-const brightColour = new THREE.Color(BODY_BRIGHT);
+const greyColour = new THREE.Color();
+const forward = new THREE.Vector3();
+const dimColour = new THREE.Color();
+const brightColour = new THREE.Color();
+const litWallColour = new THREE.Color();
 
 /** Writes the aimed-at values, and reports whether any of them actually moved. */
 function setTargets(state: Scene, rooms: Building[]): boolean {
   let changed = false;
+  dimColour.setHex(state.palette.bodyDim);
+  brightColour.setHex(state.palette.bodyBright);
+  litWallColour.setHex(state.palette.litWall);
   const note = (buffer: Float32Array, at: number, value: number) => {
     if (Math.abs(buffer[at] - value) > 1e-4) changed = true;
     buffer[at] = value;
@@ -967,6 +1316,11 @@ function setTargets(state: Scene, rooms: Building[]): boolean {
     // Brightness is activity and nothing else. It is never a state colour: a
     // grey building is one Foolscap has a volume for and no current reading of.
     scratchColour.copy(dimColour).lerp(brightColour, room.activity);
+    // Except where the room is lit, which IS a state and is the one the whole
+    // page is arranged around. The walls go to a dark accent so the building
+    // belongs to its own roof; the roof itself stays the accent at full, so the
+    // top is still the brightest face on it.
+    if (room.lit) scratchColour.copy(litWallColour);
     note(state.target.colour, i * 3, scratchColour.r);
     note(state.target.colour, i * 3 + 1, scratchColour.g);
     note(state.target.colour, i * 3 + 2, scratchColour.b);
@@ -975,7 +1329,11 @@ function setTargets(state: Scene, rooms: Building[]): boolean {
   for (const [roofIndex, roomIndex] of state.roofOf) {
     const room = rooms[roomIndex];
     // Three outcomes and no more. The page's whole colour budget is here.
-    const colour = room?.alarming ? ALARM_COLOUR : room?.lit ? LIT_COLOUR : ROOF_DIM;
+    const colour = room?.alarming
+      ? state.palette.alarm
+      : room?.lit
+        ? state.palette.lit
+        : state.palette.roofDim;
     scratchColour.setHex(colour);
     note(state.target.roof, roofIndex * 3, scratchColour.r);
     note(state.target.roof, roofIndex * 3 + 1, scratchColour.g);
@@ -993,7 +1351,7 @@ function applyInstances(
   scale: THREE.Vector3,
   quaternion: THREE.Quaternion
 ) {
-  const { bodies, roofs, order } = state;
+  const { bodies, roofs, skirts, pools, order } = state;
   if (!bodies || !roofs) return;
 
   const settle = state.transition > 0 ? 1 - state.transition / TRANSITION_MS : 1;
@@ -1020,18 +1378,33 @@ function applyInstances(
           : state.target.colour[at];
     }
 
+    const foot = room.footprint;
     position.set(room.x, 0, room.z);
-    scale.set(FOOTPRINT, Math.max(0.001, height), FOOTPRINT);
+    scale.set(foot, Math.max(0.001, height), foot);
     matrix.compose(position, quaternion, scale);
     bodies.setMatrixAt(i, matrix);
-    bodies.setColorAt(
-      i,
-      scratchColour.setRGB(
-        state.current.colour[i * 3],
-        state.current.colour[i * 3 + 1],
-        state.current.colour[i * 3 + 2]
-      )
-    );
+
+    // The contact shadow, just clear of the platform's own face. It does not
+    // grow with the building: a shadow is where a thing meets the ground, and
+    // the skirt is the same width whether the block is six pixels or ninety.
+    if (skirts) {
+      position.set(room.x, 0.012, room.z);
+      const spread = foot + SKIRT * 2;
+      scale.set(spread, 1, spread);
+      matrix.compose(position, quaternion, scale);
+      skirts.setMatrixAt(i, matrix);
+    }
+
+    // ...and the pool of light, for the rooms that have earned one. Scaled to
+    // nothing otherwise, which costs one degenerate instance and no branch in
+    // the draw.
+    if (pools) {
+      const spread = room.lit ? foot * LIT_POOL_SPREAD : 0;
+      position.set(room.x, 0.02, room.z);
+      scale.set(spread, 1, spread);
+      matrix.compose(position, quaternion, scale);
+      pools.setMatrixAt(i, matrix);
+    }
   }
 
   for (const [roofIndex, roomIndex] of state.roofOf) {
@@ -1045,7 +1418,8 @@ function applyInstances(
           : state.target.roof[at];
     }
     position.set(room.x, state.current.height[roomIndex], room.z);
-    scale.set(FOOTPRINT + 0.16, ROOF_HEIGHT, FOOTPRINT + 0.16);
+    const cap = room.footprint + 0.16;
+    scale.set(cap, ROOF_HEIGHT, cap);
     matrix.compose(position, quaternion, scale);
     roofs.setMatrixAt(roofIndex, matrix);
     roofs.setColorAt(
@@ -1058,14 +1432,84 @@ function applyInstances(
     );
   }
 
+  // The bodies' own colours are not written here: shade() does it, because what
+  // a building is painted depends on where the camera is as well as on what the
+  // page has measured, and the camera moves far more often than the readings do.
+  shade(state);
+
   bodies.instanceMatrix.needsUpdate = true;
-  if (bodies.instanceColor) bodies.instanceColor.needsUpdate = true;
   roofs.instanceMatrix.needsUpdate = true;
   if (roofs.instanceColor) roofs.instanceColor.needsUpdate = true;
+  if (skirts) skirts.instanceMatrix.needsUpdate = true;
+  if (pools) pools.instanceMatrix.needsUpdate = true;
   // Raycasting tests the bounding sphere first, and the buildings just changed
   // height. Without this, a tall building stops being clickable at the top.
   bodies.computeBoundingSphere();
   state.dirty = true;
+}
+
+/**
+ * Paint the bodies, the platforms and the contact shadows for where the camera
+ * is now.
+ *
+ * Two things multiply into the colour the model decided. AERIAL PERSPECTIVE: the
+ * far side of the plan is darker and less saturated than the near side, which is
+ * the whole difference between a city and a texture of identical blocks. And the
+ * platforms recede with it, so the ground a distant district stands on is the
+ * same distance away as the district.
+ *
+ * NOT ON THE ROOFS, deliberately. A roof carries the one state colour this page
+ * spends, and a state colour that varied with where the reader had dragged to
+ * would be a different claim at each end of the plan. The accent is exact
+ * wherever it is; the grey recedes around it.
+ */
+function shade(state: Scene) {
+  const { bodies, zoneDiscs, order, zoneOrder } = state;
+  if (!bodies || order.length === 0) return;
+
+  state.camera.getWorldDirection(forward);
+  // Depth along the view direction. Ground positions only: a building's height
+  // does not make it further away, it makes it taller.
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const room of order) {
+    const at = room.x * forward.x + room.z * forward.z;
+    if (at < lo) lo = at;
+    if (at > hi) hi = at;
+  }
+  const span = hi - lo || 1;
+  const away = (x: number, z: number) => ((x * forward.x + z * forward.z) - lo) / span;
+
+  for (let i = 0; i < order.length; i++) {
+    const room = order[i];
+    scratchColour.setRGB(
+      state.current.colour[i * 3],
+      state.current.colour[i * 3 + 1],
+      state.current.colour[i * 3 + 2]
+    );
+    recede(scratchColour, away(room.x, room.z));
+    bodies.setColorAt(i, scratchColour);
+
+
+  }
+  if (bodies.instanceColor) bodies.instanceColor.needsUpdate = true;
+
+  if (zoneDiscs) {
+    for (let i = 0; i < zoneOrder.length; i++) {
+      const zone = zoneOrder[i];
+      scratchColour.setHex(state.palette.plate);
+      recede(scratchColour, away(zone.x, zone.z));
+      zoneDiscs.setColorAt(i, scratchColour);
+    }
+    if (zoneDiscs.instanceColor) zoneDiscs.instanceColor.needsUpdate = true;
+  }
+}
+
+/** Darken and desaturate by distance, in place. */
+function recede(colour: THREE.Color, t: number) {
+  const grey = colour.r * 0.2126 + colour.g * 0.7152 + colour.b * 0.0722;
+  greyColour.setRGB(grey, grey, grey);
+  colour.lerp(greyColour, DEPTH_GREY * t).multiplyScalar(1 - DEPTH_DARKEN * t);
 }
 
 function updateMarkers(state: Scene, position: THREE.Vector3, scale: THREE.Vector3) {
@@ -1075,9 +1519,9 @@ function updateMarkers(state: Scene, position: THREE.Vector3, scale: THREE.Vecto
     if (!room) return;
     position.set(room.x, 0, room.z);
     scale.set(
-      FOOTPRINT + lift,
+      room.footprint + lift,
       Math.max(0.02, state.current.height[index]) + lift / 2,
-      FOOTPRINT + lift
+      room.footprint + lift
     );
     box.position.copy(position);
     box.scale.copy(scale);
@@ -1155,13 +1599,23 @@ function disposeCity(state: Scene) {
     const mesh = object as THREE.Mesh;
     mesh.geometry?.dispose();
     const material = mesh.material;
-    if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
-    else material?.dispose();
+    // The pool's radial gradient is a texture this file made, and a material
+    // that is disposed does not take its map with it.
+    for (const entry of Array.isArray(material) ? material : [material]) {
+      if (!entry) continue;
+      const mapped = entry as THREE.MeshBasicMaterial;
+      mapped.map?.dispose();
+      mapped.alphaMap?.dispose();
+      entry.dispose();
+    }
   }
   state.bodies = null;
   state.roofs = null;
   state.ground = [];
   state.zoneDiscs = null;
   state.zoneOrder = [];
+  state.skirts = null;
+  state.pools = null;
+  state.tinted = [];
   state.roofOf = new Map();
 }
