@@ -35,6 +35,20 @@ export const STORAGE_KEY = 'foolscap.theme.v1';
 /** How long the cross-fade runs. Matches the transition in foolscap.css. */
 export const SHIFT_MS = 200;
 
+/**
+ * Broadcast when the theme changes, so every hook on the page follows it.
+ *
+ * WITHOUT THIS, TWO COPIES DRIFT. useTheme holds its own state and reads the
+ * stored choice once, which was fine while the nav's two switches were the only
+ * callers — they are in one component. /city then started reading the theme as
+ * well, to pick a palette for a canvas that cannot read a custom property, and
+ * flipping the switch in the nav repainted every surface on the page except the
+ * city, until a reload. The event is the cheapest fix that keeps the state
+ * where it is: applyTheme is the one place a theme is ever put on the document,
+ * so it is the one place that has to say so.
+ */
+export const THEME_EVENT = 'foolscap:theme';
+
 export const isTheme = (value: unknown): value is Theme => value === 'ink' || value === 'flop';
 
 /**
@@ -84,12 +98,22 @@ export function applyTheme(theme: Theme, { shift = false }: { shift?: boolean } 
 
   if (!shift) {
     root.setAttribute('data-theme', theme);
+    announce(theme);
     return;
   }
 
   root.setAttribute('data-theme-shift', '');
   root.setAttribute('data-theme', theme);
   globalThis.setTimeout(() => root.removeAttribute('data-theme-shift'), SHIFT_MS);
+  announce(theme);
+}
+
+function announce(theme: Theme): void {
+  try {
+    globalThis.dispatchEvent?.(new CustomEvent<Theme>(THEME_EVENT, { detail: theme }));
+  } catch {
+    // No CustomEvent, no window: nothing is listening either.
+  }
 }
 
 /**
@@ -114,6 +138,16 @@ export function useTheme(): { theme: Theme; choose: (next: Theme) => void } {
     applyTheme(theme);
     // Once, deliberately. Every later change goes through choose().
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ...and follow anyone else's choose(). See THEME_EVENT.
+  useEffect(() => {
+    const onChange = (event: Event) => {
+      const next = (event as CustomEvent<Theme>).detail;
+      if (isTheme(next)) setTheme(next);
+    };
+    globalThis.addEventListener?.(THEME_EVENT, onChange);
+    return () => globalThis.removeEventListener?.(THEME_EVENT, onChange);
   }, []);
 
   // Not inside the setState updater, which StrictMode calls twice: an updater

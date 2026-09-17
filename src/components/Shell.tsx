@@ -15,6 +15,7 @@ import { startPointerField } from '../pointer';
 import { Link, NavLink } from 'react-router-dom';
 import { PAGES, pageById } from '../pages';
 import { Lockup } from './Mark';
+import { SoundControl } from './Sound';
 import { ThemeSwitch } from './ThemeSwitch';
 import { useTheme } from '../theme';
 
@@ -352,6 +353,10 @@ export function Footer() {
                 Apache-2.0
               </a>
             </p>
+            {/* The one control on this site that makes the page do something
+                rather than read something. It belongs next to the sentence
+                about what the page does and does not do. */}
+            <SoundControl />
           </div>
         </div>
       </div>

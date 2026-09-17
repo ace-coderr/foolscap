@@ -20,6 +20,8 @@ import { Link } from 'react-router-dom';
 import { Shell } from '../components/Shell';
 import { pageById } from '../pages';
 import { useTheme } from '../theme';
+import { drive, ping, useAudio } from '../audio';
+import { Speaker, soundTitle } from '../components/Sound';
 import { districtById } from '../city/districts';
 import type { CityRoom } from '../city/model';
 import type { CityApi } from '../city/CityCanvas';
@@ -206,6 +208,13 @@ export default function City() {
     setSelected(null);
     api.current?.reset();
   }, [leave]);
+
+  // THE DRONE FOLLOWS THE SAME FIGURE THE PANEL PRINTS, and it is handed over
+  // whether or not anything is sounding — see drive(). One measurement, two
+  // ways of reading it.
+  useEffect(() => {
+    drive(city.watchedRate);
+  }, [city.watchedRate]);
 
   const shown = selected ?? hovered;
   const room = shown ? city.rooms.find((entry) => entry.room === shown) ?? null : null;
@@ -796,6 +805,7 @@ function Tools({
   stage: { current: HTMLDivElement | null };
   disabled: boolean;
 }) {
+  const sound = useAudio();
   const [full, setFull] = useState(false);
   /**
    * Whether full screen is on offer at all.
@@ -824,6 +834,18 @@ function Tools({
 
   return (
     <div className="ctools" role="group" aria-label="The view">
+      {!sound.unavailable && (
+        <button
+          type="button"
+          className="ctool"
+          aria-pressed={sound.wanted}
+          onClick={sound.toggle}
+          title={soundTitle(sound)}
+          aria-label={soundTitle(sound)}
+        >
+          <Speaker on={sound.wanted} />
+        </button>
+      )}
       <button
         type="button"
         className="ctool"
@@ -990,6 +1012,14 @@ function Legend({
           frames a second the loop is keeping. It draws only when something moved, so this is the
           rate available rather than work being done.
         </dd>
+        <dt>Sound</dt>
+        <dd>
+          off unless you switch it on, and generated here rather than played back — there is no
+          audio file on this site. A drone whose filter opens as the measured rate rises, and one
+          soft tone for each verified message in the live view, pitched by the first byte of the
+          key that signed it. The same sender is always the same note. The tones are capped at a
+          few a second, so they are who and not how many; the rate is in the drone.
+        </dd>
       </dl>
 
       {/* The count of the thing the accent is spent on, next to the rule that
@@ -1129,6 +1159,36 @@ function DistrictView({
   // build did exactly that and the first thing a reader saw was a long wait.
   const feed = useLens(reading, { backfill: false });
   const shown = feed.messages.slice(-CARDS).reverse();
+
+  /**
+   * One tone per verified message, at most one per message, ever.
+   *
+   * Keyed on seq and remembered, because a message's verdict arrives after the
+   * message does — the check is asynchronous — so this effect sees each one
+   * twice: once unchecked, once decided. It fires on the second. An unsigned
+   * message makes no sound, which is the same rule the city's roofs follow: it
+   * is the ordinary case here and it is not a failure.
+   *
+   * ping() drops anything arriving faster than a tone every ninety
+   * milliseconds, so a room at twenty-five a second is a texture rather than an
+   * alarm. Nothing anywhere presents the tones as a count.
+   */
+  const sounded = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    if (sounded.current.size > 4000) sounded.current.clear();
+    for (const message of feed.messages) {
+      if (sounded.current.has(message.seq)) continue;
+      const verdict = feed.readings.get(message.seq)?.verdict;
+      if (!verdict) continue;
+      sounded.current.add(message.seq);
+      if (verdict === 'verified') ping(message.from);
+    }
+  }, [feed.messages, feed.readings]);
+
+  // A different room is a different set of seqs; do not carry the old ones.
+  useEffect(() => {
+    sounded.current.clear();
+  }, [reading]);
 
   return (
     <section className="cpanel inside" aria-label={`Inside ${zone.district.label}`}>

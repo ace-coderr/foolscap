@@ -165,7 +165,12 @@ the network drops, it tells you exactly how long you have before it drops.
   takes no edits and no deletions; see `placeholders()` in `src/lib/bench.ts`.
 - Poll with `limit=200`, detect holes from `first_seq`, recover by re-export. The read
   endpoint skips rather than queues — this is not optional.
-- No localStorage or sessionStorage, with two stated exceptions. The second is the theme: one
+- No localStorage or sessionStorage, with three stated exceptions. The third is the smallest:
+  `foolscap.audio.v1`, one key holding `on` or `off`, written only when the reader presses the
+  speaker in `/city`'s controls or in the footer. A stored `on` is a preference and never a
+  licence to start — no audio context is constructed until a gesture, and the control says
+  "on, at your next click" rather than claiming to be sounding. See `src/audio.ts`.
+  The second is the theme: one
   key holding one of two words, written only when the reader clicks the switch in the nav, in
   `src/theme.ts`. A theme that forgot itself on every navigation is a theme nobody uses twice.
   `prefers-color-scheme` decides the first visit only; after that the stored choice wins, even
